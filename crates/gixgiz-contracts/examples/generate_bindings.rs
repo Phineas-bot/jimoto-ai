@@ -11,7 +11,8 @@ use std::{
 
 use gixgiz_contracts::{
     BootstrapReady, BootstrapRequest, CancelOperationRequest, CancelOperationResponse, ClientHello,
-    CoreHello, HealthRequest, HealthResponse, SafeErrorPayload, ShutdownRequest, ShutdownResponse,
+    CoreHello, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
+    HealthRequest, HealthResponse, SafeErrorPayload, ShutdownRequest, ShutdownResponse,
     TestOperationEvent, TestOperationStartRequest, TestOperationStartResponse,
 };
 use schemars::{JsonSchema, schema_for};
@@ -26,6 +27,9 @@ struct TransportContractDocument {
     core_hello: CoreHello,
     health_request: HealthRequest,
     health_response: HealthResponse,
+    hardware_scan_start_request: HardwareScanStartRequest,
+    hardware_scan_start_response: HardwareScanStartResponse,
+    hardware_scan_event: HardwareScanEvent,
     test_operation_start_request: TestOperationStartRequest,
     test_operation_start_response: TestOperationStartResponse,
     test_operation_event: TestOperationEvent,
