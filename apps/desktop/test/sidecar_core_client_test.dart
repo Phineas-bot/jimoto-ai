@@ -101,6 +101,22 @@ void main() {
     );
   });
 
+  test('hardware scan operation and cancellation remain typed', () async {
+    final session = _FakeSession(readiness: ReadinessStatus.ready);
+    final client = SidecarCoreClient(
+      connector: _FakeConnector.session(session),
+    );
+    await client.checkConnection();
+
+    final operation = await client.startHardwareScan();
+    final accepted = await client.cancelHardwareScan(operation);
+    final events = await client.observeHardwareScan(operation).toList();
+
+    expect(accepted, isTrue);
+    expect(events.map((event) => event.sequence), orderedEquals([1, 2]));
+    expect(events.last.terminalState, HardwareScanTerminalState.cancelled);
+  });
+
   test('normal shutdown is delegated once to the sidecar session', () async {
     final session = _FakeSession(readiness: ReadinessStatus.ready);
     final client = SidecarCoreClient(
@@ -232,6 +248,62 @@ class _FakeSession implements CoreSidecarSession {
 
   @override
   Future<CancelOperationResponse> cancelOperation(
+    OperationId operationId,
+    CancelOperationRequest request,
+  ) async {
+    return CancelOperationResponse(
+      operationId: operationId,
+      accepted: true,
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<HardwareScanStartResponse> startHardwareScan(
+    HardwareScanStartRequest request,
+  ) async {
+    return HardwareScanStartResponse(
+      operationId: _operationId,
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Stream<HardwareScanEvent> hardwareScanEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  ) async* {
+    yield HardwareScanEvent(
+      schemaVersion: 1,
+      operationId: operationId,
+      correlationId: correlationId,
+      sequence: 1,
+      kind: HardwareScanEventKind.started,
+      timestampUnixMs: 1,
+      message: null,
+      profile: null,
+      error: null,
+      terminalState: null,
+    );
+    yield HardwareScanEvent(
+      schemaVersion: 1,
+      operationId: operationId,
+      correlationId: correlationId,
+      sequence: 2,
+      kind: HardwareScanEventKind.cancelled,
+      timestampUnixMs: 2,
+      message: null,
+      profile: null,
+      error: null,
+      terminalState: HardwareScanTerminalState.cancelled,
+    );
+  }
+
+  @override
+  Future<CancelOperationResponse> cancelHardwareScan(
     OperationId operationId,
     CancelOperationRequest request,
   ) async {

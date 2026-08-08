@@ -74,6 +74,26 @@ abstract class CoreClient {
     );
   }
 
+  Future<CoreOperation> startHardwareScan() {
+    return Future.error(
+      UnsupportedError('Hardware scans are not supported by this client.'),
+    );
+  }
+
+  Stream<HardwareScanEvent> observeHardwareScan(CoreOperation operation) {
+    return Stream.error(
+      UnsupportedError(
+        'Hardware scan event streams are not supported by this client.',
+      ),
+    );
+  }
+
+  Future<bool> cancelHardwareScan(CoreOperation operation) {
+    return Future.error(
+      UnsupportedError('Hardware scan cancellation is not supported.'),
+    );
+  }
+
   Future<void> shutdown() async {}
 }
 

@@ -82,6 +82,47 @@ class SidecarCoreClient extends CoreClient {
   }
 
   @override
+  Future<CoreOperation> startHardwareScan() async {
+    final session = await _connectedSession();
+    final correlationId = newCorrelationId();
+    final response = await session.startHardwareScan(
+      HardwareScanStartRequest(
+        correlationId: correlationId,
+        requestId: newRequestId(),
+      ),
+    );
+    return CoreOperation(
+      operationId: response.operationId,
+      correlationId: response.correlationId,
+    );
+  }
+
+  @override
+  Stream<HardwareScanEvent> observeHardwareScan(
+    CoreOperation operation,
+  ) async* {
+    final session = await _connectedSession();
+    yield* session.hardwareScanEvents(
+      operation.operationId,
+      operation.correlationId,
+      newRequestId(),
+    );
+  }
+
+  @override
+  Future<bool> cancelHardwareScan(CoreOperation operation) async {
+    final session = await _connectedSession();
+    final response = await session.cancelHardwareScan(
+      operation.operationId,
+      CancelOperationRequest(
+        correlationId: operation.correlationId,
+        requestId: newRequestId(),
+      ),
+    );
+    return response.accepted;
+  }
+
+  @override
   Future<void> shutdown() async {
     final session = _session;
     _session = null;
@@ -115,6 +156,7 @@ class SidecarCoreClient extends CoreClient {
           requestedCapabilities: const [
             TransportCapability.health,
             TransportCapability.testOperationEvents,
+            TransportCapability.hardwareScan,
             TransportCapability.cancellation,
             TransportCapability.shutdown,
           ],

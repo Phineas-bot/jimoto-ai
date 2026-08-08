@@ -1,6 +1,6 @@
 # GixGiz Desktop
 
-The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness state. It contains no hardware, installer, persistence, runtime, model, or provider logic.
+The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness and hardware-evidence state. It contains no hardware collection, recommendation, installer, persistence, runtime, model, or provider logic.
 
 ## Toolchain
 

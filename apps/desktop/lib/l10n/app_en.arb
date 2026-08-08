@@ -69,5 +69,101 @@
   "releaseLabel": "Release",
   "applicationIdLabel": "Application ID",
   "coreConnectionLabel": "Local core",
-  "coreNotConnectedValue": "Not connected in this build"
+  "coreNotConnectedValue": "Not connected in this build",
+  "hardwareScanIdleTitle": "Hardware evidence",
+  "hardwareScanIdleMessage": "Scan this PC for local OS, processor, physical memory, display adapter, acceleration, and storage evidence.",
+  "hardwareScanLoadingTitle": "Scanning hardware",
+  "hardwareScanLoadingMessage": "GixGiz is collecting bounded, non-elevated Windows evidence.",
+  "hardwareScanReadyTitle": "Hardware evidence ready",
+  "hardwareScanReadyMessage": "All requested evidence was reported reliably.",
+  "hardwareScanPartialTitle": "Hardware evidence partially available",
+  "hardwareScanPartialMessage": "The profile is usable, and unavailable values remain explicitly unknown.",
+  "hardwareScanFailedTitle": "Hardware scan failed",
+  "hardwareScanFailedMessage": "GixGiz could not produce a usable hardware profile. Review diagnostics, then try again.",
+  "hardwareScanCancelledTitle": "Hardware scan cancelled",
+  "hardwareScanCancelledMessage": "The scan stopped without changing system settings.",
+  "hardwareScanStartAction": "Scan hardware",
+  "hardwareScanAgainAction": "Scan again",
+  "hardwareScanCancelAction": "Cancel scan",
+  "hardwareScanProgressSemanticLabel": "Hardware evidence scan progress",
+  "hardwareScanStatusSemanticLabel": "Hardware scan status: {status}. {detail}",
+  "@hardwareScanStatusSemanticLabel": {
+    "placeholders": {
+      "status": { "type": "String" },
+      "detail": { "type": "String" }
+    }
+  },
+  "hardwareProfileSemanticLabel": "Hardware profile {completeness}, schema version {version}",
+  "@hardwareProfileSemanticLabel": {
+    "placeholders": {
+      "completeness": { "type": "String" },
+      "version": { "type": "int" }
+    }
+  },
+  "hardwareOperatingSystemLabel": "Operating system",
+  "hardwareCpuLabel": "Processor",
+  "hardwarePhysicalMemoryLabel": "Physical memory",
+  "hardwareGpuLabel": "Display adapter",
+  "hardwareGpuNumberLabel": "Display adapter {number}",
+  "@hardwareGpuNumberLabel": {
+    "placeholders": { "number": { "type": "int" } }
+  },
+  "hardwareAccelerationLabel": "Acceleration evidence",
+  "hardwareStorageLabel": "Application storage",
+  "hardwareOperatingSystemValue": "{name}, version {version}, {architecture}",
+  "@hardwareOperatingSystemValue": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "version": { "type": "String" },
+      "architecture": { "type": "String" }
+    }
+  },
+  "hardwareCpuValue": "{name}, {physical} physical cores, {logical} logical processors",
+  "@hardwareCpuValue": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "physical": { "type": "String" },
+      "logical": { "type": "String" }
+    }
+  },
+  "hardwareMemoryValue": "{total} total, {available} available",
+  "@hardwareMemoryValue": {
+    "placeholders": {
+      "total": { "type": "String" },
+      "available": { "type": "String" }
+    }
+  },
+  "hardwareGpuValue": "{name}, dedicated memory {dedicated}, shared memory {shared}",
+  "@hardwareGpuValue": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "dedicated": { "type": "String" },
+      "shared": { "type": "String" }
+    }
+  },
+  "hardwareAccelerationValue": "{kind}: {support}",
+  "@hardwareAccelerationValue": {
+    "placeholders": {
+      "kind": { "type": "String" },
+      "support": { "type": "String" }
+    }
+  },
+  "hardwareStorageValue": "{capacity} capacity, {free} free, {filesystem}, {media}",
+  "@hardwareStorageValue": {
+    "placeholders": {
+      "capacity": { "type": "String" },
+      "free": { "type": "String" },
+      "filesystem": { "type": "String" },
+      "media": { "type": "String" }
+    }
+  },
+  "hardwareEvidenceDetail": "Source: {source}. {reason}",
+  "@hardwareEvidenceDetail": {
+    "placeholders": {
+      "source": { "type": "String" },
+      "reason": { "type": "String" }
+    }
+  },
+  "supportedValue": "Supported",
+  "notSupportedValue": "Not supported"
 }
