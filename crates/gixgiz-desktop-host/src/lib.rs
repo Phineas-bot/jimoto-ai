@@ -9,13 +9,14 @@
 
 mod bootstrap;
 mod error;
+mod hardware_scans;
 mod operations;
 mod server;
 
 use std::time::Duration;
 
 use gixgiz_contracts::{BootstrapReady, InstanceId};
-use gixgiz_core::{OperationContext, PlatformCore};
+use gixgiz_core::{CoreError, HardwareProvider, HardwareScanner, OperationContext, PlatformCore};
 use tokio::io::{AsyncWriteExt, BufReader};
 
 pub use error::HostError;
@@ -39,9 +40,18 @@ pub async fn run_sidecar() -> Result<(), HostError> {
     .await
     .map_err(HostError::CoreWorker)?
     .map_err(HostError::Core)?;
+    let hardware_scanner = HardwareScanner::windows().unwrap_or_else(|error| {
+        HardwareScanner::new(std::sync::Arc::new(UnavailableHardwareProvider(error)))
+    });
 
     let serve_result = async {
-        let host = SidecarHost::bind(bootstrap.token.clone(), instance_id, status).await?;
+        let host = SidecarHost::bind(
+            bootstrap.token.clone(),
+            instance_id,
+            status,
+            hardware_scanner,
+        )
+        .await?;
         let ready = BootstrapReady::new(
             host.local_addr().port(),
             instance_id,
@@ -66,6 +76,17 @@ pub async fn run_sidecar() -> Result<(), HostError> {
         .and_then(|result| result.map_err(HostError::Core));
 
     serve_result.and(core_result)
+}
+
+struct UnavailableHardwareProvider(CoreError);
+
+impl HardwareProvider for UnavailableHardwareProvider {
+    fn collect(
+        &self,
+        _context: &OperationContext,
+    ) -> Result<gixgiz_core::CollectedHardwareEvidence, CoreError> {
+        Err(self.0.clone())
+    }
 }
 
 async fn write_bootstrap_ready(ready: &BootstrapReady) -> Result<(), HostError> {
