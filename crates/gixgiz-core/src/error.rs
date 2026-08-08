@@ -26,6 +26,18 @@ pub enum CoreError {
         /// Stable internal identifier of the failing service.
         service_id: String,
     },
+    /// The current user could not access the hardware evidence provider.
+    #[error("hardware evidence access was denied")]
+    HardwarePermissionDenied,
+    /// The supported Windows hardware evidence provider is unavailable.
+    #[error("the hardware evidence provider is unavailable")]
+    HardwareProviderUnavailable,
+    /// Structured hardware provider output failed bounded validation.
+    #[error("the hardware evidence provider returned invalid data")]
+    HardwareProviderInvalidData,
+    /// Hardware provider output exceeded its fixed size limit.
+    #[error("the hardware evidence provider exceeded its output limit")]
+    HardwareProviderOutputLimit,
 }
 
 impl CoreError {
@@ -67,6 +79,44 @@ impl CoreError {
                 RecoveryGuidance {
                     action: RecoveryAction::Retry,
                     message: "Retry the health check.".to_owned(),
+                },
+            ),
+            Self::HardwarePermissionDenied => (
+                ErrorCategory::PermissionDenied,
+                "hardware.permission_denied",
+                "GixGiz could not access hardware evidence for the current user.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Retry the scan without changing system permissions.".to_owned(),
+                },
+            ),
+            Self::HardwareProviderUnavailable => (
+                ErrorCategory::Unavailable,
+                "hardware.provider_unavailable",
+                "The Windows hardware evidence provider is unavailable.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Retry the scan after Windows system services are available."
+                        .to_owned(),
+                },
+            ),
+            Self::HardwareProviderInvalidData => (
+                ErrorCategory::Degraded,
+                "hardware.provider_data_invalid",
+                "Windows returned hardware evidence that GixGiz could not validate.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Retry the scan. Unknown values will remain explicit.".to_owned(),
+                },
+            ),
+            Self::HardwareProviderOutputLimit => (
+                ErrorCategory::ResourceExhausted,
+                "hardware.provider_output_limit",
+                "The hardware provider returned more data than GixGiz accepts.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Retry the scan. If it repeats, review the safe diagnostics."
+                        .to_owned(),
                 },
             ),
         };
