@@ -238,6 +238,237 @@
       ],
       "type": "object"
     },
+    "CandidateModel": {
+      "description": "Provider-neutral model metadata selected from the local catalogue.",
+      "properties": {
+        "catalogue_id": {
+          "$ref": "#/$defs/CandidateModelId",
+          "description": "Stable catalogue identity independent from provider install tags."
+        },
+        "display_name": {
+          "description": "Beginner-readable model name.",
+          "type": "string"
+        },
+        "family": {
+          "description": "Canonical model family.",
+          "type": "string"
+        },
+        "licence_spdx": {
+          "description": "SPDX licence identifier recorded by the upstream model card.",
+          "type": "string"
+        },
+        "provenance_url": {
+          "description": "Official upstream model-card URL used as provenance.",
+          "type": "string"
+        },
+        "size_class": {
+          "$ref": "#/$defs/ModelSizeClass",
+          "description": "Coarse resource tier."
+        },
+        "workload_tiers": {
+          "description": "Workloads explicitly represented by this catalogue entry.",
+          "items": {
+            "$ref": "#/$defs/WorkloadTier"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "catalogue_id",
+        "display_name",
+        "family",
+        "workload_tiers",
+        "size_class",
+        "licence_spdx",
+        "provenance_url"
+      ],
+      "type": "object"
+    },
+    "CandidateModelId": {
+      "description": "Provider-neutral catalogue model identifier.",
+      "type": "string"
+    },
+    "CandidateRuntime": {
+      "description": "Provider-neutral runtime metadata required to explain a recommendation.",
+      "properties": {
+        "catalogue_id": {
+          "$ref": "#/$defs/CandidateRuntimeId",
+          "description": "Stable runtime catalogue identity independent from provider product names."
+        },
+        "display_name": {
+          "description": "Beginner-readable runtime role.",
+          "type": "string"
+        },
+        "optional_accelerations": {
+          "description": "Acceleration kinds that may be used only when reliably evidenced.",
+          "items": {
+            "$ref": "#/$defs/AccelerationKind"
+          },
+          "type": "array"
+        },
+        "supported_architectures": {
+          "description": "Architectures supported by this planning profile.",
+          "items": {
+            "$ref": "#/$defs/MachineArchitecture"
+          },
+          "type": "array"
+        },
+        "supports_cpu_only": {
+          "description": "Whether the planned configuration can run without GPU acceleration.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "catalogue_id",
+        "display_name",
+        "supports_cpu_only",
+        "supported_architectures",
+        "optional_accelerations"
+      ],
+      "type": "object"
+    },
+    "CandidateRuntimeId": {
+      "description": "Provider-neutral catalogue runtime identifier.",
+      "type": "string"
+    },
+    "CapabilityReport": {
+      "description": "Deterministic capability report generated from one machine profile.",
+      "properties": {
+        "catalogue_version": {
+          "$ref": "#/$defs/CatalogueVersion",
+          "description": "Version of the local static catalogue used for this report."
+        },
+        "confidence": {
+          "$ref": "#/$defs/ConfidenceLevel",
+          "description": "Overall report confidence."
+        },
+        "fallback_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecommendationPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Smaller safe fallback, when one exists."
+        },
+        "generated_from_scan_unix_ms": {
+          "description": "Source scan timestamp used as deterministic generation provenance.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "machine_profile_schema_version": {
+          "description": "Schema version of the supplied machine profile.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "no_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NoPlanResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit no-plan detail when no safe plan exists."
+        },
+        "optional_larger_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecommendationPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe larger alternative, when requested and available."
+        },
+        "preferences": {
+          "$ref": "#/$defs/UserPreferenceProfile",
+          "description": "Exact user preferences used for selection."
+        },
+        "reasons": {
+          "description": "Report-level deterministic reasons.",
+          "items": {
+            "$ref": "#/$defs/RecommendationReason"
+          },
+          "type": "array"
+        },
+        "recommended_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecommendationPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary recommended plan, when available."
+        },
+        "rule_set_version": {
+          "$ref": "#/$defs/RuleSetVersion",
+          "description": "Version of the deterministic rule set used for this report."
+        },
+        "schema_version": {
+          "description": "Capability-report schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/CapabilityReportStatus",
+          "description": "Whether safe plans are available."
+        },
+        "warnings": {
+          "description": "Report-level warnings and unknown-evidence impact.",
+          "items": {
+            "$ref": "#/$defs/RecommendationWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "catalogue_version",
+        "rule_set_version",
+        "machine_profile_schema_version",
+        "generated_from_scan_unix_ms",
+        "preferences",
+        "status",
+        "confidence",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "CapabilityReportStatus": {
+      "description": "Whether the report contains a safe plan or an explicit no-plan result.",
+      "oneOf": [
+        {
+          "const": "plans_available",
+          "description": "At least one safe plan is available.",
+          "type": "string"
+        },
+        {
+          "const": "no_plan",
+          "description": "No safe plan can be established from the supplied evidence.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized report status.",
+          "type": "string"
+        }
+      ]
+    },
+    "CatalogueVersion": {
+      "description": "Version of the deterministic local planning catalogue.",
+      "type": "string"
+    },
     "ClientHello": {
       "description": "First authenticated request sent by the Flutter desktop.",
       "properties": {
@@ -287,6 +518,51 @@
         "request_id"
       ],
       "type": "object"
+    },
+    "CompatibilityStatus": {
+      "description": "Compatibility result after hard constraints are evaluated.",
+      "oneOf": [
+        {
+          "const": "compatible",
+          "description": "Every hard requirement is satisfied by available evidence.",
+          "type": "string"
+        },
+        {
+          "const": "incompatible",
+          "description": "At least one hard requirement is violated.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Critical evidence is unavailable, so compatibility cannot be established safely.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConfidenceLevel": {
+      "description": "Confidence in a recommendation or no-plan conclusion.",
+      "oneOf": [
+        {
+          "const": "high",
+          "description": "Critical evidence is reliable and optional uncertainty is limited.",
+          "type": "string"
+        },
+        {
+          "const": "medium",
+          "description": "The plan is safe but one or more optional facts remain unknown.",
+          "type": "string"
+        },
+        {
+          "const": "low",
+          "description": "Material uncertainty limits the strength of the result.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Confidence was not established or a newer peer supplied an unknown value.",
+          "type": "string"
+        }
+      ]
     },
     "CoreHello": {
       "description": "Successful protocol and capability negotiation returned by the core.",
@@ -980,6 +1256,100 @@
         }
       ]
     },
+    "MemoryEstimate": {
+      "description": "Conservative memory estimate and the observed evidence used to assess it.",
+      "properties": {
+        "observed_available_bytes": {
+          "description": "Observed currently available physical memory when reliably available.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observed_total_bytes": {
+          "description": "Observed total physical memory when reliably available.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "required_bytes": {
+          "description": "Estimated memory required by the planned local workload.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "safety_margin_bytes": {
+          "description": "Additional memory retained as a safety margin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "required_bytes",
+        "safety_margin_bytes"
+      ],
+      "type": "object"
+    },
+    "ModelSizeClass": {
+      "description": "Coarse model-size category used for deterministic planning and explanation.",
+      "oneOf": [
+        {
+          "const": "compact",
+          "description": "Smallest catalogue tier with the lowest resource use.",
+          "type": "string"
+        },
+        {
+          "const": "standard",
+          "description": "Middle catalogue tier balancing capability and headroom.",
+          "type": "string"
+        },
+        {
+          "const": "large",
+          "description": "Larger catalogue tier requiring substantially more resources.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized size class.",
+          "type": "string"
+        }
+      ]
+    },
+    "NoPlanResult": {
+      "description": "Explicit result when no catalogue candidate can be recommended safely.",
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/ConfidenceLevel",
+          "description": "Confidence in the no-plan conclusion."
+        },
+        "reasons": {
+          "description": "Hard-constraint reasons that prevented a safe plan.",
+          "items": {
+            "$ref": "#/$defs/RecommendationReason"
+          },
+          "type": "array"
+        },
+        "warnings": {
+          "description": "Actionable uncertainty or resource warnings.",
+          "items": {
+            "$ref": "#/$defs/RecommendationWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "confidence",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
     "OperatingSystemEvidence": {
       "description": "Operating-system evidence safe to cross the desktop boundary.",
       "properties": {
@@ -1031,6 +1401,31 @@
       ],
       "type": "object"
     },
+    "PlanRole": {
+      "description": "Role of one plan in the recommendation response.",
+      "oneOf": [
+        {
+          "const": "recommended",
+          "description": "Primary safe plan selected by deterministic scoring.",
+          "type": "string"
+        },
+        {
+          "const": "fallback",
+          "description": "Smaller plan that preserves more resource headroom.",
+          "type": "string"
+        },
+        {
+          "const": "optional_larger",
+          "description": "Safe larger plan shown as an optional trade-off.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized role.",
+          "type": "string"
+        }
+      ]
+    },
     "PlatformStatus": {
       "description": "Combined version and readiness response produced by the platform core.",
       "properties": {
@@ -1048,6 +1443,36 @@
         "readiness"
       ],
       "type": "object"
+    },
+    "PreferencePriority": {
+      "description": "User priority applied only after hard compatibility filtering.",
+      "oneOf": [
+        {
+          "const": "balanced",
+          "description": "Balance quality, setup size, and resource headroom.",
+          "type": "string"
+        },
+        {
+          "const": "fastest_setup",
+          "description": "Prefer the smallest setup likely to become usable quickly.",
+          "type": "string"
+        },
+        {
+          "const": "lowest_resource_use",
+          "description": "Preserve the most memory and storage headroom.",
+          "type": "string"
+        },
+        {
+          "const": "best_quality_within_safe_limits",
+          "description": "Prefer the strongest safe candidate supported by current evidence.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized priority.",
+          "type": "string"
+        }
+      ]
     },
     "ReadinessReport": {
       "description": "Overall readiness plus the complete evidence used to calculate it.",
@@ -1101,6 +1526,317 @@
         {
           "const": "unknown",
           "description": "A newer peer supplied an unrecognized readiness value.",
+          "type": "string"
+        }
+      ]
+    },
+    "RecommendationPlan": {
+      "description": "One explainable candidate plan returned by the recommendation engine.",
+      "properties": {
+        "catalogue_version": {
+          "$ref": "#/$defs/CatalogueVersion",
+          "description": "Catalogue version that defined this candidate."
+        },
+        "compatibility": {
+          "$ref": "#/$defs/CompatibilityStatus",
+          "description": "Hard-constraint compatibility result."
+        },
+        "confidence": {
+          "$ref": "#/$defs/ConfidenceLevel",
+          "description": "Confidence in this plan."
+        },
+        "model": {
+          "$ref": "#/$defs/CandidateModel",
+          "description": "Provider-neutral selected model."
+        },
+        "reasons": {
+          "description": "Deterministic explanations for this plan.",
+          "items": {
+            "$ref": "#/$defs/RecommendationReason"
+          },
+          "type": "array"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourceEstimate",
+          "description": "Conservative resource estimates."
+        },
+        "role": {
+          "$ref": "#/$defs/PlanRole",
+          "description": "Role in the report."
+        },
+        "rule_set_version": {
+          "$ref": "#/$defs/RuleSetVersion",
+          "description": "Rule-set version that selected this plan."
+        },
+        "runtime": {
+          "$ref": "#/$defs/CandidateRuntime",
+          "description": "Provider-neutral selected runtime planning profile."
+        },
+        "warnings": {
+          "description": "Uncertainty and trade-off warnings for this plan.",
+          "items": {
+            "$ref": "#/$defs/RecommendationWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "catalogue_version",
+        "rule_set_version",
+        "role",
+        "compatibility",
+        "model",
+        "runtime",
+        "resources",
+        "confidence",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "RecommendationReason": {
+      "description": "One stable reason plus plain-language explanation.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/RecommendationReasonCode",
+          "description": "Machine-readable reason category."
+        },
+        "message": {
+          "description": "Safe provider-neutral explanation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "RecommendationReasonCode": {
+      "description": "Stable explanation category for deterministic selection decisions.",
+      "oneOf": [
+        {
+          "const": "workload_match",
+          "description": "Candidate matches the requested workload.",
+          "type": "string"
+        },
+        {
+          "const": "balanced_choice",
+          "description": "Candidate best balances resource use and capability.",
+          "type": "string"
+        },
+        {
+          "const": "fastest_setup",
+          "description": "Candidate best matches the fastest-setup preference.",
+          "type": "string"
+        },
+        {
+          "const": "lowest_resource_use",
+          "description": "Candidate best preserves memory and storage.",
+          "type": "string"
+        },
+        {
+          "const": "best_quality_within_safe_limits",
+          "description": "Candidate is the strongest option within verified safety limits.",
+          "type": "string"
+        },
+        {
+          "const": "safe_memory_margin",
+          "description": "Verified physical-memory margin is sufficient.",
+          "type": "string"
+        },
+        {
+          "const": "safe_storage_margin",
+          "description": "Verified storage margin is sufficient.",
+          "type": "string"
+        },
+        {
+          "const": "cpu_only_feasible",
+          "description": "Candidate remains feasible without GPU acceleration.",
+          "type": "string"
+        },
+        {
+          "const": "reliable_acceleration_available",
+          "description": "Reliable optional acceleration evidence can be used.",
+          "type": "string"
+        },
+        {
+          "const": "smaller_fallback",
+          "description": "Plan is the smaller fallback to the recommended plan.",
+          "type": "string"
+        },
+        {
+          "const": "larger_alternative",
+          "description": "Plan is the larger optional alternative.",
+          "type": "string"
+        },
+        {
+          "const": "stable_catalogue_order",
+          "description": "Stable catalogue identity resolved an otherwise equal score.",
+          "type": "string"
+        },
+        {
+          "const": "no_compatible_candidate",
+          "description": "No catalogue candidate passed every hard constraint.",
+          "type": "string"
+        },
+        {
+          "const": "unsupported_architecture",
+          "description": "Machine architecture violates the runtime requirement.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_logical_processors",
+          "description": "Logical processor evidence violates the minimum requirement.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_memory",
+          "description": "Physical memory violates the conservative requirement.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_available_memory",
+          "description": "Currently available memory violates the conservative requirement.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_storage",
+          "description": "Free storage violates the conservative requirement.",
+          "type": "string"
+        },
+        {
+          "const": "critical_evidence_unknown",
+          "description": "Critical evidence is unknown, so a safe plan cannot be established.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized reason.",
+          "type": "string"
+        }
+      ]
+    },
+    "RecommendationRequest": {
+      "description": "Authenticated request for one deterministic capability report.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by the response and safe failures."
+        },
+        "machine_profile": {
+          "$ref": "#/$defs/MachineProfile",
+          "description": "Versioned machine evidence produced by Task 07."
+        },
+        "preferences": {
+          "$ref": "#/$defs/UserPreferenceProfile",
+          "description": "User intent applied only after hard filtering."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this recommendation request."
+        }
+      },
+      "required": [
+        "machine_profile",
+        "preferences",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RecommendationResponse": {
+      "description": "Authenticated response containing one deterministic capability report.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "report": {
+          "$ref": "#/$defs/CapabilityReport",
+          "description": "Deterministic capability report."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "report",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RecommendationWarning": {
+      "description": "One stable warning plus plain-language explanation.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/RecommendationWarningCode",
+          "description": "Machine-readable warning category."
+        },
+        "message": {
+          "description": "Safe provider-neutral explanation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "RecommendationWarningCode": {
+      "description": "Stable warning category for uncertainty or a resource trade-off.",
+      "oneOf": [
+        {
+          "const": "partial_hardware_evidence",
+          "description": "The machine profile contains explicitly unavailable evidence.",
+          "type": "string"
+        },
+        {
+          "const": "available_memory_unknown",
+          "description": "Currently available memory could not be verified.",
+          "type": "string"
+        },
+        {
+          "const": "vram_unknown",
+          "description": "Dedicated video memory could not be verified.",
+          "type": "string"
+        },
+        {
+          "const": "acceleration_unknown",
+          "description": "Supported acceleration could not be verified.",
+          "type": "string"
+        },
+        {
+          "const": "cpu_only_mode",
+          "description": "The plan is intentionally conservative and CPU-only.",
+          "type": "string"
+        },
+        {
+          "const": "removable_storage",
+          "description": "The selected storage location is removable.",
+          "type": "string"
+        },
+        {
+          "const": "limited_fallback_options",
+          "description": "No distinct smaller safe fallback is available.",
+          "type": "string"
+        },
+        {
+          "const": "optional_larger_unavailable",
+          "description": "No larger safe alternative is available.",
+          "type": "string"
+        },
+        {
+          "const": "no_safe_plan",
+          "description": "No safe plan can be recommended from current evidence.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized warning.",
           "type": "string"
         }
       ]
@@ -1161,6 +1897,60 @@
     "RequestId": {
       "description": "Identifier for one request within a wider correlated operation.",
       "format": "uuid",
+      "type": "string"
+    },
+    "ResourceEstimate": {
+      "description": "Conservative resource estimate for one candidate plan.",
+      "properties": {
+        "acceleration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccelerationKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reliably evidenced acceleration selected for the plan, if any."
+        },
+        "cpu_only": {
+          "description": "Whether the plan remains feasible without GPU acceleration.",
+          "type": "boolean"
+        },
+        "gpu_memory_bytes": {
+          "description": "Reliably evidenced GPU memory assigned to the plan, if any.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "memory": {
+          "$ref": "#/$defs/MemoryEstimate",
+          "description": "Physical-memory estimate."
+        },
+        "planned_context_tokens": {
+          "description": "Conservative context size used for planning, not a performance promise.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "storage": {
+          "$ref": "#/$defs/StorageEstimate",
+          "description": "Storage estimate."
+        }
+      },
+      "required": [
+        "memory",
+        "storage",
+        "planned_context_tokens",
+        "cpu_only"
+      ],
+      "type": "object"
+    },
+    "RuleSetVersion": {
+      "description": "Version of the deterministic hard-constraint and scoring rules.",
       "type": "string"
     },
     "SafeErrorPayload": {
@@ -1327,6 +2117,37 @@
       ],
       "type": "object"
     },
+    "StorageEstimate": {
+      "description": "Conservative storage estimate and the observed evidence used to assess it.",
+      "properties": {
+        "observed_free_bytes": {
+          "description": "Observed currently free bytes at the selected storage location.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "required_bytes": {
+          "description": "Estimated installed model and runtime footprint.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "safety_margin_bytes": {
+          "description": "Additional free space retained as a safety margin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "required_bytes",
+        "safety_margin_bytes"
+      ],
+      "type": "object"
+    },
     "StorageEvidence": {
       "description": "Capacity evidence for the selected privacy-preserving storage location.",
       "properties": {
@@ -1366,6 +2187,11 @@
         {
           "const": "application_data",
           "description": "The per-user GixGiz application-data root.",
+          "type": "string"
+        },
+        {
+          "const": "user_selected",
+          "description": "A user-selected location represented without exposing its raw path.",
           "type": "string"
         },
         {
@@ -1656,6 +2482,11 @@
           "type": "string"
         },
         {
+          "const": "capability_recommendation",
+          "description": "Generate a deterministic capability recommendation from supplied evidence.",
+          "type": "string"
+        },
+        {
           "const": "shutdown",
           "description": "Request bounded sidecar shutdown.",
           "type": "string"
@@ -1755,6 +2586,49 @@
           "type": "string"
         }
       ]
+    },
+    "UserPreferenceProfile": {
+      "description": "Provider-neutral user preferences consumed by the Rust recommendation engine.",
+      "properties": {
+        "include_optional_larger": {
+          "description": "Whether a safe larger alternative may be returned for comparison.",
+          "type": "boolean"
+        },
+        "priority": {
+          "$ref": "#/$defs/PreferencePriority",
+          "description": "Resource-versus-quality priority."
+        },
+        "workload": {
+          "$ref": "#/$defs/WorkloadTier",
+          "description": "Primary intended workload."
+        }
+      },
+      "required": [
+        "workload",
+        "priority",
+        "include_optional_larger"
+      ],
+      "type": "object"
+    },
+    "WorkloadTier": {
+      "description": "Beginner-facing workload selected by the user.",
+      "oneOf": [
+        {
+          "const": "general_text",
+          "description": "Everyday writing, questions, summaries, and general text.",
+          "type": "string"
+        },
+        {
+          "const": "coding",
+          "description": "Code explanation, drafting, and software-development assistance.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized workload.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1792,6 +2666,12 @@
     "health_response": {
       "$ref": "#/$defs/HealthResponse"
     },
+    "recommendation_request": {
+      "$ref": "#/$defs/RecommendationRequest"
+    },
+    "recommendation_response": {
+      "$ref": "#/$defs/RecommendationResponse"
+    },
     "safe_error_payload": {
       "$ref": "#/$defs/SafeErrorPayload"
     },
@@ -1821,6 +2701,8 @@
     "hardware_scan_start_request",
     "hardware_scan_start_response",
     "hardware_scan_event",
+    "recommendation_request",
+    "recommendation_response",
     "test_operation_start_request",
     "test_operation_start_response",
     "test_operation_event",

@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod capability;
 mod error;
 mod hardware;
 mod identity;
@@ -13,6 +14,15 @@ mod ids;
 mod readiness;
 mod transport;
 
+pub use capability::{
+    CAPABILITY_REPORT_SCHEMA_VERSION, CandidateModel, CandidateModelId, CandidateRuntime,
+    CandidateRuntimeId, CapabilityReport, CapabilityReportStatus, CatalogueVersion,
+    CompatibilityStatus, ConfidenceLevel, MemoryEstimate, ModelSizeClass, NoPlanResult, PlanRole,
+    PreferencePriority, RecommendationPlan, RecommendationReason, RecommendationReasonCode,
+    RecommendationRequest, RecommendationResponse, RecommendationWarning,
+    RecommendationWarningCode, ResourceEstimate, RuleSetVersion, StorageEstimate,
+    UserPreferenceProfile, WorkloadTier,
+};
 pub use error::{ErrorCategory, RecoveryAction, RecoveryGuidance, SafeErrorPayload};
 pub use hardware::{
     AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CpuEvidence,

@@ -12,8 +12,9 @@ use std::{
 use gixgiz_contracts::{
     BootstrapReady, BootstrapRequest, CancelOperationRequest, CancelOperationResponse, ClientHello,
     CoreHello, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
-    HealthRequest, HealthResponse, SafeErrorPayload, ShutdownRequest, ShutdownResponse,
-    TestOperationEvent, TestOperationStartRequest, TestOperationStartResponse,
+    HealthRequest, HealthResponse, RecommendationRequest, RecommendationResponse, SafeErrorPayload,
+    ShutdownRequest, ShutdownResponse, TestOperationEvent, TestOperationStartRequest,
+    TestOperationStartResponse,
 };
 use schemars::{JsonSchema, schema_for};
 use serde_json::{Map, Value};
@@ -30,6 +31,8 @@ struct TransportContractDocument {
     hardware_scan_start_request: HardwareScanStartRequest,
     hardware_scan_start_response: HardwareScanStartResponse,
     hardware_scan_event: HardwareScanEvent,
+    recommendation_request: RecommendationRequest,
+    recommendation_response: RecommendationResponse,
     test_operation_start_request: TestOperationStartRequest,
     test_operation_start_response: TestOperationStartResponse,
     test_operation_event: TestOperationEvent,
