@@ -94,6 +94,17 @@ abstract class CoreClient {
     );
   }
 
+  Future<CapabilityReport> recommendCapability(
+    MachineProfile profile,
+    UserPreferenceProfile preferences,
+  ) {
+    return Future.error(
+      UnsupportedError(
+        'Capability recommendations are not supported by this client.',
+      ),
+    );
+  }
+
   Future<void> shutdown() async {}
 }
 

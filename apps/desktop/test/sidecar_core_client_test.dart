@@ -117,6 +117,29 @@ void main() {
     expect(events.last.terminalState, HardwareScanTerminalState.cancelled);
   });
 
+  test('capability recommendation remains typed across the session', () async {
+    final session = _FakeSession(readiness: ReadinessStatus.ready);
+    final client = SidecarCoreClient(
+      connector: _FakeConnector.session(session),
+    );
+
+    final report = await client.recommendCapability(
+      _machineProfile(),
+      const UserPreferenceProfile(
+        workload: WorkloadTier.generalText,
+        priority: PreferencePriority.balanced,
+        includeOptionalLarger: true,
+      ),
+    );
+
+    expect(report.status, CapabilityReportStatus.noPlan);
+    expect(report.catalogueVersion, 'test-catalogue');
+    expect(
+      session.lastHello?.requestedCapabilities,
+      contains(TransportCapability.capabilityRecommendation),
+    );
+  });
+
   test('normal shutdown is delegated once to the sidecar session', () async {
     final session = _FakeSession(readiness: ReadinessStatus.ready);
     final client = SidecarCoreClient(
@@ -172,6 +195,7 @@ class _FakeSession implements CoreSidecarSession {
   SidecarFailure? healthFailure;
   int handshakeCount = 0;
   int shutdownCount = 0;
+  ClientHello? lastHello;
 
   @override
   bool get hasExited => false;
@@ -179,6 +203,7 @@ class _FakeSession implements CoreSidecarSession {
   @override
   Future<CoreHello> handshake(ClientHello hello) async {
     handshakeCount += 1;
+    lastHello = hello;
     return CoreHello(
       application: _application,
       selectedProtocol: 1,
@@ -316,6 +341,17 @@ class _FakeSession implements CoreSidecarSession {
   }
 
   @override
+  Future<RecommendationResponse> recommend(
+    RecommendationRequest request,
+  ) async {
+    return RecommendationResponse(
+      report: _noPlanReport(),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
   Future<void> shutdown(ShutdownRequest request) async {
     shutdownCount += 1;
   }
@@ -335,4 +371,77 @@ class _FakeSession implements CoreSidecarSession {
       services: const [],
     );
   }
+}
+
+MachineProfile _machineProfile() {
+  const metadata = <String, Object?>{
+    'source': 'windows_cim',
+    'availability': 'available',
+    'confidence': 'high',
+    'reason_code': null,
+    'reason': null,
+  };
+  Map<String, Object?> evidence(Object value) => {
+    'value': value,
+    'metadata': metadata,
+  };
+  return MachineProfile.fromJson({
+    'schema_version': 1,
+    'scan_id': '00000000-0000-4000-8000-000000000003',
+    'correlation_id': '00000000-0000-4000-8000-000000000004',
+    'scanned_at_unix_ms': 1,
+    'completeness': 'complete',
+    'operating_system': {
+      'name': evidence('Windows 11'),
+      'version': evidence('10.0'),
+      'build': evidence('26100'),
+      'architecture': evidence('x86_64'),
+    },
+    'cpu': {
+      'name': evidence('Fixture CPU'),
+      'vendor': evidence('Fixture vendor'),
+      'physical_core_count': evidence(4),
+      'logical_core_count': evidence(8),
+    },
+    'physical_memory': {
+      'total_bytes': evidence(16 * 1024 * 1024 * 1024),
+      'available_bytes': evidence(10 * 1024 * 1024 * 1024),
+    },
+    'gpus': {'devices': <Object?>[], 'metadata': metadata},
+    'acceleration': <Object?>[],
+    'storage': {
+      'location': 'application_data',
+      'capacity_bytes': evidence(200 * 1024 * 1024 * 1024),
+      'free_bytes': evidence(30 * 1024 * 1024 * 1024),
+      'filesystem': evidence('NTFS'),
+      'media_kind': evidence('fixed'),
+    },
+  });
+}
+
+CapabilityReport _noPlanReport() {
+  return CapabilityReport.fromJson({
+    'schema_version': 1,
+    'catalogue_version': 'test-catalogue',
+    'rule_set_version': 'test-rules',
+    'machine_profile_schema_version': 1,
+    'generated_from_scan_unix_ms': 1,
+    'preferences': {
+      'workload': 'general_text',
+      'priority': 'balanced',
+      'include_optional_larger': true,
+    },
+    'status': 'no_plan',
+    'recommended_plan': null,
+    'fallback_plan': null,
+    'optional_larger_plan': null,
+    'no_plan': {
+      'confidence': 'high',
+      'reasons': <Object?>[],
+      'warnings': <Object?>[],
+    },
+    'confidence': 'high',
+    'reasons': <Object?>[],
+    'warnings': <Object?>[],
+  });
 }
