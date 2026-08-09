@@ -1,6 +1,6 @@
 # GixGiz Desktop
 
-The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness and hardware-evidence state. It contains no hardware collection, recommendation, installer, persistence, runtime, model, or provider logic.
+The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness, hardware evidence, and capability reports. It contains no hardware collection, recommendation rules, installer, persistence, runtime, model, or provider logic.
 
 ## Toolchain
 
@@ -56,3 +56,5 @@ cargo run -p gixgiz-contracts --example generate_bindings -- --check
 ```
 
 The first command regenerates the Rust-owned JSON Schema and Dart bindings; the second fails when either committed artifact drifts. See [`../../docs/guides/flutter-rust-transport.md`](../../docs/guides/flutter-rust-transport.md) for bootstrap and security details.
+
+The Foundation screen can request an authenticated capability report after a completed or partial hardware scan. Flutter sends only the typed `MachineProfile` and user preferences, then renders the Rust-owned recommended, fallback, larger, or no-plan result. Catalogue policy and user-facing terminology are documented in [`../../docs/guides/capability-recommendations.md`](../../docs/guides/capability-recommendations.md).
