@@ -21,7 +21,7 @@ The v0.1 success condition is that a supported non-technical Windows user can mo
 
 ## Status
 
-Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence contributing verified startup health.
+Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence and a non-elevated Windows hardware-evidence scan.
 
 ## Repository map
 
@@ -116,10 +116,10 @@ The root Cargo workspace contains four crates with a strict dependency direction
 gixgiz-desktop-host -> gixgiz-core -> gixgiz-persistence -> gixgiz-contracts
 ```
 
-- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, handshake, event, cancellation, error, recovery, and request-correlation contracts.
+- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, machine-profile, handshake, event, cancellation, error, recovery, and request-correlation contracts.
 - `gixgiz-persistence` exclusively owns the SQLite connection, data-root layout, migrations, backups, health checks, and typed repository SQL.
-- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
-- `gixgiz-desktop-host` builds `gixgiz-core.exe`, reads a per-launch secret from the inherited stdin pipe, initializes core services on a blocking worker, and exposes only the authenticated HTTP/SSE routes on a dynamic `127.0.0.1` port. It exposes persistence health but no paths, SQL, or database access.
+- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, hardware-scan orchestration and Windows evidence normalization, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
+- `gixgiz-desktop-host` builds `gixgiz-core.exe`, reads a per-launch secret from the inherited stdin pipe, initializes core services on blocking workers, and exposes only the authenticated HTTP/SSE routes on a dynamic `127.0.0.1` port. It exposes persistence health and typed hardware evidence but no paths, SQL, or database access.
 
 Run the Rust checks from the repository root:
 
@@ -137,6 +137,12 @@ cargo run -p gixgiz-contracts --example generate_bindings -- --check
 ```
 
 Transport architecture, bootstrap, routes, security controls, and development checks are documented in [`docs/guides/flutter-rust-transport.md`](./docs/guides/flutter-rust-transport.md).
+
+## Windows hardware evidence
+
+The Foundation screen can request a versioned `MachineProfile` from Rust. The scanner uses fixed, non-elevated inbox Windows PowerShell and CIM queries for a narrow allowlist: operating-system version and architecture, CPU identity and core counts, total and available physical memory, display-adapter names/vendors, and capacity metadata for the drive containing `%LOCALAPPDATA%`. Flutter only renders the typed result.
+
+Unreported, inaccessible, or unreliable values remain explicitly unknown with source, availability, confidence, and a safe reason. In particular, Windows display-adapter memory and acceleration support are not inferred from marketing names. The scan collects no serial numbers, MAC addresses, PNP IDs, file listings, or unrelated stable identifiers; it is not persisted or uploaded. See [`docs/guides/windows-hardware-scan.md`](./docs/guides/windows-hardware-scan.md).
 
 ## SQLite persistence
 

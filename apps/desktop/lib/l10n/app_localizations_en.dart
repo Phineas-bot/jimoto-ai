@@ -166,4 +166,143 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coreNotConnectedValue => 'Not connected in this build';
+
+  @override
+  String get hardwareScanIdleTitle => 'Hardware evidence';
+
+  @override
+  String get hardwareScanIdleMessage =>
+      'Scan this PC for local OS, processor, physical memory, display adapter, acceleration, and storage evidence.';
+
+  @override
+  String get hardwareScanLoadingTitle => 'Scanning hardware';
+
+  @override
+  String get hardwareScanLoadingMessage =>
+      'GixGiz is collecting bounded, non-elevated Windows evidence.';
+
+  @override
+  String get hardwareScanReadyTitle => 'Hardware evidence ready';
+
+  @override
+  String get hardwareScanReadyMessage =>
+      'All requested evidence was reported reliably.';
+
+  @override
+  String get hardwareScanPartialTitle =>
+      'Hardware evidence partially available';
+
+  @override
+  String get hardwareScanPartialMessage =>
+      'The profile is usable, and unavailable values remain explicitly unknown.';
+
+  @override
+  String get hardwareScanFailedTitle => 'Hardware scan failed';
+
+  @override
+  String get hardwareScanFailedMessage =>
+      'GixGiz could not produce a usable hardware profile. Review diagnostics, then try again.';
+
+  @override
+  String get hardwareScanCancelledTitle => 'Hardware scan cancelled';
+
+  @override
+  String get hardwareScanCancelledMessage =>
+      'The scan stopped without changing system settings.';
+
+  @override
+  String get hardwareScanStartAction => 'Scan hardware';
+
+  @override
+  String get hardwareScanAgainAction => 'Scan again';
+
+  @override
+  String get hardwareScanCancelAction => 'Cancel scan';
+
+  @override
+  String get hardwareScanProgressSemanticLabel =>
+      'Hardware evidence scan progress';
+
+  @override
+  String hardwareScanStatusSemanticLabel(String status, String detail) {
+    return 'Hardware scan status: $status. $detail';
+  }
+
+  @override
+  String hardwareProfileSemanticLabel(String completeness, int version) {
+    return 'Hardware profile $completeness, schema version $version';
+  }
+
+  @override
+  String get hardwareOperatingSystemLabel => 'Operating system';
+
+  @override
+  String get hardwareCpuLabel => 'Processor';
+
+  @override
+  String get hardwarePhysicalMemoryLabel => 'Physical memory';
+
+  @override
+  String get hardwareGpuLabel => 'Display adapter';
+
+  @override
+  String hardwareGpuNumberLabel(int number) {
+    return 'Display adapter $number';
+  }
+
+  @override
+  String get hardwareAccelerationLabel => 'Acceleration evidence';
+
+  @override
+  String get hardwareStorageLabel => 'Application storage';
+
+  @override
+  String hardwareOperatingSystemValue(
+    String name,
+    String version,
+    String architecture,
+  ) {
+    return '$name, version $version, $architecture';
+  }
+
+  @override
+  String hardwareCpuValue(String name, String physical, String logical) {
+    return '$name, $physical physical cores, $logical logical processors';
+  }
+
+  @override
+  String hardwareMemoryValue(String total, String available) {
+    return '$total total, $available available';
+  }
+
+  @override
+  String hardwareGpuValue(String name, String dedicated, String shared) {
+    return '$name, dedicated memory $dedicated, shared memory $shared';
+  }
+
+  @override
+  String hardwareAccelerationValue(String kind, String support) {
+    return '$kind: $support';
+  }
+
+  @override
+  String hardwareStorageValue(
+    String capacity,
+    String free,
+    String filesystem,
+    String media,
+  ) {
+    return '$capacity capacity, $free free, $filesystem, $media';
+  }
+
+  @override
+  String hardwareEvidenceDetail(String source, String reason) {
+    return 'Source: $source. $reason';
+  }
+
+  @override
+  String get supportedValue => 'Supported';
+
+  @override
+  String get notSupportedValue => 'Not supported';
 }

@@ -11,16 +11,19 @@ use axum::{
 };
 use gixgiz_contracts::{
     CancelOperationRequest, CancelOperationResponse, ClientHello, CoreHello, CorrelationId,
-    ErrorCategory, HealthRequest, HealthResponse, InstanceId, OperationId, PROTOCOL_VERSION,
-    PlatformStatus, RecoveryAction, RecoveryGuidance, RequestId, SafeErrorPayload, ShutdownRequest,
+    ErrorCategory, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
+    HealthRequest, HealthResponse, InstanceId, OperationId, PROTOCOL_VERSION, PlatformStatus,
+    RecoveryAction, RecoveryGuidance, RequestId, SafeErrorPayload, ShutdownRequest,
     ShutdownResponse, TestOperationStartRequest, TestOperationStartResponse, TransportCapability,
 };
+use gixgiz_core::HardwareScanner;
 use tokio::sync::{Semaphore, mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
     HostError,
     bootstrap::BearerToken,
+    hardware_scans::HardwareScanRegistry,
     operations::{OperationError, OperationRegistry},
 };
 
@@ -37,6 +40,7 @@ struct AppState {
     status: PlatformStatus,
     handshaken: Arc<std::sync::atomic::AtomicBool>,
     operations: OperationRegistry,
+    hardware_scans: HardwareScanRegistry,
     request_slots: Arc<Semaphore>,
     shutdown: ShutdownHandle,
 }
@@ -73,6 +77,7 @@ impl SidecarHost {
         token: BearerToken,
         instance_id: InstanceId,
         status: PlatformStatus,
+        hardware_scanner: HardwareScanner,
     ) -> Result<Self, HostError> {
         let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
@@ -94,6 +99,7 @@ impl SidecarHost {
             status,
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
+            hardware_scans: HardwareScanRegistry::new(hardware_scanner),
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             shutdown: shutdown.clone(),
         };
@@ -149,6 +155,15 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/internal/v1/test-operations/{operation_id}/cancel",
             post(cancel_operation),
+        )
+        .route("/internal/v1/hardware-scans", post(start_hardware_scan))
+        .route(
+            "/internal/v1/hardware-scans/{operation_id}/events",
+            get(hardware_scan_events),
+        )
+        .route(
+            "/internal/v1/hardware-scans/{operation_id}/cancel",
+            post(cancel_hardware_scan),
         )
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
@@ -380,6 +395,85 @@ async fn cancel_operation(
     }))
 }
 
+async fn start_hardware_scan(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<HardwareScanStartRequest>, JsonRejection>,
+) -> Result<Json<HardwareScanStartResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let operation_id = state
+        .hardware_scans
+        .start(request.correlation_id, request.request_id)
+        .map_err(|error| operation_failure(error, ids))?;
+    Ok(Json(HardwareScanStartResponse {
+        operation_id,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+async fn hardware_scan_events(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(operation_id): Path<String>,
+) -> Result<Sse<ReceiverStream<Result<Event, Infallible>>>, ApiFailure> {
+    let operation_id =
+        OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
+    let mut subscription = state
+        .hardware_scans
+        .subscribe(operation_id, ids.correlation_id)
+        .map_err(|error| operation_failure(error, ids))?;
+    let (sender, receiver) = mpsc::channel(8);
+
+    tokio::spawn(async move {
+        for event in subscription.replay {
+            let terminal = event.terminal_state.is_some();
+            if send_hardware_event(&sender, event).await.is_err() || terminal {
+                return;
+            }
+        }
+        if subscription.terminal {
+            return;
+        }
+        loop {
+            match subscription.receiver.recv().await {
+                Ok(event) => {
+                    let terminal = event.terminal_state.is_some();
+                    if send_hardware_event(&sender, event).await.is_err() || terminal {
+                        return;
+                    }
+                }
+                Err(_) => return,
+            }
+        }
+    });
+
+    Ok(Sse::new(ReceiverStream::new(receiver)))
+}
+
+async fn cancel_hardware_scan(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(operation_id): Path<String>,
+    payload: Result<Json<CancelOperationRequest>, JsonRejection>,
+) -> Result<Json<CancelOperationResponse>, ApiFailure> {
+    let operation_id =
+        OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let accepted = state
+        .hardware_scans
+        .cancel(operation_id, request.correlation_id)
+        .map_err(|error| operation_failure(error, ids))?;
+    Ok(Json(CancelOperationResponse {
+        operation_id,
+        accepted,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
 async fn shutdown(
     State(state): State<AppState>,
     Extension(ids): Extension<BoundaryIds>,
@@ -404,6 +498,21 @@ async fn send_event(
     sender
         .send(Ok(Event::default()
             .event("test_operation")
+            .id(sequence)
+            .data(data)))
+        .await
+        .map_err(|_| ())
+}
+
+async fn send_hardware_event(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    event: HardwareScanEvent,
+) -> Result<(), ()> {
+    let sequence = event.sequence.to_string();
+    let data = serde_json::to_string(&event).map_err(|_| ())?;
+    sender
+        .send(Ok(Event::default()
+            .event("hardware_scan")
             .id(sequence)
             .data(data)))
         .await
@@ -462,6 +571,7 @@ fn supported_capabilities() -> Vec<TransportCapability> {
     vec![
         TransportCapability::Health,
         TransportCapability::TestOperationEvents,
+        TransportCapability::HardwareScan,
         TransportCapability::Cancellation,
         TransportCapability::Shutdown,
     ]
@@ -522,6 +632,15 @@ fn operation_failure(error: OperationError, ids: BoundaryIds) -> ApiFailure {
             "The cancellation correlation identifier did not match the operation.",
             RecoveryAction::NoAction,
             "Use the correlation identifier returned when the operation started.",
+            ids,
+        ),
+        OperationError::Busy => ApiFailure::new(
+            StatusCode::CONFLICT,
+            ErrorCategory::Conflict,
+            "hardware.scan_in_progress",
+            "A hardware evidence scan is already in progress.",
+            RecoveryAction::Retry,
+            "Wait for the current scan to finish or cancel it before retrying.",
             ids,
         ),
         OperationError::Internal => ApiFailure::new(
@@ -588,7 +707,9 @@ impl IntoResponse for ApiFailure {
 mod tests {
     use axum::http::Request;
     use gixgiz_contracts::{ServiceHealthStatus, ServiceRequirement};
-    use gixgiz_core::{OperationContext, PlatformCore};
+    use gixgiz_core::{
+        CollectedHardwareEvidence, CoreError, HardwareProvider, OperationContext, PlatformCore,
+    };
     use http_body_util::BodyExt;
     use serde_json::Value;
     use tower::ServiceExt;
@@ -596,6 +717,21 @@ mod tests {
     use super::*;
 
     const TOKEN: &str = "abababababababababababababababababababababababababababababababab";
+
+    struct UnavailableProvider;
+
+    impl HardwareProvider for UnavailableProvider {
+        fn collect(
+            &self,
+            _context: &OperationContext,
+        ) -> Result<CollectedHardwareEvidence, CoreError> {
+            Err(CoreError::HardwareProviderUnavailable)
+        }
+    }
+
+    fn test_hardware_scanner() -> HardwareScanner {
+        HardwareScanner::new(Arc::new(UnavailableProvider))
+    }
 
     fn state_with_status(status: PlatformStatus) -> AppState {
         let (shutdown_sender, _) = watch::channel(false);
@@ -605,6 +741,7 @@ mod tests {
             status,
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
+            hardware_scans: HardwareScanRegistry::new(test_hardware_scanner()),
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             shutdown: ShutdownHandle {
                 sender: shutdown_sender,
@@ -802,9 +939,14 @@ mod tests {
     #[tokio::test]
     async fn listener_uses_dynamic_ipv4_loopback_port() {
         let state = test_state();
-        let host = SidecarHost::bind(state.token, state.instance_id, state.status)
-            .await
-            .expect("loopback listener binds");
+        let host = SidecarHost::bind(
+            state.token,
+            state.instance_id,
+            state.status,
+            test_hardware_scanner(),
+        )
+        .await
+        .expect("loopback listener binds");
 
         assert_eq!(host.local_addr().ip(), std::net::Ipv4Addr::LOCALHOST);
         assert_ne!(host.local_addr().port(), 0);
@@ -900,11 +1042,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authenticated_hardware_route_streams_a_safe_typed_failure() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let correlation_id = CorrelationId::new();
+        let start_request = HardwareScanStartRequest {
+            correlation_id,
+            request_id: RequestId::new(),
+        };
+        let start_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/hardware-scans",
+                Some(TOKEN),
+                &start_request,
+            ))
+            .await
+            .expect("start request responds");
+        assert_eq!(start_response.status(), StatusCode::OK);
+        let started: HardwareScanStartResponse = response_json(start_response).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let request_id = RequestId::new();
+        let event_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/hardware-scans/{}/events",
+                started.operation_id
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, correlation_id.to_string())
+            .header(REQUEST_HEADER, request_id.to_string())
+            .body(Body::empty())
+            .expect("event request builds");
+        let event_response = router
+            .oneshot(event_request)
+            .await
+            .expect("event request responds");
+        assert_eq!(event_response.status(), StatusCode::OK);
+        let body = event_response
+            .into_body()
+            .collect()
+            .await
+            .expect("event stream completes")
+            .to_bytes();
+        let text = String::from_utf8(body.to_vec()).expect("SSE is UTF-8");
+        let events = text
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .map(|data| {
+                serde_json::from_str::<HardwareScanEvent>(data)
+                    .expect("hardware event payload decodes")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.sequence)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        let terminal = events.last().expect("terminal event exists");
+        assert_eq!(
+            terminal.terminal_state,
+            Some(gixgiz_contracts::HardwareScanTerminalState::Failed)
+        );
+        assert_eq!(
+            terminal.error.as_ref().map(|error| error.code.as_str()),
+            Some("hardware.provider_unavailable")
+        );
+        assert!(terminal.profile.is_none());
+    }
+
+    #[tokio::test]
     async fn shutdown_signal_stops_bound_server_within_deadline() {
         let state = test_state();
-        let host = SidecarHost::bind(state.token, state.instance_id, state.status)
-            .await
-            .expect("loopback listener binds");
+        let host = SidecarHost::bind(
+            state.token,
+            state.instance_id,
+            state.status,
+            test_hardware_scanner(),
+        )
+        .await
+        .expect("loopback listener binds");
         let shutdown = host.shutdown_handle();
         let server = tokio::spawn(host.run());
 

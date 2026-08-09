@@ -369,6 +369,50 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not connected in this build'**
   String get coreNotConnectedValue;
+
+  String get hardwareScanIdleTitle;
+  String get hardwareScanIdleMessage;
+  String get hardwareScanLoadingTitle;
+  String get hardwareScanLoadingMessage;
+  String get hardwareScanReadyTitle;
+  String get hardwareScanReadyMessage;
+  String get hardwareScanPartialTitle;
+  String get hardwareScanPartialMessage;
+  String get hardwareScanFailedTitle;
+  String get hardwareScanFailedMessage;
+  String get hardwareScanCancelledTitle;
+  String get hardwareScanCancelledMessage;
+  String get hardwareScanStartAction;
+  String get hardwareScanAgainAction;
+  String get hardwareScanCancelAction;
+  String get hardwareScanProgressSemanticLabel;
+  String hardwareScanStatusSemanticLabel(String status, String detail);
+  String hardwareProfileSemanticLabel(String completeness, int version);
+  String get hardwareOperatingSystemLabel;
+  String get hardwareCpuLabel;
+  String get hardwarePhysicalMemoryLabel;
+  String get hardwareGpuLabel;
+  String hardwareGpuNumberLabel(int number);
+  String get hardwareAccelerationLabel;
+  String get hardwareStorageLabel;
+  String hardwareOperatingSystemValue(
+    String name,
+    String version,
+    String architecture,
+  );
+  String hardwareCpuValue(String name, String physical, String logical);
+  String hardwareMemoryValue(String total, String available);
+  String hardwareGpuValue(String name, String dedicated, String shared);
+  String hardwareAccelerationValue(String kind, String support);
+  String hardwareStorageValue(
+    String capacity,
+    String free,
+    String filesystem,
+    String media,
+  );
+  String hardwareEvidenceDetail(String source, String reason);
+  String get supportedValue;
+  String get notSupportedValue;
 }
 
 class _AppLocalizationsDelegate

@@ -38,9 +38,14 @@ All routes require `Authorization: Bearer <per-launch-token>`, correlation and r
 | `POST /internal/v1/test-operations` | Start the deterministic Task 04 event operation. |
 | `GET /internal/v1/test-operations/{id}/events` | Stream ordered authenticated server-sent events. |
 | `POST /internal/v1/test-operations/{id}/cancel` | Request explicit cancellation. |
+| `POST /internal/v1/hardware-scans` | Start one bounded Rust-owned hardware evidence scan. |
+| `GET /internal/v1/hardware-scans/{id}/events` | Stream ordered typed scan events and the terminal machine profile. |
+| `POST /internal/v1/hardware-scans/{id}/cancel` | Propagate cancellation to the Windows evidence process. |
 | `POST /internal/v1/shutdown` | Request bounded sidecar shutdown. |
 
 The deterministic operation is transport-foundation behavior only. It is not a product workflow and has no hardware, runtime, model, download, persistence, or chat semantics.
+
+Hardware scans reuse the same authentication, handshake, correlation, bounded SSE, cancellation, and safe-error controls. Only one scan runs at a time, and the host retains at most eight in-process scan records for stream replay. No hardware evidence is exposed through an unauthenticated route or written to SQLite.
 
 ## Contract generation
 

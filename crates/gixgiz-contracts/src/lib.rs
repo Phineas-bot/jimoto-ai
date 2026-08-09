@@ -7,12 +7,23 @@
 #![deny(missing_docs)]
 
 mod error;
+mod hardware;
 mod identity;
 mod ids;
 mod readiness;
 mod transport;
 
 pub use error::{ErrorCategory, RecoveryAction, RecoveryGuidance, SafeErrorPayload};
+pub use hardware::{
+    AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CpuEvidence,
+    EvidenceAvailability, EvidenceConfidence, EvidenceMetadata, EvidenceSource,
+    GpuCollectionEvidence, GpuEvidence, HardwareScanEvent, HardwareScanEventKind,
+    HardwareScanStartRequest, HardwareScanStartResponse, HardwareScanTerminalState,
+    MACHINE_PROFILE_SCHEMA_VERSION, MachineArchitecture, MachineProfile,
+    MachineProfileCompleteness, OperatingSystemEvidence, PhysicalMemoryEvidence, StorageEvidence,
+    StorageLocation, StorageMediaEvidence, StorageMediaKind, StringEvidence, U32Evidence,
+    U64Evidence, UnknownReasonCode,
+};
 pub use identity::{
     APPLICATION_ID, APPLICATION_NAME, APPLICATION_VERSION, ApplicationInfo, PROTOCOL_VERSION,
     PlatformStatus, SCHEMA_VERSION,

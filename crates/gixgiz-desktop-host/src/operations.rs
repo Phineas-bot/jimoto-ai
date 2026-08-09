@@ -38,6 +38,7 @@ pub(crate) struct OperationSubscription {
 pub(crate) enum OperationError {
     NotFound,
     CorrelationMismatch,
+    Busy,
     Internal,
 }
 

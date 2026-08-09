@@ -159,7 +159,10 @@ Future<void> _pumpFoundation(
         home: Scaffold(
           body: FoundationScreen(
             state: state,
+            hardwareScanState: const HardwareScanIdle(),
             onRetry: () {},
+            onStartHardwareScan: () {},
+            onCancelHardwareScan: () {},
             primaryActionFocusNode: actionFocusNode,
           ),
         ),

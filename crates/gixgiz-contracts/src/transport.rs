@@ -16,6 +16,8 @@ pub enum TransportCapability {
     TestOperationEvents,
     /// Explicitly cancel an operation.
     Cancellation,
+    /// Start and observe a bounded hardware evidence scan.
+    HardwareScan,
     /// Request bounded sidecar shutdown.
     Shutdown,
     /// A newer peer supplied a capability this build does not recognize.

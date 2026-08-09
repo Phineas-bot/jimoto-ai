@@ -1,20 +1,25 @@
 //! Platform lifecycle and provider-neutral readiness policy for GixGiz.
 //!
 //! This crate owns core application behavior, composes Rust-owned persistence,
-//! and consumes shared contracts. It does not own transport, Flutter
-//! presentation, or provider and operating-system integrations. The desktop
-//! host adapts these services to the authenticated local boundary.
+//! and consumes shared contracts. The first non-elevated Windows hardware
+//! provider remains behind a provider-neutral trait in this crate. This crate
+//! does not own transport or Flutter presentation; the desktop host adapts its
+//! services to the authenticated local boundary.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 mod error;
+mod hardware;
 mod observability;
 mod operation;
 mod persistence;
 mod service;
 
 pub use error::CoreError;
+pub use hardware::{
+    CollectedHardwareEvidence, HardwareProvider, HardwareScanner, WindowsHardwareProvider,
+};
 pub use observability::{TracingInitError, init_tracing};
 pub use operation::{CancellationToken, OperationContext};
 pub use service::{CoreLifecycle, PlatformCore, ServiceHealthSource, compose_readiness};

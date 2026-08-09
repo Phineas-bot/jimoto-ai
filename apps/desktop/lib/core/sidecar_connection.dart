@@ -57,6 +57,21 @@ abstract interface class CoreSidecarSession {
     CancelOperationRequest request,
   );
 
+  Future<HardwareScanStartResponse> startHardwareScan(
+    HardwareScanStartRequest request,
+  );
+
+  Stream<HardwareScanEvent> hardwareScanEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  );
+
+  Future<CancelOperationResponse> cancelHardwareScan(
+    OperationId operationId,
+    CancelOperationRequest request,
+  );
+
   Future<void> shutdown(ShutdownRequest request);
 }
 
@@ -356,6 +371,141 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     final response = CancelOperationResponse.fromJson(
       await _post(
         '/internal/v1/test-operations/$operationId/cancel',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<HardwareScanStartResponse> startHardwareScan(
+    HardwareScanStartRequest request,
+  ) async {
+    final response = HardwareScanStartResponse.fromJson(
+      await _post(
+        '/internal/v1/hardware-scans',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Stream<HardwareScanEvent> hardwareScanEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  ) async* {
+    HttpClientResponse response;
+    try {
+      final request = await _client
+          .getUrl(
+            _endpoint.resolve(
+              '/internal/v1/hardware-scans/$operationId/events',
+            ),
+          )
+          .timeout(requestTimeout);
+      _applyHeaders(request.headers, correlationId, requestId);
+      response = await request.close().timeout(requestTimeout);
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_CONNECTION_TIMEOUT',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_CONNECTION_LOST',
+      );
+    }
+
+    if (response.statusCode != HttpStatus.ok) {
+      throw await _failureFromResponse(response);
+    }
+
+    var expectedSequence = 1;
+    var eventCount = 0;
+    var terminal = false;
+    try {
+      await for (final line
+          in response.transform(utf8.decoder).transform(const LineSplitter())) {
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+        final data = line.substring(5).trimLeft();
+        if (data.length > _maxResponseBytes || eventCount >= _maxEvents) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'HARDWARE_SCAN_STREAM_LIMIT',
+          );
+        }
+        final event = HardwareScanEvent.fromJson(
+          _decodeObject(data, 'hardware scan event'),
+        );
+        if (event.operationId != operationId ||
+            event.correlationId != correlationId ||
+            event.sequence != expectedSequence) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'HARDWARE_SCAN_SEQUENCE_INVALID',
+          );
+        }
+        expectedSequence += 1;
+        eventCount += 1;
+        terminal = event.terminalState != null;
+        yield event;
+        if (terminal) {
+          return;
+        }
+      }
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_CONNECTION_LOST',
+      );
+    }
+    if (!terminal) {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'HARDWARE_SCAN_STREAM_ENDED',
+      );
+    }
+  }
+
+  @override
+  Future<CancelOperationResponse> cancelHardwareScan(
+    OperationId operationId,
+    CancelOperationRequest request,
+  ) async {
+    final response = CancelOperationResponse.fromJson(
+      await _post(
+        '/internal/v1/hardware-scans/$operationId/cancel',
         request.toJson(),
         request.correlationId,
         request.requestId,

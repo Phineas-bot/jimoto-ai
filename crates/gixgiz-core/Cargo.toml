@@ -10,6 +10,8 @@ repository.workspace = true
 [dependencies]
 gixgiz-contracts = { path = "../gixgiz-contracts" }
 gixgiz-persistence = { path = "../gixgiz-persistence" }
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

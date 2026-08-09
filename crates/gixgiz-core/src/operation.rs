@@ -70,6 +70,13 @@ impl OperationContext {
         self
     }
 
+    /// Uses a caller-owned cancellation signal for a hosted operation.
+    #[must_use]
+    pub fn with_cancellation(mut self, cancellation: CancellationToken) -> Self {
+        self.cancellation = cancellation;
+        self
+    }
+
     /// Returns the operation correlation identifier.
     #[must_use]
     pub const fn correlation_id(&self) -> CorrelationId {

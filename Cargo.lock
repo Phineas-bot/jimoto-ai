@@ -190,6 +190,8 @@ version = "0.1.0"
 dependencies = [
  "gixgiz-contracts",
  "gixgiz-persistence",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tracing",
