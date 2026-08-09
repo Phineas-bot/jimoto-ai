@@ -75,3 +75,38 @@ final class HardwareScanFailed extends HardwareScanState {
 final class HardwareScanCancelled extends HardwareScanState {
   const HardwareScanCancelled();
 }
+
+sealed class CapabilityRecommendationState {
+  const CapabilityRecommendationState();
+}
+
+final class CapabilityRecommendationIdle
+    extends CapabilityRecommendationState {
+  const CapabilityRecommendationIdle();
+}
+
+final class CapabilityRecommendationLoading
+    extends CapabilityRecommendationState {
+  const CapabilityRecommendationLoading();
+}
+
+final class CapabilityRecommendationReady
+    extends CapabilityRecommendationState {
+  const CapabilityRecommendationReady({required this.report});
+
+  final CapabilityReport report;
+}
+
+final class CapabilityRecommendationNoPlan
+    extends CapabilityRecommendationState {
+  const CapabilityRecommendationNoPlan({required this.report});
+
+  final CapabilityReport report;
+}
+
+final class CapabilityRecommendationFailed
+    extends CapabilityRecommendationState {
+  const CapabilityRecommendationFailed({required this.diagnosticCode});
+
+  final String diagnosticCode;
+}

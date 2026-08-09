@@ -151,10 +151,7 @@ void main() {
         profile: _machineProfile('partial'),
       ),
     );
-    expect(
-      find.text('Hardware evidence partially available'),
-      findsOneWidget,
-    );
+    expect(find.text('Hardware evidence partially available'), findsOneWidget);
     expect(find.textContaining('Source:'), findsWidgets);
   });
 
@@ -170,7 +167,10 @@ void main() {
     );
     expect(find.text('Hardware scan failed'), findsOneWidget);
     expect(find.byKey(AppKeys.hardwareScanStatus), findsOneWidget);
-    await tester.tap(find.byKey(AppKeys.hardwareScanDiagnostics));
+    final diagnostics = find.byKey(AppKeys.hardwareScanDiagnostics);
+    await tester.ensureVisible(diagnostics);
+    await tester.pumpAndSettle();
+    await tester.tap(diagnostics);
     await tester.pumpAndSettle();
     expect(
       find.text('Diagnostic code: hardware.provider_unavailable'),
@@ -185,6 +185,92 @@ void main() {
     expect(find.text('Hardware scan cancelled'), findsOneWidget);
     expect(find.byKey(AppKeys.hardwareScanPrimaryAction), findsOneWidget);
   });
+
+  testWidgets('renders recommended fallback and larger plans with tradeoffs', (
+    tester,
+  ) async {
+    final profile = _machineProfile('complete');
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      hardwareScanState: HardwareScanReady(profile: profile),
+      recommendationState: CapabilityRecommendationReady(
+        report: _plansReport(),
+      ),
+    );
+
+    expect(find.byKey(AppKeys.capabilityRecommendedPlan), findsOneWidget);
+    expect(find.byKey(AppKeys.capabilityFallbackPlan), findsOneWidget);
+    expect(find.byKey(AppKeys.capabilityLargerPlan), findsOneWidget);
+    expect(find.byKey(AppKeys.capabilityStatus), findsOneWidget);
+    expect(find.text('Recommended'), findsOneWidget);
+    expect(find.text('Smaller fallback'), findsOneWidget);
+    expect(find.text('Larger option'), findsOneWidget);
+    expect(find.text('Memory allowance'), findsWidgets);
+    expect(find.textContaining('Apache-2.0'), findsWidgets);
+    expect(find.textContaining('gixgiz-catalogue-v0.1.0'), findsOneWidget);
+  });
+
+  testWidgets(
+    'renders unknown and unsupported evidence as an explicit no-plan',
+    (tester) async {
+      final profile = _machineProfile('partial');
+      await _pumpState(
+        tester,
+        _readyFoundation,
+        hardwareScanState: HardwareScanPartial(profile: profile),
+        recommendationState: CapabilityRecommendationNoPlan(
+          report: _noPlanReport(),
+        ),
+      );
+
+      expect(find.byKey(AppKeys.capabilityNoPlan), findsOneWidget);
+      expect(find.text('No safe plan available'), findsOneWidget);
+      expect(find.textContaining('could not be verified'), findsOneWidget);
+      expect(find.textContaining('not supported'), findsOneWidget);
+    },
+  );
+
+  testWidgets('capability preferences and generate action emit intentions', (
+    tester,
+  ) async {
+    WorkloadTier? workload;
+    var generated = false;
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      hardwareScanState: HardwareScanReady(
+        profile: _machineProfile('complete'),
+      ),
+      onWorkloadChanged: (value) => workload = value,
+      onGenerateRecommendation: () => generated = true,
+    );
+
+    final coding = find.text('Coding');
+    await tester.ensureVisible(coding);
+    await tester.pumpAndSettle();
+    await tester.tap(coding);
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(AppKeys.capabilityGenerateAction));
+    await tester.tap(find.byKey(AppKeys.capabilityGenerateAction));
+
+    expect(workload, WorkloadTier.coding);
+    expect(generated, isTrue);
+  });
+
+  testWidgets('capability controls tolerate expanded text', (tester) async {
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      hardwareScanState: HardwareScanReady(
+        profile: _machineProfile('complete'),
+      ),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(AppKeys.capabilityWorkload), findsOneWidget);
+  });
 }
 
 const _readyFoundation = FoundationReady(
@@ -195,23 +281,146 @@ Future<void> _pumpState(
   WidgetTester tester,
   FoundationState state, {
   HardwareScanState hardwareScanState = const HardwareScanIdle(),
+  CapabilityRecommendationState recommendationState =
+      const CapabilityRecommendationIdle(),
+  ValueChanged<WorkloadTier>? onWorkloadChanged,
+  VoidCallback? onGenerateRecommendation,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: FoundationScreen(
-          state: state,
-          hardwareScanState: hardwareScanState,
-          onRetry: () {},
-          onStartHardwareScan: () {},
-          onCancelHardwareScan: () {},
+    MediaQuery(
+      data: MediaQueryData(textScaler: textScaler),
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FoundationScreen(
+            state: state,
+            hardwareScanState: hardwareScanState,
+            recommendationState: recommendationState,
+            onRetry: () {},
+            onStartHardwareScan: () {},
+            onCancelHardwareScan: () {},
+            onWorkloadChanged: onWorkloadChanged,
+            onGenerateRecommendation: onGenerateRecommendation,
+          ),
         ),
       ),
     ),
   );
   await tester.pump();
+}
+
+CapabilityReport _plansReport() {
+  return CapabilityReport.fromJson({
+    ..._reportBase,
+    'status': 'plans_available',
+    'recommended_plan': _plan('recommended', 'Qwen 2.5 1.5B Instruct'),
+    'fallback_plan': _plan('fallback', 'Qwen 2.5 0.5B Instruct'),
+    'optional_larger_plan': _plan('optional_larger', 'Qwen 2.5 7B Instruct'),
+    'no_plan': null,
+    'confidence': 'high',
+    'reasons': [
+      {
+        'code': 'balanced_choice',
+        'message': 'Balances capability and headroom.',
+      },
+    ],
+    'warnings': <Object?>[],
+  });
+}
+
+CapabilityReport _noPlanReport() {
+  final reasons = [
+    {
+      'code': 'critical_evidence_unknown',
+      'message': 'Available memory could not be verified.',
+    },
+    {
+      'code': 'unsupported_architecture',
+      'message': 'This machine type is not supported.',
+    },
+  ];
+  return CapabilityReport.fromJson({
+    ..._reportBase,
+    'status': 'no_plan',
+    'recommended_plan': null,
+    'fallback_plan': null,
+    'optional_larger_plan': null,
+    'no_plan': {
+      'confidence': 'low',
+      'reasons': reasons,
+      'warnings': [
+        {
+          'code': 'no_safe_plan',
+          'message': 'More reliable evidence is needed.',
+        },
+      ],
+    },
+    'confidence': 'low',
+    'reasons': reasons,
+    'warnings': <Object?>[],
+  });
+}
+
+const _reportBase = <String, Object?>{
+  'schema_version': 1,
+  'catalogue_version': 'gixgiz-catalogue-v0.1.0',
+  'rule_set_version': 'gixgiz-capability-rules-v0.1.0',
+  'machine_profile_schema_version': 1,
+  'generated_from_scan_unix_ms': 1,
+  'preferences': {
+    'workload': 'general_text',
+    'priority': 'balanced',
+    'include_optional_larger': true,
+  },
+};
+
+Map<String, Object?> _plan(String role, String name) {
+  return {
+    'catalogue_version': 'gixgiz-catalogue-v0.1.0',
+    'rule_set_version': 'gixgiz-capability-rules-v0.1.0',
+    'role': role,
+    'compatibility': 'compatible',
+    'model': {
+      'catalogue_id': 'gixgiz.model.fixture',
+      'display_name': name,
+      'family': 'Qwen 2.5',
+      'licence_spdx': 'Apache-2.0',
+      'provenance_url': 'https://huggingface.co/Qwen/fixture',
+      'size_class': 'standard',
+      'workload_tiers': ['general_text'],
+    },
+    'runtime': {
+      'catalogue_id': 'gixgiz.runtime.local-text',
+      'display_name': 'GixGiz local text runtime',
+      'supports_cpu_only': true,
+      'supported_architectures': ['x86_64'],
+      'optional_accelerations': ['direct_ml'],
+    },
+    'resources': {
+      'memory': {
+        'required_bytes': 4294967296,
+        'safety_margin_bytes': 3221225472,
+        'observed_total_bytes': 17179869184,
+        'observed_available_bytes': 10737418240,
+      },
+      'storage': {
+        'required_bytes': 2147483648,
+        'safety_margin_bytes': 2147483648,
+        'observed_free_bytes': 32212254720,
+      },
+      'planned_context_tokens': 8192,
+      'cpu_only': true,
+      'gpu_memory_bytes': null,
+      'acceleration': null,
+    },
+    'confidence': 'high',
+    'reasons': [
+      {'code': 'workload_match', 'message': 'Matches the selected use.'},
+    ],
+    'warnings': <Object?>[],
+  };
 }
 
 MachineProfile _machineProfile(String completeness) {
@@ -265,24 +474,14 @@ MachineProfile _machineProfile(String completeness) {
         {
           'name': text('Example GPU'),
           'vendor': text('Example vendor'),
-          'dedicated_memory_bytes': {
-            'value': null,
-            'metadata': unreliable,
-          },
-          'shared_memory_bytes': {
-            'value': null,
-            'metadata': unreliable,
-          },
+          'dedicated_memory_bytes': {'value': null, 'metadata': unreliable},
+          'shared_memory_bytes': {'value': null, 'metadata': unreliable},
         },
       ],
       'metadata': available,
     },
     'acceleration': [
-      {
-        'kind': 'direct_ml',
-        'supported': null,
-        'metadata': unreliable,
-      },
+      {'kind': 'direct_ml', 'supported': null, 'metadata': unreliable},
     ],
     'storage': {
       'location': 'application_data',
