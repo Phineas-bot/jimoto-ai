@@ -38,6 +38,15 @@ pub enum CoreError {
     /// Hardware provider output exceeded its fixed size limit.
     #[error("the hardware evidence provider exceeded its output limit")]
     HardwareProviderOutputLimit,
+    /// The supplied machine profile uses an unsupported schema generation.
+    #[error("the machine profile schema is not supported")]
+    UnsupportedMachineProfile {
+        /// Schema version supplied by the caller.
+        received: u32,
+    },
+    /// The supplied recommendation preference enum is unknown to this rule set.
+    #[error("the recommendation preferences are not supported")]
+    InvalidRecommendationPreferences,
 }
 
 impl CoreError {
@@ -117,6 +126,24 @@ impl CoreError {
                     action: RecoveryAction::Retry,
                     message: "Retry the scan. If it repeats, review the safe diagnostics."
                         .to_owned(),
+                },
+            ),
+            Self::UnsupportedMachineProfile { .. } => (
+                ErrorCategory::IncompatibleVersion,
+                "capability.machine_profile_incompatible",
+                "The hardware profile uses an unsupported schema version.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Run a new hardware scan, then retry the recommendation.".to_owned(),
+                },
+            ),
+            Self::InvalidRecommendationPreferences => (
+                ErrorCategory::InvalidInput,
+                "capability.preferences_invalid",
+                "The selected recommendation preferences are not supported.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Choose a supported workload and priority, then retry.".to_owned(),
                 },
             ),
         };

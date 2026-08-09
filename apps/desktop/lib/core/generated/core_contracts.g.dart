@@ -243,6 +243,186 @@ class CancelOperationResponse {
   }
 }
 
+class CandidateModel {
+  const CandidateModel({
+    required this.catalogueId,
+    required this.displayName,
+    required this.family,
+    required this.licenceSpdx,
+    required this.provenanceUrl,
+    required this.sizeClass,
+    required this.workloadTiers,
+  });
+
+  final CandidateModelId catalogueId;
+  final String displayName;
+  final String family;
+  final String licenceSpdx;
+  final String provenanceUrl;
+  final ModelSizeClass sizeClass;
+  final List<WorkloadTier> workloadTiers;
+
+  factory CandidateModel.fromJson(Map<String, dynamic> json) {
+    return CandidateModel(
+      catalogueId: _contractString(json['catalogue_id'], 'CandidateModel.catalogue_id'),
+      displayName: _contractString(json['display_name'], 'CandidateModel.display_name'),
+      family: _contractString(json['family'], 'CandidateModel.family'),
+      licenceSpdx: _contractString(json['licence_spdx'], 'CandidateModel.licence_spdx'),
+      provenanceUrl: _contractString(json['provenance_url'], 'CandidateModel.provenance_url'),
+      sizeClass: ModelSizeClass.fromJson(json['size_class']),
+      workloadTiers: _contractList(json['workload_tiers'], 'CandidateModel.workload_tiers').map((item) => WorkloadTier.fromJson(item)).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'catalogue_id': catalogueId,
+      'display_name': displayName,
+      'family': family,
+      'licence_spdx': licenceSpdx,
+      'provenance_url': provenanceUrl,
+      'size_class': sizeClass.toJson(),
+      'workload_tiers': workloadTiers.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+typedef CandidateModelId = String;
+
+class CandidateRuntime {
+  const CandidateRuntime({
+    required this.catalogueId,
+    required this.displayName,
+    required this.optionalAccelerations,
+    required this.supportedArchitectures,
+    required this.supportsCpuOnly,
+  });
+
+  final CandidateRuntimeId catalogueId;
+  final String displayName;
+  final List<AccelerationKind> optionalAccelerations;
+  final List<MachineArchitecture> supportedArchitectures;
+  final bool supportsCpuOnly;
+
+  factory CandidateRuntime.fromJson(Map<String, dynamic> json) {
+    return CandidateRuntime(
+      catalogueId: _contractString(json['catalogue_id'], 'CandidateRuntime.catalogue_id'),
+      displayName: _contractString(json['display_name'], 'CandidateRuntime.display_name'),
+      optionalAccelerations: _contractList(json['optional_accelerations'], 'CandidateRuntime.optional_accelerations').map((item) => AccelerationKind.fromJson(item)).toList(growable: false),
+      supportedArchitectures: _contractList(json['supported_architectures'], 'CandidateRuntime.supported_architectures').map((item) => MachineArchitecture.fromJson(item)).toList(growable: false),
+      supportsCpuOnly: _contractBool(json['supports_cpu_only'], 'CandidateRuntime.supports_cpu_only'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'catalogue_id': catalogueId,
+      'display_name': displayName,
+      'optional_accelerations': optionalAccelerations.map((item) => item.toJson()).toList(growable: false),
+      'supported_architectures': supportedArchitectures.map((item) => item.toJson()).toList(growable: false),
+      'supports_cpu_only': supportsCpuOnly,
+    };
+  }
+}
+
+typedef CandidateRuntimeId = String;
+
+class CapabilityReport {
+  const CapabilityReport({
+    required this.catalogueVersion,
+    required this.confidence,
+    required this.fallbackPlan,
+    required this.generatedFromScanUnixMs,
+    required this.machineProfileSchemaVersion,
+    required this.noPlan,
+    required this.optionalLargerPlan,
+    required this.preferences,
+    required this.reasons,
+    required this.recommendedPlan,
+    required this.ruleSetVersion,
+    required this.schemaVersion,
+    required this.status,
+    required this.warnings,
+  });
+
+  final CatalogueVersion catalogueVersion;
+  final ConfidenceLevel confidence;
+  final RecommendationPlan? fallbackPlan;
+  final int generatedFromScanUnixMs;
+  final int machineProfileSchemaVersion;
+  final NoPlanResult? noPlan;
+  final RecommendationPlan? optionalLargerPlan;
+  final UserPreferenceProfile preferences;
+  final List<RecommendationReason> reasons;
+  final RecommendationPlan? recommendedPlan;
+  final RuleSetVersion ruleSetVersion;
+  final int schemaVersion;
+  final CapabilityReportStatus status;
+  final List<RecommendationWarning> warnings;
+
+  factory CapabilityReport.fromJson(Map<String, dynamic> json) {
+    return CapabilityReport(
+      catalogueVersion: _contractString(json['catalogue_version'], 'CapabilityReport.catalogue_version'),
+      confidence: ConfidenceLevel.fromJson(json['confidence']),
+      fallbackPlan: json['fallback_plan'] == null ? null : RecommendationPlan.fromJson(_contractMap(json['fallback_plan'], 'CapabilityReport.fallback_plan')),
+      generatedFromScanUnixMs: _contractInt(json['generated_from_scan_unix_ms'], 'CapabilityReport.generated_from_scan_unix_ms'),
+      machineProfileSchemaVersion: _contractInt(json['machine_profile_schema_version'], 'CapabilityReport.machine_profile_schema_version'),
+      noPlan: json['no_plan'] == null ? null : NoPlanResult.fromJson(_contractMap(json['no_plan'], 'CapabilityReport.no_plan')),
+      optionalLargerPlan: json['optional_larger_plan'] == null ? null : RecommendationPlan.fromJson(_contractMap(json['optional_larger_plan'], 'CapabilityReport.optional_larger_plan')),
+      preferences: UserPreferenceProfile.fromJson(_contractMap(json['preferences'], 'CapabilityReport.preferences')),
+      reasons: _contractList(json['reasons'], 'CapabilityReport.reasons').map((item) => RecommendationReason.fromJson(_contractMap(item, 'CapabilityReport.reasons[]'))).toList(growable: false),
+      recommendedPlan: json['recommended_plan'] == null ? null : RecommendationPlan.fromJson(_contractMap(json['recommended_plan'], 'CapabilityReport.recommended_plan')),
+      ruleSetVersion: _contractString(json['rule_set_version'], 'CapabilityReport.rule_set_version'),
+      schemaVersion: _contractInt(json['schema_version'], 'CapabilityReport.schema_version'),
+      status: CapabilityReportStatus.fromJson(json['status']),
+      warnings: _contractList(json['warnings'], 'CapabilityReport.warnings').map((item) => RecommendationWarning.fromJson(_contractMap(item, 'CapabilityReport.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'catalogue_version': catalogueVersion,
+      'confidence': confidence.toJson(),
+      'fallback_plan': fallbackPlan?.toJson(),
+      'generated_from_scan_unix_ms': generatedFromScanUnixMs,
+      'machine_profile_schema_version': machineProfileSchemaVersion,
+      'no_plan': noPlan?.toJson(),
+      'optional_larger_plan': optionalLargerPlan?.toJson(),
+      'preferences': preferences.toJson(),
+      'reasons': reasons.map((item) => item.toJson()).toList(growable: false),
+      'recommended_plan': recommendedPlan?.toJson(),
+      'rule_set_version': ruleSetVersion,
+      'schema_version': schemaVersion,
+      'status': status.toJson(),
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+enum CapabilityReportStatus {
+  plansAvailable('plans_available'),
+  noPlan('no_plan'),
+  unknown('unknown'),
+  ;
+
+  const CapabilityReportStatus(this.wireValue);
+
+  final String wireValue;
+
+  static CapabilityReportStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+typedef CatalogueVersion = String;
+
 class ClientHello {
   const ClientHello({
     required this.clientName,
@@ -285,6 +465,51 @@ class ClientHello {
       'requested_capabilities': requestedCapabilities.map((item) => item.toJson()).toList(growable: false),
     };
   }
+}
+
+enum CompatibilityStatus {
+  compatible('compatible'),
+  incompatible('incompatible'),
+  unknown('unknown'),
+  ;
+
+  const CompatibilityStatus(this.wireValue);
+
+  final String wireValue;
+
+  static CompatibilityStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum ConfidenceLevel {
+  high('high'),
+  medium('medium'),
+  low('low'),
+  unknown('unknown'),
+  ;
+
+  const ConfidenceLevel(this.wireValue);
+
+  final String wireValue;
+
+  static ConfidenceLevel fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
 }
 
 class CoreHello {
@@ -879,6 +1104,89 @@ enum MachineProfileCompleteness {
   String toJson() => wireValue;
 }
 
+class MemoryEstimate {
+  const MemoryEstimate({
+    required this.observedAvailableBytes,
+    required this.observedTotalBytes,
+    required this.requiredBytes,
+    required this.safetyMarginBytes,
+  });
+
+  final int? observedAvailableBytes;
+  final int? observedTotalBytes;
+  final int requiredBytes;
+  final int safetyMarginBytes;
+
+  factory MemoryEstimate.fromJson(Map<String, dynamic> json) {
+    return MemoryEstimate(
+      observedAvailableBytes: json['observed_available_bytes'] == null ? null : _contractInt(json['observed_available_bytes'], 'MemoryEstimate.observed_available_bytes'),
+      observedTotalBytes: json['observed_total_bytes'] == null ? null : _contractInt(json['observed_total_bytes'], 'MemoryEstimate.observed_total_bytes'),
+      requiredBytes: _contractInt(json['required_bytes'], 'MemoryEstimate.required_bytes'),
+      safetyMarginBytes: _contractInt(json['safety_margin_bytes'], 'MemoryEstimate.safety_margin_bytes'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'observed_available_bytes': observedAvailableBytes,
+      'observed_total_bytes': observedTotalBytes,
+      'required_bytes': requiredBytes,
+      'safety_margin_bytes': safetyMarginBytes,
+    };
+  }
+}
+
+enum ModelSizeClass {
+  compact('compact'),
+  standard('standard'),
+  large('large'),
+  unknown('unknown'),
+  ;
+
+  const ModelSizeClass(this.wireValue);
+
+  final String wireValue;
+
+  static ModelSizeClass fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class NoPlanResult {
+  const NoPlanResult({
+    required this.confidence,
+    required this.reasons,
+    required this.warnings,
+  });
+
+  final ConfidenceLevel confidence;
+  final List<RecommendationReason> reasons;
+  final List<RecommendationWarning> warnings;
+
+  factory NoPlanResult.fromJson(Map<String, dynamic> json) {
+    return NoPlanResult(
+      confidence: ConfidenceLevel.fromJson(json['confidence']),
+      reasons: _contractList(json['reasons'], 'NoPlanResult.reasons').map((item) => RecommendationReason.fromJson(_contractMap(item, 'NoPlanResult.reasons[]'))).toList(growable: false),
+      warnings: _contractList(json['warnings'], 'NoPlanResult.warnings').map((item) => RecommendationWarning.fromJson(_contractMap(item, 'NoPlanResult.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'confidence': confidence.toJson(),
+      'reasons': reasons.map((item) => item.toJson()).toList(growable: false),
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
 class OperatingSystemEvidence {
   const OperatingSystemEvidence({
     required this.architecture,
@@ -937,6 +1245,29 @@ class PhysicalMemoryEvidence {
   }
 }
 
+enum PlanRole {
+  recommended('recommended'),
+  fallback('fallback'),
+  optionalLarger('optional_larger'),
+  unknown('unknown'),
+  ;
+
+  const PlanRole(this.wireValue);
+
+  final String wireValue;
+
+  static PlanRole fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
 class PlatformStatus {
   const PlatformStatus({
     required this.application,
@@ -959,6 +1290,30 @@ class PlatformStatus {
       'readiness': readiness.toJson(),
     };
   }
+}
+
+enum PreferencePriority {
+  balanced('balanced'),
+  fastestSetup('fastest_setup'),
+  lowestResourceUse('lowest_resource_use'),
+  bestQualityWithinSafeLimits('best_quality_within_safe_limits'),
+  unknown('unknown'),
+  ;
+
+  const PreferencePriority(this.wireValue);
+
+  final String wireValue;
+
+  static PreferencePriority fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
 }
 
 class ReadinessReport {
@@ -1002,6 +1357,238 @@ enum ReadinessStatus {
   final String wireValue;
 
   static ReadinessStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RecommendationPlan {
+  const RecommendationPlan({
+    required this.catalogueVersion,
+    required this.compatibility,
+    required this.confidence,
+    required this.model,
+    required this.reasons,
+    required this.resources,
+    required this.role,
+    required this.ruleSetVersion,
+    required this.runtime,
+    required this.warnings,
+  });
+
+  final CatalogueVersion catalogueVersion;
+  final CompatibilityStatus compatibility;
+  final ConfidenceLevel confidence;
+  final CandidateModel model;
+  final List<RecommendationReason> reasons;
+  final ResourceEstimate resources;
+  final PlanRole role;
+  final RuleSetVersion ruleSetVersion;
+  final CandidateRuntime runtime;
+  final List<RecommendationWarning> warnings;
+
+  factory RecommendationPlan.fromJson(Map<String, dynamic> json) {
+    return RecommendationPlan(
+      catalogueVersion: _contractString(json['catalogue_version'], 'RecommendationPlan.catalogue_version'),
+      compatibility: CompatibilityStatus.fromJson(json['compatibility']),
+      confidence: ConfidenceLevel.fromJson(json['confidence']),
+      model: CandidateModel.fromJson(_contractMap(json['model'], 'RecommendationPlan.model')),
+      reasons: _contractList(json['reasons'], 'RecommendationPlan.reasons').map((item) => RecommendationReason.fromJson(_contractMap(item, 'RecommendationPlan.reasons[]'))).toList(growable: false),
+      resources: ResourceEstimate.fromJson(_contractMap(json['resources'], 'RecommendationPlan.resources')),
+      role: PlanRole.fromJson(json['role']),
+      ruleSetVersion: _contractString(json['rule_set_version'], 'RecommendationPlan.rule_set_version'),
+      runtime: CandidateRuntime.fromJson(_contractMap(json['runtime'], 'RecommendationPlan.runtime')),
+      warnings: _contractList(json['warnings'], 'RecommendationPlan.warnings').map((item) => RecommendationWarning.fromJson(_contractMap(item, 'RecommendationPlan.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'catalogue_version': catalogueVersion,
+      'compatibility': compatibility.toJson(),
+      'confidence': confidence.toJson(),
+      'model': model.toJson(),
+      'reasons': reasons.map((item) => item.toJson()).toList(growable: false),
+      'resources': resources.toJson(),
+      'role': role.toJson(),
+      'rule_set_version': ruleSetVersion,
+      'runtime': runtime.toJson(),
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class RecommendationReason {
+  const RecommendationReason({
+    required this.code,
+    required this.message,
+  });
+
+  final RecommendationReasonCode code;
+  final String message;
+
+  factory RecommendationReason.fromJson(Map<String, dynamic> json) {
+    return RecommendationReason(
+      code: RecommendationReasonCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'RecommendationReason.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum RecommendationReasonCode {
+  workloadMatch('workload_match'),
+  balancedChoice('balanced_choice'),
+  fastestSetup('fastest_setup'),
+  lowestResourceUse('lowest_resource_use'),
+  bestQualityWithinSafeLimits('best_quality_within_safe_limits'),
+  safeMemoryMargin('safe_memory_margin'),
+  safeStorageMargin('safe_storage_margin'),
+  cpuOnlyFeasible('cpu_only_feasible'),
+  reliableAccelerationAvailable('reliable_acceleration_available'),
+  smallerFallback('smaller_fallback'),
+  largerAlternative('larger_alternative'),
+  stableCatalogueOrder('stable_catalogue_order'),
+  noCompatibleCandidate('no_compatible_candidate'),
+  unsupportedArchitecture('unsupported_architecture'),
+  insufficientLogicalProcessors('insufficient_logical_processors'),
+  insufficientMemory('insufficient_memory'),
+  insufficientAvailableMemory('insufficient_available_memory'),
+  insufficientStorage('insufficient_storage'),
+  criticalEvidenceUnknown('critical_evidence_unknown'),
+  unknown('unknown'),
+  ;
+
+  const RecommendationReasonCode(this.wireValue);
+
+  final String wireValue;
+
+  static RecommendationReasonCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RecommendationRequest {
+  const RecommendationRequest({
+    required this.correlationId,
+    required this.machineProfile,
+    required this.preferences,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final MachineProfile machineProfile;
+  final UserPreferenceProfile preferences;
+  final RequestId requestId;
+
+  factory RecommendationRequest.fromJson(Map<String, dynamic> json) {
+    return RecommendationRequest(
+      correlationId: _contractString(json['correlation_id'], 'RecommendationRequest.correlation_id'),
+      machineProfile: MachineProfile.fromJson(_contractMap(json['machine_profile'], 'RecommendationRequest.machine_profile')),
+      preferences: UserPreferenceProfile.fromJson(_contractMap(json['preferences'], 'RecommendationRequest.preferences')),
+      requestId: _contractString(json['request_id'], 'RecommendationRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'machine_profile': machineProfile.toJson(),
+      'preferences': preferences.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class RecommendationResponse {
+  const RecommendationResponse({
+    required this.correlationId,
+    required this.report,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final CapabilityReport report;
+  final RequestId requestId;
+
+  factory RecommendationResponse.fromJson(Map<String, dynamic> json) {
+    return RecommendationResponse(
+      correlationId: _contractString(json['correlation_id'], 'RecommendationResponse.correlation_id'),
+      report: CapabilityReport.fromJson(_contractMap(json['report'], 'RecommendationResponse.report')),
+      requestId: _contractString(json['request_id'], 'RecommendationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'report': report.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class RecommendationWarning {
+  const RecommendationWarning({
+    required this.code,
+    required this.message,
+  });
+
+  final RecommendationWarningCode code;
+  final String message;
+
+  factory RecommendationWarning.fromJson(Map<String, dynamic> json) {
+    return RecommendationWarning(
+      code: RecommendationWarningCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'RecommendationWarning.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum RecommendationWarningCode {
+  partialHardwareEvidence('partial_hardware_evidence'),
+  availableMemoryUnknown('available_memory_unknown'),
+  vramUnknown('vram_unknown'),
+  accelerationUnknown('acceleration_unknown'),
+  cpuOnlyMode('cpu_only_mode'),
+  removableStorage('removable_storage'),
+  limitedFallbackOptions('limited_fallback_options'),
+  optionalLargerUnavailable('optional_larger_unavailable'),
+  noSafePlan('no_safe_plan'),
+  unknown('unknown'),
+  ;
+
+  const RecommendationWarningCode(this.wireValue);
+
+  final String wireValue;
+
+  static RecommendationWarningCode fromJson(Object? value) {
     for (final candidate in values) {
       if (candidate.wireValue == value) {
         return candidate;
@@ -1063,6 +1650,48 @@ class RecoveryGuidance {
 }
 
 typedef RequestId = String;
+
+class ResourceEstimate {
+  const ResourceEstimate({
+    required this.acceleration,
+    required this.cpuOnly,
+    required this.gpuMemoryBytes,
+    required this.memory,
+    required this.plannedContextTokens,
+    required this.storage,
+  });
+
+  final AccelerationKind? acceleration;
+  final bool cpuOnly;
+  final int? gpuMemoryBytes;
+  final MemoryEstimate memory;
+  final int plannedContextTokens;
+  final StorageEstimate storage;
+
+  factory ResourceEstimate.fromJson(Map<String, dynamic> json) {
+    return ResourceEstimate(
+      acceleration: json['acceleration'] == null ? null : AccelerationKind.fromJson(json['acceleration']),
+      cpuOnly: _contractBool(json['cpu_only'], 'ResourceEstimate.cpu_only'),
+      gpuMemoryBytes: json['gpu_memory_bytes'] == null ? null : _contractInt(json['gpu_memory_bytes'], 'ResourceEstimate.gpu_memory_bytes'),
+      memory: MemoryEstimate.fromJson(_contractMap(json['memory'], 'ResourceEstimate.memory')),
+      plannedContextTokens: _contractInt(json['planned_context_tokens'], 'ResourceEstimate.planned_context_tokens'),
+      storage: StorageEstimate.fromJson(_contractMap(json['storage'], 'ResourceEstimate.storage')),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'acceleration': acceleration?.toJson(),
+      'cpu_only': cpuOnly,
+      'gpu_memory_bytes': gpuMemoryBytes,
+      'memory': memory.toJson(),
+      'planned_context_tokens': plannedContextTokens,
+      'storage': storage.toJson(),
+    };
+  }
+}
+
+typedef RuleSetVersion = String;
 
 class SafeErrorPayload {
   const SafeErrorPayload({
@@ -1238,6 +1867,34 @@ class ShutdownResponse {
   }
 }
 
+class StorageEstimate {
+  const StorageEstimate({
+    required this.observedFreeBytes,
+    required this.requiredBytes,
+    required this.safetyMarginBytes,
+  });
+
+  final int? observedFreeBytes;
+  final int requiredBytes;
+  final int safetyMarginBytes;
+
+  factory StorageEstimate.fromJson(Map<String, dynamic> json) {
+    return StorageEstimate(
+      observedFreeBytes: json['observed_free_bytes'] == null ? null : _contractInt(json['observed_free_bytes'], 'StorageEstimate.observed_free_bytes'),
+      requiredBytes: _contractInt(json['required_bytes'], 'StorageEstimate.required_bytes'),
+      safetyMarginBytes: _contractInt(json['safety_margin_bytes'], 'StorageEstimate.safety_margin_bytes'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'observed_free_bytes': observedFreeBytes,
+      'required_bytes': requiredBytes,
+      'safety_margin_bytes': safetyMarginBytes,
+    };
+  }
+}
+
 class StorageEvidence {
   const StorageEvidence({
     required this.capacityBytes,
@@ -1276,6 +1933,7 @@ class StorageEvidence {
 
 enum StorageLocation {
   applicationData('application_data'),
+  userSelected('user_selected'),
   unknown('unknown'),
   ;
 
@@ -1525,6 +2183,7 @@ enum TransportCapability {
   testOperationEvents('test_operation_events'),
   cancellation('cancellation'),
   hardwareScan('hardware_scan'),
+  capabilityRecommendation('capability_recommendation'),
   shutdown('shutdown'),
   unknown('unknown'),
   ;
@@ -1609,6 +2268,56 @@ enum UnknownReasonCode {
   final String wireValue;
 
   static UnknownReasonCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class UserPreferenceProfile {
+  const UserPreferenceProfile({
+    required this.includeOptionalLarger,
+    required this.priority,
+    required this.workload,
+  });
+
+  final bool includeOptionalLarger;
+  final PreferencePriority priority;
+  final WorkloadTier workload;
+
+  factory UserPreferenceProfile.fromJson(Map<String, dynamic> json) {
+    return UserPreferenceProfile(
+      includeOptionalLarger: _contractBool(json['include_optional_larger'], 'UserPreferenceProfile.include_optional_larger'),
+      priority: PreferencePriority.fromJson(json['priority']),
+      workload: WorkloadTier.fromJson(json['workload']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'include_optional_larger': includeOptionalLarger,
+      'priority': priority.toJson(),
+      'workload': workload.toJson(),
+    };
+  }
+}
+
+enum WorkloadTier {
+  generalText('general_text'),
+  coding('coding'),
+  unknown('unknown'),
+  ;
+
+  const WorkloadTier(this.wireValue);
+
+  final String wireValue;
+
+  static WorkloadTier fromJson(Object? value) {
     for (final candidate in values) {
       if (candidate.wireValue == value) {
         return candidate;

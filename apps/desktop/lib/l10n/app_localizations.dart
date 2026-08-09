@@ -370,49 +370,458 @@ abstract class AppLocalizations {
   /// **'Not connected in this build'**
   String get coreNotConnectedValue;
 
+  /// No description provided for @hardwareScanIdleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware evidence'**
   String get hardwareScanIdleTitle;
+
+  /// No description provided for @hardwareScanIdleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan this PC for local OS, processor, physical memory, display adapter, acceleration, and storage evidence.'**
   String get hardwareScanIdleMessage;
+
+  /// No description provided for @hardwareScanLoadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning hardware'**
   String get hardwareScanLoadingTitle;
+
+  /// No description provided for @hardwareScanLoadingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is collecting bounded, non-elevated Windows evidence.'**
   String get hardwareScanLoadingMessage;
+
+  /// No description provided for @hardwareScanReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware evidence ready'**
   String get hardwareScanReadyTitle;
+
+  /// No description provided for @hardwareScanReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'All requested evidence was reported reliably.'**
   String get hardwareScanReadyMessage;
+
+  /// No description provided for @hardwareScanPartialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware evidence partially available'**
   String get hardwareScanPartialTitle;
+
+  /// No description provided for @hardwareScanPartialMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile is usable, and unavailable values remain explicitly unknown.'**
   String get hardwareScanPartialMessage;
+
+  /// No description provided for @hardwareScanFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware scan failed'**
   String get hardwareScanFailedTitle;
+
+  /// No description provided for @hardwareScanFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not produce a usable hardware profile. Review diagnostics, then try again.'**
   String get hardwareScanFailedMessage;
+
+  /// No description provided for @hardwareScanCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware scan cancelled'**
   String get hardwareScanCancelledTitle;
+
+  /// No description provided for @hardwareScanCancelledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The scan stopped without changing system settings.'**
   String get hardwareScanCancelledMessage;
+
+  /// No description provided for @hardwareScanStartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan hardware'**
   String get hardwareScanStartAction;
+
+  /// No description provided for @hardwareScanAgainAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
   String get hardwareScanAgainAction;
+
+  /// No description provided for @hardwareScanCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel scan'**
   String get hardwareScanCancelAction;
+
+  /// No description provided for @hardwareScanProgressSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware evidence scan progress'**
   String get hardwareScanProgressSemanticLabel;
+
+  /// No description provided for @hardwareScanStatusSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware scan status: {status}. {detail}'**
   String hardwareScanStatusSemanticLabel(String status, String detail);
+
+  /// No description provided for @hardwareProfileSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware profile {completeness}, schema version {version}'**
   String hardwareProfileSemanticLabel(String completeness, int version);
+
+  /// No description provided for @hardwareOperatingSystemLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system'**
   String get hardwareOperatingSystemLabel;
+
+  /// No description provided for @hardwareCpuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Processor'**
   String get hardwareCpuLabel;
+
+  /// No description provided for @hardwarePhysicalMemoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Physical memory'**
   String get hardwarePhysicalMemoryLabel;
+
+  /// No description provided for @hardwareGpuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Display adapter'**
   String get hardwareGpuLabel;
+
+  /// No description provided for @hardwareGpuNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Display adapter {number}'**
   String hardwareGpuNumberLabel(int number);
+
+  /// No description provided for @hardwareAccelerationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Acceleration evidence'**
   String get hardwareAccelerationLabel;
+
+  /// No description provided for @hardwareStorageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Application storage'**
   String get hardwareStorageLabel;
+
+  /// No description provided for @hardwareOperatingSystemValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, version {version}, {architecture}'**
   String hardwareOperatingSystemValue(
     String name,
     String version,
     String architecture,
   );
+
+  /// No description provided for @hardwareCpuValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, {physical} physical cores, {logical} logical processors'**
   String hardwareCpuValue(String name, String physical, String logical);
+
+  /// No description provided for @hardwareMemoryValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{total} total, {available} available'**
   String hardwareMemoryValue(String total, String available);
+
+  /// No description provided for @hardwareGpuValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, dedicated memory {dedicated}, shared memory {shared}'**
   String hardwareGpuValue(String name, String dedicated, String shared);
+
+  /// No description provided for @hardwareAccelerationValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind}: {support}'**
   String hardwareAccelerationValue(String kind, String support);
+
+  /// No description provided for @hardwareStorageValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{capacity} capacity, {free} free, {filesystem}, {media}'**
   String hardwareStorageValue(
     String capacity,
     String free,
     String filesystem,
     String media,
   );
+
+  /// No description provided for @hardwareEvidenceDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {source}. {reason}'**
   String hardwareEvidenceDetail(String source, String reason);
+
+  /// No description provided for @supportedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Supported'**
   String get supportedValue;
+
+  /// No description provided for @notSupportedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Not supported'**
   String get notSupportedValue;
+
+  /// No description provided for @capabilityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan for this PC'**
+  String get capabilityTitle;
+
+  /// No description provided for @capabilityWorkloadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary use'**
+  String get capabilityWorkloadLabel;
+
+  /// No description provided for @capabilityWorkloadGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing and chat'**
+  String get capabilityWorkloadGeneral;
+
+  /// No description provided for @capabilityWorkloadCoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Coding'**
+  String get capabilityWorkloadCoding;
+
+  /// No description provided for @capabilityPriorityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preference'**
+  String get capabilityPriorityLabel;
+
+  /// No description provided for @capabilityPriorityBalanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Balanced'**
+  String get capabilityPriorityBalanced;
+
+  /// No description provided for @capabilityPriorityFastest.
+  ///
+  /// In en, this message translates to:
+  /// **'Fastest setup'**
+  String get capabilityPriorityFastest;
+
+  /// No description provided for @capabilityPriorityLightest.
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest resource use'**
+  String get capabilityPriorityLightest;
+
+  /// No description provided for @capabilityPriorityQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Best quality within safe limits'**
+  String get capabilityPriorityQuality;
+
+  /// No description provided for @capabilityLargerOptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a larger safe option'**
+  String get capabilityLargerOptionLabel;
+
+  /// No description provided for @capabilityGenerateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate plan'**
+  String get capabilityGenerateAction;
+
+  /// No description provided for @capabilityProgressSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Capability planning progress'**
+  String get capabilityProgressSemanticLabel;
+
+  /// No description provided for @capabilityIdleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No plan has been generated for this hardware profile.'**
+  String get capabilityIdleMessage;
+
+  /// No description provided for @capabilityIdleSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Capability plan not generated'**
+  String get capabilityIdleSemanticLabel;
+
+  /// No description provided for @capabilityLoadingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking safe options for this PC.'**
+  String get capabilityLoadingMessage;
+
+  /// No description provided for @capabilityLoadingSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Capability planning in progress'**
+  String get capabilityLoadingSemanticLabel;
+
+  /// No description provided for @capabilityReadySemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended plan: {name}. Confidence: {confidence}.'**
+  String capabilityReadySemanticLabel(String name, String confidence);
+
+  /// No description provided for @capabilityRecommendedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get capabilityRecommendedTitle;
+
+  /// No description provided for @capabilityFallbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller fallback'**
+  String get capabilityFallbackTitle;
+
+  /// No description provided for @capabilityLargerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Larger option'**
+  String get capabilityLargerTitle;
+
+  /// No description provided for @capabilityMemoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory allowance'**
+  String get capabilityMemoryLabel;
+
+  /// No description provided for @capabilityStorageEstimateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage allowance'**
+  String get capabilityStorageEstimateLabel;
+
+  /// No description provided for @capabilityModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating mode'**
+  String get capabilityModeLabel;
+
+  /// No description provided for @capabilityStandardMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get capabilityStandardMode;
+
+  /// No description provided for @capabilityAcceleratedMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Accelerated'**
+  String get capabilityAcceleratedMode;
+
+  /// No description provided for @capabilityConfidenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence'**
+  String get capabilityConfidenceLabel;
+
+  /// No description provided for @capabilityConfidenceHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get capabilityConfidenceHigh;
+
+  /// No description provided for @capabilityConfidenceMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get capabilityConfidenceMedium;
+
+  /// No description provided for @capabilityConfidenceLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get capabilityConfidenceLow;
+
+  /// No description provided for @capabilityReasonsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Why this result'**
+  String get capabilityReasonsLabel;
+
+  /// No description provided for @capabilityWarningsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Important considerations'**
+  String get capabilityWarningsLabel;
+
+  /// No description provided for @capabilityLicenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Licence: {licence}'**
+  String capabilityLicenceLabel(String licence);
+
+  /// No description provided for @capabilitySourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {source}'**
+  String capabilitySourceLabel(String source);
+
+  /// No description provided for @capabilityVersionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Catalogue {catalogue}; rules {rules}'**
+  String capabilityVersionsLabel(String catalogue, String rules);
+
+  /// No description provided for @capabilityNoPlanTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No safe plan available'**
+  String get capabilityNoPlanTitle;
+
+  /// No description provided for @capabilityNoPlanMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The current evidence or available resources do not support a safe plan.'**
+  String get capabilityNoPlanMessage;
+
+  /// No description provided for @capabilityNoPlanSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'No safe capability plan is available'**
+  String get capabilityNoPlanSemanticLabel;
+
+  /// No description provided for @capabilityFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Planning failed'**
+  String get capabilityFailedTitle;
+
+  /// No description provided for @capabilityFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not generate a plan. Review diagnostics, then try again.'**
+  String get capabilityFailedMessage;
+
+  /// No description provided for @capabilityFailedSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Capability planning failed'**
+  String get capabilityFailedSemanticLabel;
 }
 
 class _AppLocalizationsDelegate

@@ -25,4 +25,34 @@ abstract final class AppKeys {
   static const hardwareScanDiagnostics = ValueKey<String>(
     'foundation.hardware_scan.diagnostics',
   );
+  static const capabilityRecommendation = ValueKey<String>(
+    'foundation.capability',
+  );
+  static const capabilityWorkload = ValueKey<String>(
+    'foundation.capability.workload',
+  );
+  static const capabilityLargerOption = ValueKey<String>(
+    'foundation.capability.larger_option',
+  );
+  static const capabilityGenerateAction = ValueKey<String>(
+    'foundation.capability.generate_action',
+  );
+  static const capabilityProgress = ValueKey<String>(
+    'foundation.capability.progress',
+  );
+  static const capabilityStatus = ValueKey<String>(
+    'foundation.capability.status',
+  );
+  static const capabilityRecommendedPlan = ValueKey<String>(
+    'foundation.capability.recommended',
+  );
+  static const capabilityFallbackPlan = ValueKey<String>(
+    'foundation.capability.fallback',
+  );
+  static const capabilityLargerPlan = ValueKey<String>(
+    'foundation.capability.larger',
+  );
+  static const capabilityNoPlan = ValueKey<String>(
+    'foundation.capability.no_plan',
+  );
 }

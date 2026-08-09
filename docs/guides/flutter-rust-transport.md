@@ -39,6 +39,7 @@ All routes require `Authorization: Bearer <per-launch-token>`, correlation and r
 | `GET /internal/v1/test-operations/{id}/events` | Stream ordered authenticated server-sent events. |
 | `POST /internal/v1/test-operations/{id}/cancel` | Request explicit cancellation. |
 | `POST /internal/v1/hardware-scans` | Start one bounded Rust-owned hardware evidence scan. |
+| `POST /internal/v1/recommendations` | Generate one deterministic report from supplied typed evidence and preferences. |
 | `GET /internal/v1/hardware-scans/{id}/events` | Stream ordered typed scan events and the terminal machine profile. |
 | `POST /internal/v1/hardware-scans/{id}/cancel` | Propagate cancellation to the Windows evidence process. |
 | `POST /internal/v1/shutdown` | Request bounded sidecar shutdown. |
@@ -46,6 +47,8 @@ All routes require `Authorization: Bearer <per-launch-token>`, correlation and r
 The deterministic operation is transport-foundation behavior only. It is not a product workflow and has no hardware, runtime, model, download, persistence, or chat semantics.
 
 Hardware scans reuse the same authentication, handshake, correlation, bounded SSE, cancellation, and safe-error controls. Only one scan runs at a time, and the host retains at most eight in-process scan records for stream replay. No hardware evidence is exposed through an unauthenticated route or written to SQLite.
+
+Capability recommendations use the same authentication, handshake, body limit, timeout, and identifier checks. The route is an in-memory bounded calculation: it consumes the supplied `MachineProfile`, does not start a scan, does not query Windows or SQLite, and exposes no raw catalogue rules. See [`capability-recommendations.md`](./capability-recommendations.md).
 
 ## Contract generation
 

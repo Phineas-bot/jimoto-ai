@@ -165,5 +165,63 @@
     }
   },
   "supportedValue": "Supported",
-  "notSupportedValue": "Not supported"
+  "notSupportedValue": "Not supported",
+  "capabilityTitle": "Plan for this PC",
+  "capabilityWorkloadLabel": "Primary use",
+  "capabilityWorkloadGeneral": "Writing and chat",
+  "capabilityWorkloadCoding": "Coding",
+  "capabilityPriorityLabel": "Preference",
+  "capabilityPriorityBalanced": "Balanced",
+  "capabilityPriorityFastest": "Fastest setup",
+  "capabilityPriorityLightest": "Lowest resource use",
+  "capabilityPriorityQuality": "Best quality within safe limits",
+  "capabilityLargerOptionLabel": "Show a larger safe option",
+  "capabilityGenerateAction": "Generate plan",
+  "capabilityProgressSemanticLabel": "Capability planning progress",
+  "capabilityIdleMessage": "No plan has been generated for this hardware profile.",
+  "capabilityIdleSemanticLabel": "Capability plan not generated",
+  "capabilityLoadingMessage": "Checking safe options for this PC.",
+  "capabilityLoadingSemanticLabel": "Capability planning in progress",
+  "capabilityReadySemanticLabel": "Recommended plan: {name}. Confidence: {confidence}.",
+  "@capabilityReadySemanticLabel": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "confidence": { "type": "String" }
+    }
+  },
+  "capabilityRecommendedTitle": "Recommended",
+  "capabilityFallbackTitle": "Smaller fallback",
+  "capabilityLargerTitle": "Larger option",
+  "capabilityMemoryLabel": "Memory allowance",
+  "capabilityStorageEstimateLabel": "Storage allowance",
+  "capabilityModeLabel": "Operating mode",
+  "capabilityStandardMode": "Standard",
+  "capabilityAcceleratedMode": "Accelerated",
+  "capabilityConfidenceLabel": "Confidence",
+  "capabilityConfidenceHigh": "High",
+  "capabilityConfidenceMedium": "Medium",
+  "capabilityConfidenceLow": "Low",
+  "capabilityReasonsLabel": "Why this result",
+  "capabilityWarningsLabel": "Important considerations",
+  "capabilityLicenceLabel": "Licence: {licence}",
+  "@capabilityLicenceLabel": {
+    "placeholders": { "licence": { "type": "String" } }
+  },
+  "capabilitySourceLabel": "Source: {source}",
+  "@capabilitySourceLabel": {
+    "placeholders": { "source": { "type": "String" } }
+  },
+  "capabilityVersionsLabel": "Catalogue {catalogue}; rules {rules}",
+  "@capabilityVersionsLabel": {
+    "placeholders": {
+      "catalogue": { "type": "String" },
+      "rules": { "type": "String" }
+    }
+  },
+  "capabilityNoPlanTitle": "No safe plan available",
+  "capabilityNoPlanMessage": "The current evidence or available resources do not support a safe plan.",
+  "capabilityNoPlanSemanticLabel": "No safe capability plan is available",
+  "capabilityFailedTitle": "Planning failed",
+  "capabilityFailedMessage": "GixGiz could not generate a plan. Review diagnostics, then try again.",
+  "capabilityFailedSemanticLabel": "Capability planning failed"
 }

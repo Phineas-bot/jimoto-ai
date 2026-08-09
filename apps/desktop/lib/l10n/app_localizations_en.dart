@@ -305,4 +305,137 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notSupportedValue => 'Not supported';
+
+  @override
+  String get capabilityTitle => 'Plan for this PC';
+
+  @override
+  String get capabilityWorkloadLabel => 'Primary use';
+
+  @override
+  String get capabilityWorkloadGeneral => 'Writing and chat';
+
+  @override
+  String get capabilityWorkloadCoding => 'Coding';
+
+  @override
+  String get capabilityPriorityLabel => 'Preference';
+
+  @override
+  String get capabilityPriorityBalanced => 'Balanced';
+
+  @override
+  String get capabilityPriorityFastest => 'Fastest setup';
+
+  @override
+  String get capabilityPriorityLightest => 'Lowest resource use';
+
+  @override
+  String get capabilityPriorityQuality => 'Best quality within safe limits';
+
+  @override
+  String get capabilityLargerOptionLabel => 'Show a larger safe option';
+
+  @override
+  String get capabilityGenerateAction => 'Generate plan';
+
+  @override
+  String get capabilityProgressSemanticLabel => 'Capability planning progress';
+
+  @override
+  String get capabilityIdleMessage =>
+      'No plan has been generated for this hardware profile.';
+
+  @override
+  String get capabilityIdleSemanticLabel => 'Capability plan not generated';
+
+  @override
+  String get capabilityLoadingMessage => 'Checking safe options for this PC.';
+
+  @override
+  String get capabilityLoadingSemanticLabel =>
+      'Capability planning in progress';
+
+  @override
+  String capabilityReadySemanticLabel(String name, String confidence) {
+    return 'Recommended plan: $name. Confidence: $confidence.';
+  }
+
+  @override
+  String get capabilityRecommendedTitle => 'Recommended';
+
+  @override
+  String get capabilityFallbackTitle => 'Smaller fallback';
+
+  @override
+  String get capabilityLargerTitle => 'Larger option';
+
+  @override
+  String get capabilityMemoryLabel => 'Memory allowance';
+
+  @override
+  String get capabilityStorageEstimateLabel => 'Storage allowance';
+
+  @override
+  String get capabilityModeLabel => 'Operating mode';
+
+  @override
+  String get capabilityStandardMode => 'Standard';
+
+  @override
+  String get capabilityAcceleratedMode => 'Accelerated';
+
+  @override
+  String get capabilityConfidenceLabel => 'Confidence';
+
+  @override
+  String get capabilityConfidenceHigh => 'High';
+
+  @override
+  String get capabilityConfidenceMedium => 'Medium';
+
+  @override
+  String get capabilityConfidenceLow => 'Low';
+
+  @override
+  String get capabilityReasonsLabel => 'Why this result';
+
+  @override
+  String get capabilityWarningsLabel => 'Important considerations';
+
+  @override
+  String capabilityLicenceLabel(String licence) {
+    return 'Licence: $licence';
+  }
+
+  @override
+  String capabilitySourceLabel(String source) {
+    return 'Source: $source';
+  }
+
+  @override
+  String capabilityVersionsLabel(String catalogue, String rules) {
+    return 'Catalogue $catalogue; rules $rules';
+  }
+
+  @override
+  String get capabilityNoPlanTitle => 'No safe plan available';
+
+  @override
+  String get capabilityNoPlanMessage =>
+      'The current evidence or available resources do not support a safe plan.';
+
+  @override
+  String get capabilityNoPlanSemanticLabel =>
+      'No safe capability plan is available';
+
+  @override
+  String get capabilityFailedTitle => 'Planning failed';
+
+  @override
+  String get capabilityFailedMessage =>
+      'GixGiz could not generate a plan. Review diagnostics, then try again.';
+
+  @override
+  String get capabilityFailedSemanticLabel => 'Capability planning failed';
 }

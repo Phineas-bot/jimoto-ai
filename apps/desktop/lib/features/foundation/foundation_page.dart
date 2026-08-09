@@ -18,6 +18,13 @@ class FoundationPage extends StatefulWidget {
 class _FoundationPageState extends State<FoundationPage> {
   FoundationState _state = const FoundationLoading();
   HardwareScanState _hardwareScanState = const HardwareScanIdle();
+  CapabilityRecommendationState _recommendationState =
+      const CapabilityRecommendationIdle();
+  UserPreferenceProfile _preferences = const UserPreferenceProfile(
+    workload: WorkloadTier.generalText,
+    priority: PreferencePriority.balanced,
+    includeOptionalLarger: true,
+  );
   CoreOperation? _activeHardwareScan;
   CoreClient? _activeHardwareScanClient;
   StreamSubscription<HardwareScanEvent>? _hardwareScanSubscription;
@@ -34,6 +41,7 @@ class _FoundationPageState extends State<FoundationPage> {
     if (!identical(oldWidget.coreClient, widget.coreClient)) {
       unawaited(_stopHardwareScan(cancelRemote: true));
       _hardwareScanState = const HardwareScanIdle();
+      _recommendationState = const CapabilityRecommendationIdle();
       _checkConnection();
     }
   }
@@ -90,7 +98,10 @@ class _FoundationPageState extends State<FoundationPage> {
     if (!mounted) {
       return;
     }
-    setState(() => _hardwareScanState = const HardwareScanLoading());
+    setState(() {
+      _hardwareScanState = const HardwareScanLoading();
+      _recommendationState = const CapabilityRecommendationIdle();
+    });
     final client = widget.coreClient;
     try {
       final operation = await client.startHardwareScan();
@@ -140,6 +151,77 @@ class _FoundationPageState extends State<FoundationPage> {
       ),
     };
     setState(() => _hardwareScanState = next);
+  }
+
+  void _setWorkload(WorkloadTier workload) {
+    setState(() {
+      _preferences = UserPreferenceProfile(
+        workload: workload,
+        priority: _preferences.priority,
+        includeOptionalLarger: _preferences.includeOptionalLarger,
+      );
+      _recommendationState = const CapabilityRecommendationIdle();
+    });
+  }
+
+  void _setPriority(PreferencePriority priority) {
+    setState(() {
+      _preferences = UserPreferenceProfile(
+        workload: _preferences.workload,
+        priority: priority,
+        includeOptionalLarger: _preferences.includeOptionalLarger,
+      );
+      _recommendationState = const CapabilityRecommendationIdle();
+    });
+  }
+
+  void _setIncludeOptionalLarger(bool include) {
+    setState(() {
+      _preferences = UserPreferenceProfile(
+        workload: _preferences.workload,
+        priority: _preferences.priority,
+        includeOptionalLarger: include,
+      );
+      _recommendationState = const CapabilityRecommendationIdle();
+    });
+  }
+
+  Future<void> _generateRecommendation() async {
+    final profile = switch (_hardwareScanState) {
+      HardwareScanReady(:final profile) ||
+      HardwareScanPartial(:final profile) => profile,
+      _ => null,
+    };
+    if (profile == null) {
+      return;
+    }
+    final client = widget.coreClient;
+    setState(
+      () => _recommendationState = const CapabilityRecommendationLoading(),
+    );
+    try {
+      final report = await client.recommendCapability(profile, _preferences);
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      setState(() {
+        _recommendationState = switch (report.status) {
+          CapabilityReportStatus.plansAvailable =>
+            CapabilityRecommendationReady(report: report),
+          CapabilityReportStatus.noPlan || CapabilityReportStatus.unknown =>
+            CapabilityRecommendationNoPlan(report: report),
+        };
+      });
+    } on Object {
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      setState(
+        () => _recommendationState = const CapabilityRecommendationFailed(
+          diagnosticCode: 'CAPABILITY_RECOMMENDATION_FAILED',
+        ),
+      );
+    }
   }
 
   void _failHardwareScan(String diagnosticCode) {
@@ -196,9 +278,15 @@ class _FoundationPageState extends State<FoundationPage> {
     return FoundationScreen(
       state: _state,
       hardwareScanState: _hardwareScanState,
+      recommendationState: _recommendationState,
+      preferences: _preferences,
       onRetry: _checkConnection,
       onStartHardwareScan: _startHardwareScan,
       onCancelHardwareScan: _cancelHardwareScan,
+      onWorkloadChanged: _setWorkload,
+      onPriorityChanged: _setPriority,
+      onIncludeOptionalLargerChanged: _setIncludeOptionalLarger,
+      onGenerateRecommendation: _generateRecommendation,
     );
   }
 }

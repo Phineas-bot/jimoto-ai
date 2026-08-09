@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod capability;
 mod error;
 mod hardware;
 mod observability;
@@ -16,6 +17,7 @@ mod operation;
 mod persistence;
 mod service;
 
+pub use capability::CapabilityEngine;
 pub use error::CoreError;
 pub use hardware::{
     CollectedHardwareEvidence, HardwareProvider, HardwareScanner, WindowsHardwareProvider,

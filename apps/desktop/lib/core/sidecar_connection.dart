@@ -72,6 +72,8 @@ abstract interface class CoreSidecarSession {
     CancelOperationRequest request,
   );
 
+  Future<RecommendationResponse> recommend(RecommendationRequest request);
+
   Future<void> shutdown(ShutdownRequest request);
 }
 
@@ -506,6 +508,27 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     final response = CancelOperationResponse.fromJson(
       await _post(
         '/internal/v1/hardware-scans/$operationId/cancel',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RecommendationResponse> recommend(
+    RecommendationRequest request,
+  ) async {
+    final response = RecommendationResponse.fromJson(
+      await _post(
+        '/internal/v1/recommendations',
         request.toJson(),
         request.correlationId,
         request.requestId,

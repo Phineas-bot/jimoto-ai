@@ -293,6 +293,8 @@ pub struct AccelerationEvidence {
 pub enum StorageLocation {
     /// The per-user GixGiz application-data root.
     ApplicationData,
+    /// A user-selected location represented without exposing its raw path.
+    UserSelected,
     /// The location is unknown or was supplied by a newer peer.
     #[serde(other)]
     Unknown,
@@ -496,5 +498,10 @@ mod tests {
         let json = serde_json::to_value(request).expect("scan request serializes");
         assert!(json.get("correlation_id").is_some());
         assert!(json.get("request_id").is_some());
+        assert_eq!(
+            serde_json::to_string(&StorageLocation::UserSelected)
+                .expect("storage location serializes"),
+            "\"user_selected\""
+        );
     }
 }

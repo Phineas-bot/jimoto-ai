@@ -13,10 +13,11 @@ use gixgiz_contracts::{
     CancelOperationRequest, CancelOperationResponse, ClientHello, CoreHello, CorrelationId,
     ErrorCategory, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
     HealthRequest, HealthResponse, InstanceId, OperationId, PROTOCOL_VERSION, PlatformStatus,
-    RecoveryAction, RecoveryGuidance, RequestId, SafeErrorPayload, ShutdownRequest,
-    ShutdownResponse, TestOperationStartRequest, TestOperationStartResponse, TransportCapability,
+    RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance, RequestId,
+    SafeErrorPayload, ShutdownRequest, ShutdownResponse, TestOperationStartRequest,
+    TestOperationStartResponse, TransportCapability,
 };
-use gixgiz_core::HardwareScanner;
+use gixgiz_core::{CapabilityEngine, CoreError, HardwareScanner, OperationContext};
 use tokio::sync::{Semaphore, mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -41,6 +42,7 @@ struct AppState {
     handshaken: Arc<std::sync::atomic::AtomicBool>,
     operations: OperationRegistry,
     hardware_scans: HardwareScanRegistry,
+    capability_engine: CapabilityEngine,
     request_slots: Arc<Semaphore>,
     shutdown: ShutdownHandle,
 }
@@ -100,6 +102,7 @@ impl SidecarHost {
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(hardware_scanner),
+            capability_engine: CapabilityEngine::v0_1(),
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             shutdown: shutdown.clone(),
         };
@@ -165,6 +168,7 @@ fn build_router(state: AppState) -> Router {
             "/internal/v1/hardware-scans/{operation_id}/cancel",
             post(cancel_hardware_scan),
         )
+        .route("/internal/v1/recommendations", post(recommendation))
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(middleware::from_fn_with_state(state.clone(), request_guard))
@@ -474,6 +478,24 @@ async fn cancel_hardware_scan(
     }))
 }
 
+async fn recommendation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RecommendationRequest>, JsonRejection>,
+) -> Result<Json<RecommendationResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let report = state
+        .capability_engine
+        .recommend(&request.machine_profile, request.preferences)
+        .map_err(|error| capability_failure(error, ids))?;
+    Ok(Json(RecommendationResponse {
+        report,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
 async fn shutdown(
     State(state): State<AppState>,
     Extension(ids): Extension<BoundaryIds>,
@@ -572,6 +594,7 @@ fn supported_capabilities() -> Vec<TransportCapability> {
         TransportCapability::Health,
         TransportCapability::TestOperationEvents,
         TransportCapability::HardwareScan,
+        TransportCapability::CapabilityRecommendation,
         TransportCapability::Cancellation,
         TransportCapability::Shutdown,
     ]
@@ -655,6 +678,20 @@ fn operation_failure(error: OperationError, ids: BoundaryIds) -> ApiFailure {
     }
 }
 
+fn capability_failure(error: CoreError, ids: BoundaryIds) -> ApiFailure {
+    let context = OperationContext::new(ids.correlation_id, ids.request_id);
+    let payload = error.to_safe_payload(&context);
+    let status = match payload.category {
+        ErrorCategory::InvalidInput => StatusCode::BAD_REQUEST,
+        ErrorCategory::IncompatibleVersion => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiFailure {
+        status,
+        payload: Box::new(payload),
+    }
+}
+
 struct ApiFailure {
     status: StatusCode,
     payload: Box<SafeErrorPayload>,
@@ -706,7 +743,14 @@ impl IntoResponse for ApiFailure {
 #[cfg(test)]
 mod tests {
     use axum::http::Request;
-    use gixgiz_contracts::{ServiceHealthStatus, ServiceRequirement};
+    use gixgiz_contracts::{
+        AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CpuEvidence,
+        EvidenceConfidence, EvidenceMetadata, EvidenceSource, GpuCollectionEvidence,
+        MachineArchitecture, MachineProfile, MachineProfileCompleteness, OperatingSystemEvidence,
+        PhysicalMemoryEvidence, PreferencePriority, ServiceHealthStatus, ServiceRequirement,
+        StorageEvidence, StorageLocation, StorageMediaEvidence, StorageMediaKind, StringEvidence,
+        U32Evidence, U64Evidence, UserPreferenceProfile, WorkloadTier,
+    };
     use gixgiz_core::{
         CollectedHardwareEvidence, CoreError, HardwareProvider, OperationContext, PlatformCore,
     };
@@ -742,6 +786,7 @@ mod tests {
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(test_hardware_scanner()),
+            capability_engine: CapabilityEngine::v0_1(),
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             shutdown: ShutdownHandle {
                 sender: shutdown_sender,
@@ -767,6 +812,85 @@ mod tests {
             requested_capabilities: vec![TransportCapability::Health],
             correlation_id: CorrelationId::new(),
             request_id: RequestId::new(),
+        }
+    }
+
+    fn recommendation_request() -> RecommendationRequest {
+        RecommendationRequest {
+            machine_profile: test_profile(),
+            preferences: UserPreferenceProfile {
+                workload: WorkloadTier::GeneralText,
+                priority: PreferencePriority::Balanced,
+                include_optional_larger: true,
+            },
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        }
+    }
+
+    fn test_profile() -> MachineProfile {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        let metadata =
+            EvidenceMetadata::available(EvidenceSource::WindowsCim, EvidenceConfidence::High);
+        let text = |value: &str| StringEvidence {
+            value: Some(value.to_owned()),
+            metadata: metadata.clone(),
+        };
+        let u64_value = |value| U64Evidence {
+            value: Some(value),
+            metadata: metadata.clone(),
+        };
+
+        MachineProfile {
+            schema_version: gixgiz_contracts::MACHINE_PROFILE_SCHEMA_VERSION,
+            scan_id: OperationId::new(),
+            correlation_id: CorrelationId::new(),
+            scanned_at_unix_ms: 1_725_000_000_000,
+            completeness: MachineProfileCompleteness::Complete,
+            operating_system: OperatingSystemEvidence {
+                name: text("Windows 11"),
+                version: text("10.0"),
+                build: text("26100"),
+                architecture: ArchitectureEvidence {
+                    value: Some(MachineArchitecture::X86_64),
+                    metadata: metadata.clone(),
+                },
+            },
+            cpu: CpuEvidence {
+                name: text("Fixture CPU"),
+                vendor: text("Fixture vendor"),
+                physical_core_count: U32Evidence {
+                    value: Some(4),
+                    metadata: metadata.clone(),
+                },
+                logical_core_count: U32Evidence {
+                    value: Some(8),
+                    metadata: metadata.clone(),
+                },
+            },
+            physical_memory: PhysicalMemoryEvidence {
+                total_bytes: u64_value(16 * GIB),
+                available_bytes: u64_value(10 * GIB),
+            },
+            gpus: GpuCollectionEvidence {
+                devices: Vec::new(),
+                metadata: metadata.clone(),
+            },
+            acceleration: vec![AccelerationEvidence {
+                kind: AccelerationKind::DirectMl,
+                supported: Some(false),
+                metadata: metadata.clone(),
+            }],
+            storage: StorageEvidence {
+                location: StorageLocation::ApplicationData,
+                capacity_bytes: u64_value(200 * GIB),
+                free_bytes: u64_value(30 * GIB),
+                filesystem: text("NTFS"),
+                media_kind: StorageMediaEvidence {
+                    value: Some(StorageMediaKind::Fixed),
+                    metadata,
+                },
+            },
         }
     }
 
@@ -858,6 +982,102 @@ mod tests {
         assert_eq!(core.selected_protocol, PROTOCOL_VERSION);
         assert_eq!(core.correlation_id, hello.correlation_id);
         assert_eq!(core.application.name, "GixGiz");
+        assert!(
+            core.supported_capabilities
+                .contains(&TransportCapability::CapabilityRecommendation)
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_recommendation_uses_supplied_profile_without_scanning() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let request = recommendation_request();
+        let response = router
+            .oneshot(json_request(
+                "/internal/v1/recommendations",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let recommendation: RecommendationResponse = response_json(response).await;
+        assert_eq!(recommendation.correlation_id, request.correlation_id);
+        assert_eq!(recommendation.request_id, request.request_id);
+        assert!(recommendation.report.recommended_plan.is_some());
+    }
+
+    #[tokio::test]
+    async fn recommendation_rejects_unsupported_profile_with_safe_payload() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let mut request = recommendation_request();
+        request.machine_profile.schema_version = 999;
+        let response = router
+            .oneshot(json_request(
+                "/internal/v1/recommendations",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let error = error_payload(response).await;
+        assert_eq!(error.category, ErrorCategory::IncompatibleVersion);
+        assert_eq!(error.code, "capability.machine_profile_incompatible");
+        assert_eq!(error.correlation_id, request.correlation_id);
+    }
+
+    #[tokio::test]
+    async fn recommendation_rejects_unauthenticated_input_before_parsing() {
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/internal/v1/recommendations")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::from("not-json"))
+            .expect("request builds");
+        let response = build_router(test_state())
+            .oneshot(request)
+            .await
+            .expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let error = error_payload(response).await;
+        assert_eq!(error.code, "transport.authentication_required");
+    }
+
+    #[tokio::test]
+    async fn recommendation_rejects_invalid_authenticated_payload_safely() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/internal/v1/recommendations")
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::from("not-json"))
+            .expect("request builds");
+        let response = router.oneshot(request).await.expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error = error_payload(response).await;
+        assert_eq!(error.code, "transport.invalid_json_body");
+        assert_eq!(error.correlation_id, ids.correlation_id);
     }
 
     #[tokio::test]

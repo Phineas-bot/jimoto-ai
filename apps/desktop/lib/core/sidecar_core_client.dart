@@ -123,6 +123,23 @@ class SidecarCoreClient extends CoreClient {
   }
 
   @override
+  Future<CapabilityReport> recommendCapability(
+    MachineProfile profile,
+    UserPreferenceProfile preferences,
+  ) async {
+    final session = await _connectedSession();
+    final response = await session.recommend(
+      RecommendationRequest(
+        machineProfile: profile,
+        preferences: preferences,
+        correlationId: newCorrelationId(),
+        requestId: newRequestId(),
+      ),
+    );
+    return response.report;
+  }
+
+  @override
   Future<void> shutdown() async {
     final session = _session;
     _session = null;
@@ -157,6 +174,7 @@ class SidecarCoreClient extends CoreClient {
             TransportCapability.health,
             TransportCapability.testOperationEvents,
             TransportCapability.hardwareScan,
+            TransportCapability.capabilityRecommendation,
             TransportCapability.cancellation,
             TransportCapability.shutdown,
           ],
