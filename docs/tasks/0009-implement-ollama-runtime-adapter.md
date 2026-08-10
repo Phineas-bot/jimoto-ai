@@ -2,7 +2,7 @@
 
 - **GitHub issue:** [#9](https://github.com/Phineas-bot/gixgiz/issues/9)
 - **Depends on:** Tasks 03–08
-- **Requires before implementation:** ADR for privileged installer helper and ADR for runtime abstraction/Ollama registration
+- **Requires before implementation:** [ADR 0006](../adr/0006-runtime-abstraction-and-ollama-provider.md) and [ADR 0007](../adr/0007-privileged-installer-helper-elevation-and-rollback.md)
 - **Blocks:** Tasks 10 and 11
 
 ## Context and user value
