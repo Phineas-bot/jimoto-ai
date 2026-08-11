@@ -1,6 +1,7 @@
 use std::io;
 
 use gixgiz_core::CoreError;
+use gixgiz_runtime::RuntimeError;
 use thiserror::Error;
 
 /// Safe top-level failures produced while hosting the desktop sidecar.
@@ -33,4 +34,7 @@ pub enum HostError {
     /// A blocking core lifecycle worker stopped unexpectedly.
     #[error("the platform core lifecycle worker stopped unexpectedly")]
     CoreWorker(#[source] tokio::task::JoinError),
+    /// The concrete runtime adapter could not be composed safely.
+    #[error("the local runtime adapter could not be initialized")]
+    Runtime(#[source] RuntimeError),
 }

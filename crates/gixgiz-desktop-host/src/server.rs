@@ -14,11 +14,15 @@ use gixgiz_contracts::{
     ErrorCategory, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
     HealthRequest, HealthResponse, InstanceId, OperationId, PROTOCOL_VERSION, PlatformStatus,
     RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance, RequestId,
-    SafeErrorPayload, ShutdownRequest, ShutdownResponse, TestOperationStartRequest,
-    TestOperationStartResponse, TransportCapability,
+    RuntimeConsentRequest, RuntimeConsentResponse, RuntimeModelInventoryRequest,
+    RuntimeModelInventoryResponse, RuntimeOperationEvent, RuntimeOperationStartRequest,
+    RuntimeOperationStartResponse, RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload,
+    ShutdownRequest, ShutdownResponse, TestOperationStartRequest, TestOperationStartResponse,
+    TransportCapability,
 };
-use gixgiz_core::{CapabilityEngine, CoreError, HardwareScanner, OperationContext};
-use tokio::sync::{Semaphore, mpsc, watch};
+use gixgiz_core::{CapabilityEngine, CoreError, HardwareScanner, OperationContext, RuntimeService};
+use gixgiz_runtime::{RuntimeError, RuntimeOperationContext};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
@@ -26,10 +30,12 @@ use crate::{
     bootstrap::BearerToken,
     hardware_scans::HardwareScanRegistry,
     operations::{OperationError, OperationRegistry},
+    runtime_operations::RuntimeOperationRegistry,
 };
 
 const MAX_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_CONCURRENT_REQUESTS: usize = 16;
+const MAX_CONCURRENT_EVENT_STREAMS: usize = 16;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const CORRELATION_HEADER: &str = "x-gixgiz-correlation-id";
 const REQUEST_HEADER: &str = "x-gixgiz-request-id";
@@ -43,7 +49,10 @@ struct AppState {
     operations: OperationRegistry,
     hardware_scans: HardwareScanRegistry,
     capability_engine: CapabilityEngine,
+    runtime: RuntimeService,
+    runtime_operations: RuntimeOperationRegistry,
     request_slots: Arc<Semaphore>,
+    event_stream_slots: Arc<Semaphore>,
     shutdown: ShutdownHandle,
 }
 
@@ -80,6 +89,7 @@ impl SidecarHost {
         instance_id: InstanceId,
         status: PlatformStatus,
         hardware_scanner: HardwareScanner,
+        runtime: RuntimeService,
     ) -> Result<Self, HostError> {
         let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
@@ -103,7 +113,10 @@ impl SidecarHost {
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(hardware_scanner),
             capability_engine: CapabilityEngine::v0_1(),
+            runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
+            runtime,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
+            event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: shutdown.clone(),
         };
 
@@ -169,6 +182,21 @@ fn build_router(state: AppState) -> Router {
             post(cancel_hardware_scan),
         )
         .route("/internal/v1/recommendations", post(recommendation))
+        .route("/internal/v1/runtime/status", post(runtime_status))
+        .route("/internal/v1/runtime/consent", post(runtime_consent))
+        .route("/internal/v1/runtime/models", post(runtime_models))
+        .route(
+            "/internal/v1/runtime/operations",
+            post(start_runtime_operation),
+        )
+        .route(
+            "/internal/v1/runtime/operations/{operation_id}/events",
+            get(runtime_operation_events),
+        )
+        .route(
+            "/internal/v1/runtime/operations/{operation_id}/cancel",
+            post(cancel_runtime_operation),
+        )
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(middleware::from_fn_with_state(state.clone(), request_guard))
@@ -209,6 +237,19 @@ async fn request_guard(
             "Browser-origin requests are not accepted by the local core.",
             RecoveryAction::NoAction,
             "Use the installed GixGiz desktop application.",
+            ids,
+        )
+        .into_response();
+    }
+
+    if !has_valid_boundary_headers(request.headers()) {
+        return ApiFailure::new(
+            StatusCode::BAD_REQUEST,
+            ErrorCategory::InvalidInput,
+            "transport.identifiers_required",
+            "Valid request identifiers are required in the transport headers.",
+            RecoveryAction::Retry,
+            "Retry with valid correlation and request identifiers.",
             ids,
         )
         .into_response();
@@ -299,6 +340,7 @@ async fn handshake(
         application: state.status.application.clone(),
         selected_protocol,
         supported_capabilities: supported_capabilities(),
+        runtime_provider_id: Some(state.runtime.provider_id()),
         readiness: state.status.readiness.clone(),
         instance_id: state.instance_id,
         correlation_id: hello.correlation_id,
@@ -343,6 +385,7 @@ async fn operation_events(
     Extension(ids): Extension<BoundaryIds>,
     Path(operation_id): Path<String>,
 ) -> Result<Sse<ReceiverStream<Result<Event, Infallible>>>, ApiFailure> {
+    let stream_permit = acquire_event_stream(&state, ids)?;
     let operation_id =
         OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
     let mut subscription = state
@@ -352,6 +395,7 @@ async fn operation_events(
     let (sender, receiver) = mpsc::channel(16);
 
     tokio::spawn(async move {
+        let _stream_permit = stream_permit;
         for event in subscription.replay {
             let terminal = event.terminal_state.is_some();
             if send_event(&sender, event).await.is_err() || terminal {
@@ -422,6 +466,7 @@ async fn hardware_scan_events(
     Extension(ids): Extension<BoundaryIds>,
     Path(operation_id): Path<String>,
 ) -> Result<Sse<ReceiverStream<Result<Event, Infallible>>>, ApiFailure> {
+    let stream_permit = acquire_event_stream(&state, ids)?;
     let operation_id =
         OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
     let mut subscription = state
@@ -431,6 +476,7 @@ async fn hardware_scan_events(
     let (sender, receiver) = mpsc::channel(8);
 
     tokio::spawn(async move {
+        let _stream_permit = stream_permit;
         for event in subscription.replay {
             let terminal = event.terminal_state.is_some();
             if send_hardware_event(&sender, event).await.is_err() || terminal {
@@ -496,6 +542,150 @@ async fn recommendation(
     }))
 }
 
+async fn runtime_status(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeStatusRequest>, JsonRejection>,
+) -> Result<Json<RuntimeStatusResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let context =
+        RuntimeOperationContext::new(request.correlation_id, request.request_id, REQUEST_TIMEOUT);
+    let report = state
+        .runtime
+        .status(&request.provider_id, context)
+        .await
+        .map_err(|error| runtime_failure(error, ids))?;
+    Ok(Json(RuntimeStatusResponse {
+        report,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+async fn runtime_consent(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeConsentRequest>, JsonRejection>,
+) -> Result<Json<RuntimeConsentResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let context =
+        RuntimeOperationContext::new(request.correlation_id, request.request_id, REQUEST_TIMEOUT);
+    let report = state
+        .runtime
+        .set_reuse_consent(&request.provider_id, request.decision, context)
+        .await
+        .map_err(|error| runtime_failure(error, ids))?;
+    Ok(Json(RuntimeConsentResponse {
+        report,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+async fn runtime_models(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeModelInventoryRequest>, JsonRejection>,
+) -> Result<Json<RuntimeModelInventoryResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let context =
+        RuntimeOperationContext::new(request.correlation_id, request.request_id, REQUEST_TIMEOUT);
+    let inventory = state
+        .runtime
+        .list_models(&request.provider_id, request.limit, context)
+        .await
+        .map_err(|error| runtime_failure(error, ids))?;
+    Ok(Json(RuntimeModelInventoryResponse {
+        inventory,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+async fn start_runtime_operation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeOperationStartRequest>, JsonRejection>,
+) -> Result<Json<RuntimeOperationStartResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let operation_id = state
+        .runtime_operations
+        .start(
+            request.provider_id,
+            request.kind,
+            request.correlation_id,
+            request.request_id,
+        )
+        .map_err(|error| runtime_operation_failure(error, ids))?;
+    Ok(Json(RuntimeOperationStartResponse {
+        operation_id,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+async fn runtime_operation_events(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(operation_id): Path<String>,
+) -> Result<Sse<ReceiverStream<Result<Event, Infallible>>>, ApiFailure> {
+    let stream_permit = acquire_event_stream(&state, ids)?;
+    let operation_id =
+        OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
+    let mut subscription = state
+        .runtime_operations
+        .subscribe(operation_id, ids.correlation_id)
+        .map_err(|error| runtime_operation_failure(error, ids))?;
+    let (sender, receiver) = mpsc::channel(8);
+
+    tokio::spawn(async move {
+        let _stream_permit = stream_permit;
+        for event in subscription.replay {
+            let terminal = event.terminal_state.is_some();
+            if send_runtime_event(&sender, event).await.is_err() || terminal {
+                return;
+            }
+        }
+        if subscription.terminal {
+            return;
+        }
+        while let Ok(event) = subscription.receiver.recv().await {
+            let terminal = event.terminal_state.is_some();
+            if send_runtime_event(&sender, event).await.is_err() || terminal {
+                return;
+            }
+        }
+    });
+
+    Ok(Sse::new(ReceiverStream::new(receiver)))
+}
+
+async fn cancel_runtime_operation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(operation_id): Path<String>,
+    payload: Result<Json<CancelOperationRequest>, JsonRejection>,
+) -> Result<Json<CancelOperationResponse>, ApiFailure> {
+    let operation_id =
+        OperationId::from_str(&operation_id).map_err(|_| invalid_operation_id(ids))?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let accepted = state
+        .runtime_operations
+        .cancel(operation_id, request.correlation_id)
+        .map_err(|error| runtime_operation_failure(error, ids))?;
+    Ok(Json(CancelOperationResponse {
+        operation_id,
+        accepted,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
 async fn shutdown(
     State(state): State<AppState>,
     Extension(ids): Extension<BoundaryIds>,
@@ -535,6 +725,21 @@ async fn send_hardware_event(
     sender
         .send(Ok(Event::default()
             .event("hardware_scan")
+            .id(sequence)
+            .data(data)))
+        .await
+        .map_err(|_| ())
+}
+
+async fn send_runtime_event(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    event: RuntimeOperationEvent,
+) -> Result<(), ()> {
+    let sequence = event.sequence.to_string();
+    let data = serde_json::to_string(&event).map_err(|_| ())?;
+    sender
+        .send(Ok(Event::default()
+            .event("runtime_operation")
             .id(sequence)
             .data(data)))
         .await
@@ -595,6 +800,10 @@ fn supported_capabilities() -> Vec<TransportCapability> {
         TransportCapability::TestOperationEvents,
         TransportCapability::HardwareScan,
         TransportCapability::CapabilityRecommendation,
+        TransportCapability::RuntimeStatus,
+        TransportCapability::RuntimeConsent,
+        TransportCapability::RuntimeLifecycle,
+        TransportCapability::RuntimeModelInventory,
         TransportCapability::Cancellation,
         TransportCapability::Shutdown,
     ]
@@ -615,6 +824,38 @@ fn ids_from_headers(headers: &HeaderMap) -> BoundaryIds {
         correlation_id,
         request_id,
     }
+}
+
+fn has_valid_boundary_headers(headers: &HeaderMap) -> bool {
+    headers
+        .get(CORRELATION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| CorrelationId::from_str(value).is_ok())
+        && headers
+            .get(REQUEST_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| RequestId::from_str(value).is_ok())
+}
+
+fn acquire_event_stream(
+    state: &AppState,
+    ids: BoundaryIds,
+) -> Result<OwnedSemaphorePermit, ApiFailure> {
+    state
+        .event_stream_slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| {
+            ApiFailure::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorCategory::ResourceExhausted,
+                "transport.concurrent_event_stream_limit",
+                "The local core is handling the maximum number of event streams.",
+                RecoveryAction::Retry,
+                "Close an existing event stream, then retry.",
+                ids,
+            )
+        })
 }
 
 fn has_json_content_type(headers: &HeaderMap) -> bool {
@@ -692,6 +933,45 @@ fn capability_failure(error: CoreError, ids: BoundaryIds) -> ApiFailure {
     }
 }
 
+fn runtime_operation_failure(error: OperationError, ids: BoundaryIds) -> ApiFailure {
+    match error {
+        OperationError::Busy => ApiFailure::new(
+            StatusCode::CONFLICT,
+            ErrorCategory::Conflict,
+            "runtime.operation_busy",
+            "A runtime lifecycle operation is already in progress.",
+            RecoveryAction::Retry,
+            "Wait for the current operation or cancel it before retrying.",
+            ids,
+        ),
+        other => operation_failure(other, ids),
+    }
+}
+
+fn runtime_failure(error: RuntimeError, ids: BoundaryIds) -> ApiFailure {
+    let context = RuntimeOperationContext::new(ids.correlation_id, ids.request_id, REQUEST_TIMEOUT);
+    let payload = error.to_safe_payload(&context);
+    let status = match payload.category {
+        ErrorCategory::InvalidInput => StatusCode::BAD_REQUEST,
+        ErrorCategory::PermissionDenied => StatusCode::FORBIDDEN,
+        ErrorCategory::NotSupported => StatusCode::NOT_IMPLEMENTED,
+        ErrorCategory::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        ErrorCategory::Conflict | ErrorCategory::IncompatibleVersion => StatusCode::CONFLICT,
+        ErrorCategory::ResourceExhausted => StatusCode::TOO_MANY_REQUESTS,
+        ErrorCategory::Cancelled => StatusCode::CONFLICT,
+        ErrorCategory::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+        ErrorCategory::IntegrityFailure | ErrorCategory::Degraded | ErrorCategory::Internal => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+        ErrorCategory::Unknown => StatusCode::INTERNAL_SERVER_ERROR,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiFailure {
+        status,
+        payload: Box::new(payload),
+    }
+}
+
 struct ApiFailure {
     status: StatusCode,
     payload: Box<SafeErrorPayload>,
@@ -742,17 +1022,27 @@ impl IntoResponse for ApiFailure {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use axum::http::Request;
     use gixgiz_contracts::{
         AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CpuEvidence,
         EvidenceConfidence, EvidenceMetadata, EvidenceSource, GpuCollectionEvidence,
         MachineArchitecture, MachineProfile, MachineProfileCompleteness, OperatingSystemEvidence,
-        PhysicalMemoryEvidence, PreferencePriority, ServiceHealthStatus, ServiceRequirement,
-        StorageEvidence, StorageLocation, StorageMediaEvidence, StorageMediaKind, StringEvidence,
-        U32Evidence, U64Evidence, UserPreferenceProfile, WorkloadTier,
+        PhysicalMemoryEvidence, PreferencePriority, RuntimeCapabilityAvailability,
+        RuntimeCapabilityDescriptor, RuntimeCapabilityKind, RuntimeDisplayName,
+        RuntimeEndpointSafety, RuntimeModelInventory, RuntimeProviderId, RuntimeState,
+        ServiceHealthStatus, ServiceRequirement, StorageEvidence, StorageLocation,
+        StorageMediaEvidence, StorageMediaKind, StringEvidence, U32Evidence, U64Evidence,
+        UserPreferenceProfile, WorkloadTier,
     };
     use gixgiz_core::{
         CollectedHardwareEvidence, CoreError, HardwareProvider, OperationContext, PlatformCore,
+    };
+    use gixgiz_runtime::{
+        RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle,
+        RuntimeModelInventoryProvider, RuntimeObservation, RuntimeOperationContext,
+        RuntimeProvider, testing::FakeRuntimeProvider,
     };
     use http_body_util::BodyExt;
     use serde_json::Value;
@@ -763,6 +1053,93 @@ mod tests {
     const TOKEN: &str = "abababababababababababababababababababababababababababababababab";
 
     struct UnavailableProvider;
+
+    struct CancellableRuntimeProvider {
+        provider_id: RuntimeProviderId,
+        detect_calls: AtomicUsize,
+        first_detect_started: Arc<tokio::sync::Notify>,
+    }
+
+    impl CancellableRuntimeProvider {
+        fn new(first_detect_started: Arc<tokio::sync::Notify>) -> Self {
+            Self {
+                provider_id: RuntimeProviderId::new("gixgiz.runtime.cancel-test.v1"),
+                detect_calls: AtomicUsize::new(0),
+                first_detect_started,
+            }
+        }
+
+        fn observation(&self) -> RuntimeObservation {
+            RuntimeObservation {
+                provider_id: self.provider_id.clone(),
+                display_name: RuntimeDisplayName::new("Cancellation test runtime"),
+                state: RuntimeState::Ready,
+                endpoint_safety: RuntimeEndpointSafety::LoopbackVerified,
+                version: None,
+                capabilities: Vec::new(),
+                reasons: Vec::new(),
+                warnings: Vec::new(),
+            }
+        }
+    }
+
+    impl RuntimeDetector for CancellableRuntimeProvider {
+        fn detect(
+            &self,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeObservation> {
+            Box::pin(async move {
+                if self.detect_calls.fetch_add(1, Ordering::AcqRel) == 0 {
+                    self.first_detect_started.notify_one();
+                    return context
+                        .run(std::future::pending::<
+                            Result<RuntimeObservation, RuntimeError>,
+                        >())
+                        .await;
+                }
+                context.check()?;
+                Ok(self.observation())
+            })
+        }
+    }
+
+    impl RuntimeLifecycle for CancellableRuntimeProvider {
+        fn execute(
+            &self,
+            _kind: gixgiz_contracts::RuntimeOperationKind,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeObservation> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(self.observation())
+            })
+        }
+    }
+
+    impl RuntimeModelInventoryProvider for CancellableRuntimeProvider {
+        fn list_models(
+            &self,
+            _limit: u16,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelInventory> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(RuntimeModelInventory {
+                    schema_version: gixgiz_contracts::RUNTIME_REPORT_SCHEMA_VERSION,
+                    provider_id: self.provider_id.clone(),
+                    models: Vec::new(),
+                    truncated: false,
+                    collected_at_unix_ms: 1,
+                })
+            })
+        }
+    }
+
+    impl RuntimeProvider for CancellableRuntimeProvider {
+        fn provider_id(&self) -> &RuntimeProviderId {
+            &self.provider_id
+        }
+    }
 
     impl HardwareProvider for UnavailableProvider {
         fn collect(
@@ -777,7 +1154,45 @@ mod tests {
         HardwareScanner::new(Arc::new(UnavailableProvider))
     }
 
-    fn state_with_status(status: PlatformStatus) -> AppState {
+    fn test_runtime_service() -> RuntimeService {
+        let provider_id = RuntimeProviderId::new("gixgiz.runtime.test.v1");
+        let observation = RuntimeObservation {
+            provider_id: provider_id.clone(),
+            display_name: RuntimeDisplayName::new("Test runtime"),
+            state: RuntimeState::Ready,
+            endpoint_safety: RuntimeEndpointSafety::LoopbackVerified,
+            version: None,
+            capabilities: vec![
+                RuntimeCapabilityDescriptor {
+                    kind: RuntimeCapabilityKind::Detection,
+                    availability: RuntimeCapabilityAvailability::Available,
+                    reason: None,
+                },
+                RuntimeCapabilityDescriptor {
+                    kind: RuntimeCapabilityKind::ModelInventory,
+                    availability: RuntimeCapabilityAvailability::Available,
+                    reason: None,
+                },
+            ],
+            reasons: Vec::new(),
+            warnings: Vec::new(),
+        };
+        let inventory = RuntimeModelInventory {
+            schema_version: gixgiz_contracts::RUNTIME_REPORT_SCHEMA_VERSION,
+            provider_id: provider_id.clone(),
+            models: Vec::new(),
+            truncated: false,
+            collected_at_unix_ms: 1,
+        };
+        RuntimeService::in_memory(Arc::new(FakeRuntimeProvider::new(
+            provider_id,
+            Ok(observation.clone()),
+            Ok(observation),
+            Ok(inventory),
+        )))
+    }
+
+    fn state_with_status_and_runtime(status: PlatformStatus, runtime: RuntimeService) -> AppState {
         let (shutdown_sender, _) = watch::channel(false);
         AppState {
             token: BearerToken::parse(TOKEN.to_owned()).expect("fixed token is valid"),
@@ -787,11 +1202,18 @@ mod tests {
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(test_hardware_scanner()),
             capability_engine: CapabilityEngine::v0_1(),
+            runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
+            runtime,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
+            event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: ShutdownHandle {
                 sender: shutdown_sender,
             },
         }
+    }
+
+    fn state_with_status(status: PlatformStatus) -> AppState {
+        state_with_status_and_runtime(status, test_runtime_service())
     }
 
     fn test_state() -> AppState {
@@ -986,6 +1408,10 @@ mod tests {
             core.supported_capabilities
                 .contains(&TransportCapability::CapabilityRecommendation)
         );
+        assert_eq!(
+            core.runtime_provider_id,
+            Some(RuntimeProviderId::new("gixgiz.runtime.test.v1"))
+        );
     }
 
     #[tokio::test]
@@ -1164,6 +1590,7 @@ mod tests {
             state.instance_id,
             state.status,
             test_hardware_scanner(),
+            test_runtime_service(),
         )
         .await
         .expect("loopback listener binds");
@@ -1336,6 +1763,411 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authenticated_runtime_status_returns_normalized_external_policy() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let request = RuntimeStatusRequest {
+            provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .oneshot(json_request(
+                "/internal/v1/runtime/status",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("runtime status responds");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let status: RuntimeStatusResponse = response_json(response).await;
+        assert_eq!(status.report.state, RuntimeState::Ready);
+        assert_eq!(
+            status.report.ownership,
+            gixgiz_contracts::RuntimeOwnership::External
+        );
+        assert_eq!(status.correlation_id, request.correlation_id);
+        assert_eq!(status.request_id, request.request_id);
+    }
+
+    #[tokio::test]
+    async fn runtime_routes_require_authentication_and_handshake_before_parsing() {
+        let request = RuntimeStatusRequest {
+            provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let unauthenticated = build_router(test_state())
+            .oneshot(json_request("/internal/v1/runtime/status", None, &request))
+            .await
+            .expect("unauthenticated request responds");
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            error_payload(unauthenticated).await.code,
+            "transport.authentication_required"
+        );
+
+        let before_handshake = build_router(test_state())
+            .oneshot(json_request(
+                "/internal/v1/runtime/status",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("pre-handshake request responds");
+        assert_eq!(before_handshake.status(), StatusCode::PRECONDITION_REQUIRED);
+        assert_eq!(
+            error_payload(before_handshake).await.code,
+            "transport.handshake_required"
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_runtime_route_rejects_invalid_payload_safely() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/internal/v1/runtime/status")
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::from("not-json"))
+            .expect("request builds");
+
+        let response = router.oneshot(request).await.expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error = error_payload(response).await;
+        assert_eq!(error.code, "transport.invalid_json_body");
+        assert_eq!(error.correlation_id, ids.correlation_id);
+        assert_eq!(error.request_id, ids.request_id);
+    }
+
+    #[tokio::test]
+    async fn runtime_event_stream_requires_a_valid_request_id_header() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/runtime/operations/{}/events",
+                OperationId::new()
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, CorrelationId::new().to_string())
+            .body(Body::empty())
+            .expect("event request builds");
+
+        let response = router.oneshot(request).await.expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_payload(response).await.code,
+            "transport.identifiers_required"
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_event_streams_respect_the_global_stream_bound() {
+        let state = test_state();
+        let slots = state.event_stream_slots.clone();
+        let mut permits = Vec::new();
+        for _ in 0..MAX_CONCURRENT_EVENT_STREAMS {
+            permits.push(
+                slots
+                    .clone()
+                    .try_acquire_owned()
+                    .expect("test reserves event stream slot"),
+            );
+        }
+        let router = build_router(state);
+        complete_handshake(&router).await;
+        let request_id = RequestId::new();
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/runtime/operations/{}/events",
+                OperationId::new()
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, CorrelationId::new().to_string())
+            .header(REQUEST_HEADER, request_id.to_string())
+            .body(Body::empty())
+            .expect("event request builds");
+
+        let response = router.oneshot(request).await.expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            error_payload(response).await.code,
+            "transport.concurrent_event_stream_limit"
+        );
+        drop(permits);
+    }
+
+    #[tokio::test]
+    async fn runtime_reuse_consent_enables_bounded_inventory_without_adoption() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let models = RuntimeModelInventoryRequest {
+            provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            limit: 10,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let denied = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/models",
+                Some(TOKEN),
+                &models,
+            ))
+            .await
+            .expect("model request responds");
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        assert_eq!(error_payload(denied).await.code, "runtime.consent_required");
+
+        let consent = RuntimeConsentRequest {
+            provider_id: models.provider_id.clone(),
+            decision: gixgiz_contracts::RuntimeConsentDecision::ApproveReuse,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let consent_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/consent",
+                Some(TOKEN),
+                &consent,
+            ))
+            .await
+            .expect("consent request responds");
+        assert_eq!(consent_response.status(), StatusCode::OK);
+        let consent_result: RuntimeConsentResponse = response_json(consent_response).await;
+        assert_eq!(
+            consent_result.report.ownership,
+            gixgiz_contracts::RuntimeOwnership::External
+        );
+        assert_eq!(
+            consent_result.report.reuse_consent,
+            gixgiz_contracts::RuntimeConsentState::ReuseApproved
+        );
+        assert_eq!(
+            consent_result.report.management_consent,
+            gixgiz_contracts::RuntimeConsentState::NotRequested
+        );
+
+        let response = router
+            .oneshot(json_request(
+                "/internal/v1/runtime/models",
+                Some(TOKEN),
+                &models,
+            ))
+            .await
+            .expect("approved model request responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        let inventory: RuntimeModelInventoryResponse = response_json(response).await;
+        assert!(inventory.inventory.models.is_empty());
+        assert!(!inventory.inventory.truncated);
+    }
+
+    #[tokio::test]
+    async fn authenticated_runtime_cancel_reaches_provider_and_streams_authoritative_state() {
+        let first_detect_started = Arc::new(tokio::sync::Notify::new());
+        let provider = Arc::new(CancellableRuntimeProvider::new(
+            first_detect_started.clone(),
+        ));
+        let provider_id = provider.provider_id().clone();
+        let base_state = test_state();
+        let runtime = RuntimeService::in_memory(provider);
+        let router = build_router(state_with_status_and_runtime(base_state.status, runtime));
+        complete_handshake(&router).await;
+        let correlation_id = CorrelationId::new();
+        let start = RuntimeOperationStartRequest {
+            provider_id,
+            kind: gixgiz_contracts::RuntimeOperationKind::Start,
+            correlation_id,
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/operations",
+                Some(TOKEN),
+                &start,
+            ))
+            .await
+            .expect("runtime operation starts");
+        assert_eq!(response.status(), StatusCode::OK);
+        let started: RuntimeOperationStartResponse = response_json(response).await;
+        tokio::time::timeout(Duration::from_secs(1), first_detect_started.notified())
+            .await
+            .expect("provider detection starts");
+
+        let cancel = CancelOperationRequest {
+            correlation_id,
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .clone()
+            .oneshot(json_request(
+                &format!(
+                    "/internal/v1/runtime/operations/{}/cancel",
+                    started.operation_id
+                ),
+                Some(TOKEN),
+                &cancel,
+            ))
+            .await
+            .expect("runtime cancellation responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        let cancellation: CancelOperationResponse = response_json(response).await;
+        assert!(cancellation.accepted);
+
+        let events_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/runtime/operations/{}/events",
+                started.operation_id
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, correlation_id.to_string())
+            .header(REQUEST_HEADER, RequestId::new().to_string())
+            .body(Body::empty())
+            .expect("event request builds");
+        let response = router
+            .oneshot(events_request)
+            .await
+            .expect("event request responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("event stream completes")
+            .to_bytes();
+        let events = String::from_utf8(body.to_vec())
+            .expect("SSE is UTF-8")
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .map(|data| {
+                serde_json::from_str::<RuntimeOperationEvent>(data).expect("runtime event decodes")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.sequence)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        let terminal = events.last().expect("terminal event exists");
+        assert_eq!(
+            terminal.terminal_state,
+            Some(gixgiz_contracts::RuntimeOperationTerminalState::Cancelled)
+        );
+        assert!(terminal.error.is_none());
+        let report = terminal
+            .report
+            .as_ref()
+            .expect("cancelled operation includes authoritative retained state");
+        assert_eq!(report.state, RuntimeState::Ready);
+        assert_eq!(
+            report.ownership,
+            gixgiz_contracts::RuntimeOwnership::External
+        );
+    }
+
+    #[tokio::test]
+    async fn external_runtime_lifecycle_streams_safe_failed_terminal_event() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let correlation_id = CorrelationId::new();
+        let start = RuntimeOperationStartRequest {
+            provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            kind: gixgiz_contracts::RuntimeOperationKind::Start,
+            correlation_id,
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/operations",
+                Some(TOKEN),
+                &start,
+            ))
+            .await
+            .expect("runtime operation starts");
+        assert_eq!(response.status(), StatusCode::OK);
+        let started: RuntimeOperationStartResponse = response_json(response).await;
+        tokio::time::sleep(Duration::from_millis(25)).await;
+
+        let events_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/runtime/operations/{}/events",
+                started.operation_id
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, correlation_id.to_string())
+            .header(REQUEST_HEADER, RequestId::new().to_string())
+            .body(Body::empty())
+            .expect("event request builds");
+        let response = router
+            .oneshot(events_request)
+            .await
+            .expect("event request responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("event stream completes")
+            .to_bytes();
+        let events = String::from_utf8(body.to_vec())
+            .expect("SSE is UTF-8")
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .map(|data| {
+                serde_json::from_str::<RuntimeOperationEvent>(data).expect("runtime event decodes")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.sequence)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        let terminal = events.last().expect("terminal event exists");
+        assert_eq!(
+            terminal.terminal_state,
+            Some(gixgiz_contracts::RuntimeOperationTerminalState::Failed)
+        );
+        assert_eq!(
+            terminal.error.as_ref().map(|error| error.code.as_str()),
+            Some("runtime.ownership_conflict")
+        );
+        let report = terminal
+            .report
+            .as_ref()
+            .expect("failed lifecycle includes authoritative retained state");
+        assert_eq!(report.state, RuntimeState::Ready);
+        assert_eq!(
+            report.ownership,
+            gixgiz_contracts::RuntimeOwnership::External
+        );
+    }
+
+    #[tokio::test]
     async fn shutdown_signal_stops_bound_server_within_deadline() {
         let state = test_state();
         let host = SidecarHost::bind(
@@ -1343,6 +2175,7 @@ mod tests {
             state.instance_id,
             state.status,
             test_hardware_scanner(),
+            test_runtime_service(),
         )
         .await
         .expect("loopback listener binds");
