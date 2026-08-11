@@ -55,4 +55,38 @@ abstract final class AppKeys {
   static const capabilityNoPlan = ValueKey<String>(
     'foundation.capability.no_plan',
   );
+  static const runtimePanel = ValueKey<String>('foundation.runtime');
+  static const runtimeStatus = ValueKey<String>('foundation.runtime.status');
+  static const runtimeDetails = ValueKey<String>('foundation.runtime.details');
+  static const runtimeProgress = ValueKey<String>(
+    'foundation.runtime.progress',
+  );
+  static const runtimeRefreshAction = ValueKey<String>(
+    'foundation.runtime.refresh_action',
+  );
+  static const runtimeConsentAction = ValueKey<String>(
+    'foundation.runtime.consent_action',
+  );
+  static const runtimeStartAction = ValueKey<String>(
+    'foundation.runtime.start_action',
+  );
+  static const runtimeStopAction = ValueKey<String>(
+    'foundation.runtime.stop_action',
+  );
+  static const runtimeRestartAction = ValueKey<String>(
+    'foundation.runtime.restart_action',
+  );
+  static const runtimeCancelAction = ValueKey<String>(
+    'foundation.runtime.cancel_action',
+  );
+  static const runtimeModelsAction = ValueKey<String>(
+    'foundation.runtime.models_action',
+  );
+  static const runtimeModels = ValueKey<String>('foundation.runtime.models');
+  static const runtimeModelsProgress = ValueKey<String>(
+    'foundation.runtime.models_progress',
+  );
+  static const runtimeDiagnostics = ValueKey<String>(
+    'foundation.runtime.diagnostics',
+  );
 }

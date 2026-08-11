@@ -16,6 +16,11 @@ class SidecarCoreClient extends CoreClient {
   CoreHello? _hello;
 
   @override
+  bool supportsTransportCapability(TransportCapability capability) {
+    return _hello?.supportedCapabilities.contains(capability) ?? false;
+  }
+
+  @override
   Future<CoreConnectionSnapshot> checkConnection() async {
     try {
       final session = await _connectedSession();
@@ -140,6 +145,189 @@ class SidecarCoreClient extends CoreClient {
   }
 
   @override
+  Future<RuntimeHealthReport> checkRuntimeStatus() async {
+    return _runtimeRequest(TransportCapability.runtimeStatus, (session) async {
+      final response = await session.runtimeStatus(
+        RuntimeStatusRequest(
+          providerId: _runtimeProviderId(),
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifyRuntimeProvider(response.report.providerId);
+      return response.report;
+    });
+  }
+
+  @override
+  Future<RuntimeHealthReport> decideRuntimeReuse(
+    RuntimeConsentDecision decision,
+  ) async {
+    return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
+      final response = await session.runtimeConsent(
+        RuntimeConsentRequest(
+          providerId: _runtimeProviderId(),
+          decision: decision,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifyRuntimeProvider(response.report.providerId);
+      return response.report;
+    });
+  }
+
+  @override
+  Future<CoreOperation> startRuntimeOperation(RuntimeOperationKind kind) async {
+    return _runtimeRequest(TransportCapability.runtimeLifecycle, (
+      session,
+    ) async {
+      final correlationId = newCorrelationId();
+      final response = await session.startRuntimeOperation(
+        RuntimeOperationStartRequest(
+          providerId: _runtimeProviderId(),
+          kind: kind,
+          correlationId: correlationId,
+          requestId: newRequestId(),
+        ),
+      );
+      return CoreOperation(
+        operationId: response.operationId,
+        correlationId: response.correlationId,
+      );
+    });
+  }
+
+  @override
+  Stream<RuntimeOperationEvent> observeRuntimeOperation(
+    CoreOperation operation,
+  ) async* {
+    try {
+      final session = await _connectedSession();
+      _requireCapability(TransportCapability.runtimeLifecycle);
+      await for (final event in session.runtimeOperationEvents(
+        operation.operationId,
+        operation.correlationId,
+        newRequestId(),
+      )) {
+        final providerId = event.report?.providerId;
+        if (providerId != null) {
+          _verifyRuntimeProvider(providerId);
+        }
+        yield event;
+      }
+    } on SidecarFailure catch (failure) {
+      throw _coreFailure(failure);
+    }
+  }
+
+  @override
+  Future<bool> cancelRuntimeOperation(CoreOperation operation) async {
+    return _runtimeRequest(TransportCapability.runtimeLifecycle, (
+      session,
+    ) async {
+      _requireCapability(TransportCapability.cancellation);
+      final response = await session.cancelRuntimeOperation(
+        operation.operationId,
+        CancelOperationRequest(
+          correlationId: operation.correlationId,
+          requestId: newRequestId(),
+        ),
+      );
+      return response.accepted;
+    });
+  }
+
+  @override
+  Future<RuntimeModelInventory> listRuntimeModels() async {
+    return _runtimeRequest(TransportCapability.runtimeModelInventory, (
+      session,
+    ) async {
+      final response = await session.runtimeModels(
+        RuntimeModelInventoryRequest(
+          providerId: _runtimeProviderId(),
+          limit: 32,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifyRuntimeProvider(response.inventory.providerId);
+      return response.inventory;
+    });
+  }
+
+  Future<T> _runtimeRequest<T>(
+    TransportCapability capability,
+    Future<T> Function(CoreSidecarSession session) request,
+  ) async {
+    try {
+      final session = await _connectedSession();
+      _requireCapability(capability);
+      return await request(session);
+    } on SidecarFailure catch (failure) {
+      throw _coreFailure(failure);
+    }
+  }
+
+  void _requireCapability(TransportCapability capability) {
+    if (!supportsTransportCapability(capability)) {
+      throw const CoreClientFailure(
+        code: 'CORE_CAPABILITY_UNSUPPORTED',
+        category: ErrorCategory.notSupported,
+        recoveryAction: RecoveryAction.checkPrerequisites,
+      );
+    }
+  }
+
+  CoreClientFailure _coreFailure(SidecarFailure failure) {
+    final safeError = failure.safeError;
+    if (safeError != null) {
+      return CoreClientFailure(
+        code: failure.diagnosticCode,
+        category: safeError.category,
+        recoveryAction: safeError.recovery.action,
+      );
+    }
+    final timedOut = failure.diagnosticCode.endsWith('TIMEOUT');
+    final category = switch (failure.kind) {
+      SidecarFailureKind.missingCore ||
+      SidecarFailureKind.startupFailed => ErrorCategory.unavailable,
+      SidecarFailureKind.startupTimedOut => ErrorCategory.timedOut,
+      SidecarFailureKind.protocolMismatch => ErrorCategory.incompatibleVersion,
+      SidecarFailureKind.authenticationFailed => ErrorCategory.permissionDenied,
+      SidecarFailureKind.connectionLost when timedOut => ErrorCategory.timedOut,
+      SidecarFailureKind.connectionLost => ErrorCategory.unavailable,
+      SidecarFailureKind.cancelled => ErrorCategory.cancelled,
+      SidecarFailureKind.invalidResponse => ErrorCategory.integrityFailure,
+      SidecarFailureKind.coreFailure => ErrorCategory.internal,
+    };
+    final recoveryAction = switch (category) {
+      ErrorCategory.cancelled => RecoveryAction.noAction,
+      ErrorCategory.unavailable ||
+      ErrorCategory.timedOut => RecoveryAction.retry,
+      ErrorCategory.incompatibleVersion => RecoveryAction.checkPrerequisites,
+      ErrorCategory.permissionDenied ||
+      ErrorCategory.integrityFailure ||
+      ErrorCategory.internal => RecoveryAction.contactSupport,
+      _ => RecoveryAction.retry,
+    };
+    return CoreClientFailure(
+      code: failure.diagnosticCode,
+      category: category,
+      recoveryAction: recoveryAction,
+    );
+  }
+
+  void _verifyRuntimeProvider(RuntimeProviderId providerId) {
+    if (providerId != _runtimeProviderId()) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'RUNTIME_PROVIDER_ID_MISMATCH',
+      );
+    }
+  }
+
+  @override
   Future<void> shutdown() async {
     final session = _session;
     _session = null;
@@ -175,6 +363,10 @@ class SidecarCoreClient extends CoreClient {
             TransportCapability.testOperationEvents,
             TransportCapability.hardwareScan,
             TransportCapability.capabilityRecommendation,
+            TransportCapability.runtimeStatus,
+            TransportCapability.runtimeConsent,
+            TransportCapability.runtimeLifecycle,
+            TransportCapability.runtimeModelInventory,
             TransportCapability.cancellation,
             TransportCapability.shutdown,
           ],
@@ -189,9 +381,38 @@ class SidecarCoreClient extends CoreClient {
           'CORE_PROTOCOL_INCOMPATIBLE',
         );
       }
+      if (_hasRuntimeCapability(hello.supportedCapabilities) &&
+          (hello.runtimeProviderId == null ||
+              hello.runtimeProviderId!.isEmpty)) {
+        throw const SidecarFailure(
+          SidecarFailureKind.invalidResponse,
+          'RUNTIME_PROVIDER_ID_MISSING',
+        );
+      }
       _hello = hello;
     }
     return session;
+  }
+
+  RuntimeProviderId _runtimeProviderId() {
+    final providerId = _hello?.runtimeProviderId;
+    if (providerId == null || providerId.isEmpty) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'RUNTIME_PROVIDER_ID_MISSING',
+      );
+    }
+    return providerId;
+  }
+
+  bool _hasRuntimeCapability(List<TransportCapability> capabilities) {
+    return capabilities.any(
+      (capability) =>
+          capability == TransportCapability.runtimeStatus ||
+          capability == TransportCapability.runtimeConsent ||
+          capability == TransportCapability.runtimeLifecycle ||
+          capability == TransportCapability.runtimeModelInventory,
+    );
   }
 
   CoreConnectionSnapshot _snapshot(HealthResponse response) {

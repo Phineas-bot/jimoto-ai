@@ -438,4 +438,402 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get capabilityFailedSemanticLabel => 'Capability planning failed';
+
+  @override
+  String get runtimeTitle => 'Local runtime';
+
+  @override
+  String get runtimeIdleTitle => 'Runtime not checked';
+
+  @override
+  String get runtimeIdleMessage =>
+      'Check for a compatible local runtime before continuing.';
+
+  @override
+  String get runtimeCheckingTitle => 'Checking runtime';
+
+  @override
+  String get runtimeCheckingMessage =>
+      'GixGiz is checking local runtime evidence without changing the installation.';
+
+  @override
+  String get runtimeNotInstalledTitle => 'Runtime not installed';
+
+  @override
+  String get runtimeNotInstalledMessage =>
+      'No compatible local runtime was verified. Installation is not available in this step.';
+
+  @override
+  String get runtimeInstalledStoppedTitle => 'Runtime installed but stopped';
+
+  @override
+  String get runtimeInstalledStoppedMessage =>
+      'A compatible local runtime was found, but it is not ready.';
+
+  @override
+  String get runtimeStartingTitle => 'Runtime starting';
+
+  @override
+  String get runtimeStartingMessage =>
+      'The approved local runtime start is in progress.';
+
+  @override
+  String get runtimeReadyTitle => 'Runtime ready';
+
+  @override
+  String get runtimeReadyMessage =>
+      'The local endpoint, version, and health checks succeeded.';
+
+  @override
+  String get runtimeDegradedTitle => 'Runtime needs attention';
+
+  @override
+  String get runtimeDegradedMessage =>
+      'The runtime responded, but some health or capability evidence is limited.';
+
+  @override
+  String get runtimeIncompatibleTitle => 'Runtime version incompatible';
+
+  @override
+  String get runtimeIncompatibleMessage =>
+      'The detected runtime version is not supported by this GixGiz release.';
+
+  @override
+  String get runtimeUpdatingTitle => 'Runtime updating';
+
+  @override
+  String get runtimeUpdatingMessage =>
+      'An external update is in progress. GixGiz will not change it automatically.';
+
+  @override
+  String get runtimeFailedTitle => 'Runtime check failed';
+
+  @override
+  String get runtimeFailedMessage =>
+      'GixGiz could not obtain a safe runtime status. Review diagnostics, then try again.';
+
+  @override
+  String get runtimeUnknownTitle => 'Runtime status unknown';
+
+  @override
+  String get runtimeUnknownMessage =>
+      'The runtime reported a state this desktop does not recognize. Update GixGiz before continuing.';
+
+  @override
+  String get runtimeOperationTitle => 'Runtime operation in progress';
+
+  @override
+  String get runtimeOperationMessage =>
+      'GixGiz is waiting for the approved operation to reach a verified terminal state.';
+
+  @override
+  String runtimeOperationFailedTitle(String operation) {
+    return 'Runtime $operation failed';
+  }
+
+  @override
+  String runtimeOperationFailedMessage(String operation) {
+    return 'GixGiz could not complete the approved $operation operation. Review diagnostics and the recommended action.';
+  }
+
+  @override
+  String get runtimeOperationKindStart => 'start';
+
+  @override
+  String get runtimeOperationKindStop => 'stop';
+
+  @override
+  String get runtimeOperationKindRestart => 'restart';
+
+  @override
+  String get runtimeOperationKindUnknown => 'lifecycle operation';
+
+  @override
+  String get runtimeCancelledTitle => 'Runtime operation cancelled';
+
+  @override
+  String get runtimeCancelledMessage =>
+      'The operation was cancelled. Check the current runtime status before continuing.';
+
+  @override
+  String get runtimeProviderLabel => 'Runtime';
+
+  @override
+  String get runtimeVersionLabel => 'Version';
+
+  @override
+  String get runtimeOwnershipLabel => 'Ownership';
+
+  @override
+  String get runtimeReuseConsentLabel => 'Reuse permission';
+
+  @override
+  String get runtimeManagementConsentLabel => 'Management permission';
+
+  @override
+  String get runtimeEndpointLabel => 'Local endpoint';
+
+  @override
+  String get runtimeOwnershipExternal => 'Installed outside GixGiz';
+
+  @override
+  String get runtimeOwnershipManaged => 'Managed by GixGiz';
+
+  @override
+  String get runtimeOwnershipBundled => 'Included with GixGiz';
+
+  @override
+  String get runtimeOwnershipUnknown => 'Ownership not verified';
+
+  @override
+  String get runtimeConsentNotRequested => 'Reuse permission not granted';
+
+  @override
+  String get runtimeConsentReuseApproved => 'Approved for reuse only';
+
+  @override
+  String get runtimeConsentManagementApproved => 'Approved for management';
+
+  @override
+  String get runtimeConsentDenied => 'Reuse declined';
+
+  @override
+  String get runtimeConsentUnknown => 'Permission state unknown';
+
+  @override
+  String get runtimeManagementConsentNotRequested =>
+      'Management permission not granted';
+
+  @override
+  String get runtimeManagementConsentApproved => 'Approved for management';
+
+  @override
+  String get runtimeManagementConsentDenied => 'Management declined';
+
+  @override
+  String get runtimeManagementConsentUnknown => 'Management permission unknown';
+
+  @override
+  String get runtimeEndpointVerified => 'Verified local endpoint';
+
+  @override
+  String get runtimeEndpointRejected => 'Endpoint rejected';
+
+  @override
+  String get runtimeEndpointUnknown => 'Endpoint not verified';
+
+  @override
+  String get runtimeExternalNotice =>
+      'This installation remains externally owned. Reuse does not let GixGiz update, uninstall, reconfigure, or claim it.';
+
+  @override
+  String get runtimeManagementRequiredNotice =>
+      'Start, stop, and restart remain unavailable because management permission is separate from reuse.';
+
+  @override
+  String get runtimeExternalManagementRequiredNotice =>
+      'Start, stop, and restart remain unavailable because management permission is separate from reuse. Manage this external installation with its existing controls.';
+
+  @override
+  String get runtimeConsentPromptTitle => 'Allow runtime reuse?';
+
+  @override
+  String get runtimeConsentPromptMessage =>
+      'Allowing reuse lets GixGiz check this local runtime and list its installed models when current health and compatibility evidence permits. Ownership stays external, and this does not approve updates, uninstallation, reconfiguration, or other system changes.';
+
+  @override
+  String get runtimeConsentApproveAction => 'Allow reuse';
+
+  @override
+  String get runtimeConsentCancelAction => 'Not now';
+
+  @override
+  String get runtimeRefreshAction => 'Check runtime';
+
+  @override
+  String get runtimeStartAction => 'Start runtime';
+
+  @override
+  String get runtimeStopAction => 'Stop runtime';
+
+  @override
+  String get runtimeRestartAction => 'Restart runtime';
+
+  @override
+  String get runtimeCancelAction => 'Cancel operation';
+
+  @override
+  String get runtimeModelsAction => 'Show installed models';
+
+  @override
+  String get runtimeModelsHideAction => 'Hide installed models';
+
+  @override
+  String get runtimeModelsTitle => 'Installed models';
+
+  @override
+  String get runtimeModelsProgressSemanticLabel =>
+      'Installed model inventory progress';
+
+  @override
+  String get runtimeModelsEmpty => 'No installed models were reported.';
+
+  @override
+  String get runtimeModelsFailedMessage =>
+      'GixGiz could not list installed models. Review diagnostics, then try again.';
+
+  @override
+  String get runtimeModelsTruncated =>
+      'More installed models exist than can be shown safely.';
+
+  @override
+  String get runtimeExternalModelLabel => 'External model';
+
+  @override
+  String runtimeModelSizeLabel(String size) {
+    return 'Size: $size';
+  }
+
+  @override
+  String runtimeModelCatalogueLabel(String model) {
+    return 'Catalogue model: $model';
+  }
+
+  @override
+  String get runtimeReasonsLabel => 'Status details';
+
+  @override
+  String get runtimeWarningsLabel => 'Important considerations';
+
+  @override
+  String get runtimeReasonInstallationNotFound =>
+      'No supported local runtime installation was found.';
+
+  @override
+  String get runtimeReasonExecutableVerified =>
+      'The runtime executable location was verified.';
+
+  @override
+  String get runtimeReasonEndpointUnavailable =>
+      'The local runtime endpoint did not respond.';
+
+  @override
+  String get runtimeReasonEndpointReachable =>
+      'The local runtime endpoint responded.';
+
+  @override
+  String get runtimeReasonEndpointUnsafe =>
+      'The runtime endpoint was rejected because it was not safely local.';
+
+  @override
+  String get runtimeReasonVersionCompatible =>
+      'The reported runtime version is compatible.';
+
+  @override
+  String get runtimeReasonVersionIncompatible =>
+      'The reported runtime version is incompatible.';
+
+  @override
+  String get runtimeReasonVersionUnverified =>
+      'The runtime version could not be verified.';
+
+  @override
+  String get runtimeReasonEvidenceIncomplete =>
+      'Some runtime health evidence is incomplete.';
+
+  @override
+  String get runtimeReasonOwnershipRequired =>
+      'GixGiz ownership is required for this operation.';
+
+  @override
+  String get runtimeReasonConsentRequired =>
+      'Explicit permission is required for this capability.';
+
+  @override
+  String get runtimeReasonOperationUnsupported =>
+      'This runtime operation is not supported.';
+
+  @override
+  String get runtimeReasonProcessExited =>
+      'The managed runtime process exited before it became ready.';
+
+  @override
+  String get runtimeReasonUnknown =>
+      'Additional runtime evidence is not recognized by this GixGiz version.';
+
+  @override
+  String get runtimeWarningExternalInstallation =>
+      'This runtime is installed and managed outside GixGiz.';
+
+  @override
+  String get runtimeWarningEndpointExposure =>
+      'The runtime endpoint may be exposed beyond this device.';
+
+  @override
+  String get runtimeWarningVersionUntested =>
+      'This runtime version has not been verified with this GixGiz release.';
+
+  @override
+  String get runtimeWarningPartialEvidence =>
+      'Only partial runtime evidence is available.';
+
+  @override
+  String get runtimeWarningModelInventoryTruncated =>
+      'The installed model list was limited for safe display.';
+
+  @override
+  String get runtimeWarningUnknown =>
+      'An unrecognized runtime warning was reported.';
+
+  @override
+  String runtimeRecommendedAction(String action) {
+    return 'Recommended action: $action';
+  }
+
+  @override
+  String get runtimeRecoveryRetry => 'Try the operation again.';
+
+  @override
+  String get runtimeRecoveryRestart =>
+      'Restart GixGiz, then check the runtime again.';
+
+  @override
+  String get runtimeRecoveryCheckPrerequisites =>
+      'Check the runtime prerequisites, then try again.';
+
+  @override
+  String get runtimeRecoveryContactSupport =>
+      'Contact support with the diagnostic code.';
+
+  @override
+  String get runtimeRecoveryNoAction => 'No action is required.';
+
+  @override
+  String get runtimeRecoveryUnknown =>
+      'Review diagnostics before trying again.';
+
+  @override
+  String get runtimeProgressSemanticLabel => 'Runtime operation progress';
+
+  @override
+  String runtimeStatusSemanticLabel(
+    String status,
+    String message,
+    String ownership,
+    String consent,
+  ) {
+    return 'Runtime status: $status. $message Ownership: $ownership. Permission: $consent.';
+  }
+
+  @override
+  String runtimeDetailsSemanticLabel(
+    String provider,
+    String version,
+    String endpoint,
+    String ownership,
+    String reuseConsent,
+    String managementConsent,
+  ) {
+    return 'Runtime details: $provider, version $version, endpoint $endpoint, ownership $ownership, reuse permission $reuseConsent, management permission $managementConsent.';
+  }
 }
