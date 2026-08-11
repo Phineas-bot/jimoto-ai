@@ -587,6 +587,17 @@
           "$ref": "#/$defs/RequestId",
           "description": "Request identifier copied from the client hello."
         },
+        "runtime_provider_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeProviderId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Opaque identity of the runtime provider registered by the Rust composition root."
+        },
         "selected_protocol": {
           "description": "Protocol version selected from the overlapping supported ranges.",
           "format": "uint32",
@@ -1953,6 +1964,1051 @@
       "description": "Version of the deterministic hard-constraint and scoring rules.",
       "type": "string"
     },
+    "RuntimeCapabilityAvailability": {
+      "description": "Current policy availability for one runtime capability.",
+      "oneOf": [
+        {
+          "const": "available",
+          "description": "The capability is currently available.",
+          "type": "string"
+        },
+        {
+          "const": "requires_reuse_consent",
+          "description": "The capability requires explicit external-runtime reuse consent.",
+          "type": "string"
+        },
+        {
+          "const": "requires_management_consent",
+          "description": "The capability requires explicit management ownership and consent.",
+          "type": "string"
+        },
+        {
+          "const": "unsupported",
+          "description": "The provider or current ownership cannot safely perform the capability.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Availability is unknown or was supplied by a newer peer.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeCapabilityDescriptor": {
+      "description": "Core-owned action availability presented without duplicating policy in Flutter.",
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/RuntimeCapabilityAvailability",
+          "description": "Current provider and policy availability."
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeCapabilityKind",
+          "description": "Capability being described."
+        },
+        "reason": {
+          "description": "Optional bounded explanation safe for UI presentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "availability"
+      ],
+      "type": "object"
+    },
+    "RuntimeCapabilityKind": {
+      "description": "Provider-neutral runtime capability category.",
+      "oneOf": [
+        {
+          "const": "detection",
+          "description": "Detect installation and endpoint evidence.",
+          "type": "string"
+        },
+        {
+          "const": "health",
+          "description": "Query normalized provider health.",
+          "type": "string"
+        },
+        {
+          "const": "version",
+          "description": "Query provider version evidence.",
+          "type": "string"
+        },
+        {
+          "const": "start",
+          "description": "Start a core-managed provider process.",
+          "type": "string"
+        },
+        {
+          "const": "stop",
+          "description": "Stop the exact process owned by the active adapter session.",
+          "type": "string"
+        },
+        {
+          "const": "restart",
+          "description": "Perform one bounded stop followed by one start.",
+          "type": "string"
+        },
+        {
+          "const": "model_inventory",
+          "description": "List a bounded normalized installed-model inventory.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized capability.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeConsentDecision": {
+      "description": "User decision accepted by the Task 09 reuse-consent boundary.",
+      "oneOf": [
+        {
+          "const": "approve_reuse",
+          "description": "Permit read-only reuse without changing ownership.",
+          "type": "string"
+        },
+        {
+          "const": "deny_reuse",
+          "description": "Refuse read-only reuse.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer client supplied an unrecognized decision.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeConsentRequest": {
+      "description": "Authenticated decision for external-runtime reuse.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and any failure."
+        },
+        "decision": {
+          "$ref": "#/$defs/RuntimeConsentDecision",
+          "description": "Explicit reuse decision; management approval is not granted here."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Provider to which the decision applies."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "provider_id",
+        "decision",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeConsentResponse": {
+      "description": "Runtime report after applying an explicit reuse decision.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "report": {
+          "$ref": "#/$defs/RuntimeHealthReport",
+          "description": "Authoritative report after the policy write."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "report",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeConsentState": {
+      "description": "Recorded decision for one runtime consent scope.",
+      "oneOf": [
+        {
+          "const": "not_requested",
+          "description": "The user has not made a decision for this scope.",
+          "type": "string"
+        },
+        {
+          "const": "reuse_approved",
+          "description": "Read-only reuse of a compatible external runtime is approved.",
+          "type": "string"
+        },
+        {
+          "const": "management_approved",
+          "description": "Lifecycle management is explicitly approved.",
+          "type": "string"
+        },
+        {
+          "const": "denied",
+          "description": "The user denied the requested scope.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "The consent state is unavailable or was supplied by a newer peer.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeDisplayName": {
+      "description": "Bounded display name for a runtime provider.",
+      "type": "string"
+    },
+    "RuntimeEndpointSafety": {
+      "description": "Safety classification for the selected provider endpoint.",
+      "oneOf": [
+        {
+          "const": "loopback_verified",
+          "description": "The adapter verified a fixed local loopback endpoint before I/O.",
+          "type": "string"
+        },
+        {
+          "const": "unsafe",
+          "description": "The configured endpoint is not restricted to loopback.",
+          "type": "string"
+        },
+        {
+          "const": "unverified",
+          "description": "Endpoint safety could not be established.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized safety classification.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeHealthReport": {
+      "description": "Authoritative provider-neutral runtime status.",
+      "properties": {
+        "capabilities": {
+          "description": "Core-owned current action availability.",
+          "items": {
+            "$ref": "#/$defs/RuntimeCapabilityDescriptor"
+          },
+          "type": "array"
+        },
+        "display_name": {
+          "$ref": "#/$defs/RuntimeDisplayName",
+          "description": "User-facing provider display name."
+        },
+        "endpoint_safety": {
+          "$ref": "#/$defs/RuntimeEndpointSafety",
+          "description": "Safety of the selected provider endpoint."
+        },
+        "management_consent": {
+          "$ref": "#/$defs/RuntimeConsentState",
+          "description": "Consent for process lifecycle management."
+        },
+        "ownership": {
+          "$ref": "#/$defs/RuntimeOwnership",
+          "description": "Ownership recorded independently from detection."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Stable runtime provider identity."
+        },
+        "reasons": {
+          "description": "Safe reasons supporting the state.",
+          "items": {
+            "$ref": "#/$defs/RuntimeReason"
+          },
+          "type": "array"
+        },
+        "reuse_consent": {
+          "$ref": "#/$defs/RuntimeConsentState",
+          "description": "Consent for read-only external-runtime reuse."
+        },
+        "schema_version": {
+          "description": "Runtime report schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/RuntimeState",
+          "description": "Normalized runtime state."
+        },
+        "version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeVersionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Provider version evidence when available."
+        },
+        "warnings": {
+          "description": "Safe non-terminal warnings.",
+          "items": {
+            "$ref": "#/$defs/RuntimeWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "provider_id",
+        "display_name",
+        "state",
+        "ownership",
+        "reuse_consent",
+        "management_consent",
+        "endpoint_safety",
+        "capabilities",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "RuntimeModelInventory": {
+      "description": "Bounded installed-model inventory returned only on explicit request.",
+      "properties": {
+        "collected_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds captured after collection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "models": {
+          "description": "Normalized model records in stable provider order.",
+          "items": {
+            "$ref": "#/$defs/RuntimeModelSummary"
+          },
+          "type": "array"
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Provider that supplied the inventory."
+        },
+        "schema_version": {
+          "description": "Runtime report schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "truncated": {
+          "description": "Whether additional provider records were omitted by a safe bound.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "provider_id",
+        "models",
+        "truncated",
+        "collected_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "RuntimeModelInventoryRequest": {
+      "description": "Authenticated bounded installed-model inventory request.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and any failure."
+        },
+        "limit": {
+          "description": "Maximum number of records requested; the core applies a lower safe cap.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Requested provider identity."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "provider_id",
+        "limit",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeModelInventoryResponse": {
+      "description": "Bounded normalized inventory with boundary identifiers.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "inventory": {
+          "$ref": "#/$defs/RuntimeModelInventory",
+          "description": "Normalized provider inventory."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "inventory",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeModelMappingStatus": {
+      "description": "Confidence of a provider-model to catalogue-model mapping.",
+      "oneOf": [
+        {
+          "const": "matched",
+          "description": "The adapter recognized an exact provider identifier mapping.",
+          "type": "string"
+        },
+        {
+          "const": "external",
+          "description": "The provider model remains external to the current catalogue.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Mapping is unavailable or was supplied by a newer peer.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeModelSummary": {
+      "description": "One bounded provider model record with no digest or raw payload.",
+      "properties": {
+        "display_name": {
+          "description": "Bounded display name.",
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/RuntimeProviderModelMapping",
+          "description": "Optional exact mapping to the local planning catalogue."
+        },
+        "provider_model_id": {
+          "$ref": "#/$defs/RuntimeProviderModelId",
+          "description": "Opaque adapter-normalized provider model identifier."
+        },
+        "size_bytes": {
+          "description": "Provider-reported size in bytes when valid.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provider_model_id",
+        "display_name",
+        "mapping"
+      ],
+      "type": "object"
+    },
+    "RuntimeOperationEvent": {
+      "description": "Ordered provider-neutral runtime lifecycle event.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by every event for the operation."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SafeErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe typed failure for failed or timed-out terminal events."
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeOperationEventKind",
+          "description": "Stable event classification."
+        },
+        "message": {
+          "description": "Optional safe provider-neutral progress explanation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation_id": {
+          "$ref": "#/$defs/OperationId",
+          "description": "Operation that owns this stream."
+        },
+        "operation_kind": {
+          "$ref": "#/$defs/RuntimeOperationKind",
+          "description": "Requested lifecycle operation."
+        },
+        "report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeHealthReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Authoritative report when new status evidence is available."
+        },
+        "schema_version": {
+          "description": "Runtime report schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "description": "Monotonically increasing sequence number starting at one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "terminal_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeOperationTerminalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal state present only on the final event."
+        },
+        "timestamp_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds captured by the host.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation_id",
+        "correlation_id",
+        "sequence",
+        "operation_kind",
+        "kind",
+        "timestamp_unix_ms"
+      ],
+      "type": "object"
+    },
+    "RuntimeOperationEventKind": {
+      "description": "Stable runtime lifecycle event kind.",
+      "oneOf": [
+        {
+          "const": "started",
+          "description": "The operation was accepted.",
+          "type": "string"
+        },
+        {
+          "const": "progress",
+          "description": "Bounded lifecycle work is in progress.",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "description": "The lifecycle operation completed.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The lifecycle operation failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "description": "The operation exceeded its deadline.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized event kind.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeOperationKind": {
+      "description": "Provider-neutral lifecycle operation.",
+      "oneOf": [
+        {
+          "const": "start",
+          "description": "Start a managed provider process.",
+          "type": "string"
+        },
+        {
+          "const": "stop",
+          "description": "Stop the exact provider process owned by this adapter session.",
+          "type": "string"
+        },
+        {
+          "const": "restart",
+          "description": "Perform one bounded stop followed by one start.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized operation.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeOperationStartRequest": {
+      "description": "Authenticated request to start one bounded lifecycle operation.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by all operation events and failures."
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeOperationKind",
+          "description": "Requested lifecycle operation."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Provider that should perform the operation."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this start request."
+        }
+      },
+      "required": [
+        "provider_id",
+        "kind",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeOperationStartResponse": {
+      "description": "Accepted runtime lifecycle operation.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "operation_id": {
+          "$ref": "#/$defs/OperationId",
+          "description": "Opaque identifier used for events and cancellation."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "operation_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeOperationTerminalState": {
+      "description": "Terminal result for one runtime lifecycle operation.",
+      "oneOf": [
+        {
+          "const": "completed",
+          "description": "The requested effect completed and was re-observed.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The operation failed safely; partial effects are described by the report.",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "description": "The operation exceeded its deadline.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized terminal state.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeOwnership": {
+      "description": "Management ownership recorded independently from provider detection.",
+      "oneOf": [
+        {
+          "const": "external",
+          "description": "The installation is controlled outside GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "gix_giz_managed",
+          "description": "GixGiz may manage the installation under recorded policy.",
+          "type": "string"
+        },
+        {
+          "const": "bundled",
+          "description": "The runtime is distributed as a controlled GixGiz component.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Ownership has not been established or was supplied by a newer peer.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeProviderId": {
+      "description": "Stable provider-neutral runtime provider identifier.",
+      "type": "string"
+    },
+    "RuntimeProviderModelId": {
+      "description": "Opaque provider model identifier normalized by a runtime adapter.",
+      "type": "string"
+    },
+    "RuntimeProviderModelMapping": {
+      "description": "Provider-neutral mapping from one provider model to the local catalogue.",
+      "properties": {
+        "catalogue_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateModelId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stable catalogue identity only for an exact known mapping."
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeModelMappingStatus",
+          "description": "Mapping confidence category."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeReason": {
+      "description": "Safe bounded explanation attached to a runtime report.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/RuntimeReasonCode",
+          "description": "Stable reason category."
+        },
+        "message": {
+          "description": "Provider-neutral explanation with no raw provider output.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "RuntimeReasonCode": {
+      "description": "Stable explanation category for runtime state evidence.",
+      "oneOf": [
+        {
+          "const": "installation_not_found",
+          "description": "No validated installation evidence was found.",
+          "type": "string"
+        },
+        {
+          "const": "executable_verified",
+          "description": "A validated executable was found in an approved location.",
+          "type": "string"
+        },
+        {
+          "const": "endpoint_unavailable",
+          "description": "The approved local endpoint could not be reached.",
+          "type": "string"
+        },
+        {
+          "const": "endpoint_reachable",
+          "description": "The approved local endpoint returned valid evidence.",
+          "type": "string"
+        },
+        {
+          "const": "endpoint_unsafe",
+          "description": "The endpoint failed local-only safety policy.",
+          "type": "string"
+        },
+        {
+          "const": "version_compatible",
+          "description": "Provider version and required capabilities are compatible.",
+          "type": "string"
+        },
+        {
+          "const": "version_incompatible",
+          "description": "Required provider capabilities are incompatible.",
+          "type": "string"
+        },
+        {
+          "const": "version_unverified",
+          "description": "Provider version compatibility could not be verified.",
+          "type": "string"
+        },
+        {
+          "const": "evidence_incomplete",
+          "description": "Some provider evidence was valid but incomplete.",
+          "type": "string"
+        },
+        {
+          "const": "ownership_required",
+          "description": "Current ownership does not permit the requested operation.",
+          "type": "string"
+        },
+        {
+          "const": "consent_required",
+          "description": "Explicit consent is required before the requested operation.",
+          "type": "string"
+        },
+        {
+          "const": "operation_unsupported",
+          "description": "The provider does not support the requested operation safely.",
+          "type": "string"
+        },
+        {
+          "const": "process_exited",
+          "description": "A managed provider process exited before becoming healthy.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized reason.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeState": {
+      "description": "Normalized lifecycle and health state for a local runtime.",
+      "oneOf": [
+        {
+          "const": "not_installed",
+          "description": "No verified installation or reachable provider was found.",
+          "type": "string"
+        },
+        {
+          "const": "installed_stopped",
+          "description": "A verified installation exists but its local endpoint is stopped.",
+          "type": "string"
+        },
+        {
+          "const": "starting",
+          "description": "A bounded core-owned start operation is in progress.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Required local health and compatibility evidence is verified.",
+          "type": "string"
+        },
+        {
+          "const": "degraded",
+          "description": "The provider is reachable but some required evidence is incomplete.",
+          "type": "string"
+        },
+        {
+          "const": "incompatible",
+          "description": "Required provider capabilities or version policy are incompatible.",
+          "type": "string"
+        },
+        {
+          "const": "updating",
+          "description": "A bounded update operation is in progress.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "A terminal lifecycle operation failed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeStatusRequest": {
+      "description": "Authenticated request for current runtime status.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and any failure."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Requested provider identity."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "provider_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeStatusResponse": {
+      "description": "Current authoritative runtime status with boundary identifiers.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "report": {
+          "$ref": "#/$defs/RuntimeHealthReport",
+          "description": "Core-composed runtime report."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "report",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeVersionCompatibility": {
+      "description": "Compatibility result for normalized provider version evidence.",
+      "oneOf": [
+        {
+          "const": "compatible",
+          "description": "Required provider capabilities and version syntax were verified.",
+          "type": "string"
+        },
+        {
+          "const": "incompatible",
+          "description": "Required capabilities are known not to match this adapter.",
+          "type": "string"
+        },
+        {
+          "const": "untested",
+          "description": "The version is valid but outside recorded real-provider evidence.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Compatibility is unavailable or was supplied by a newer peer.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeVersionInfo": {
+      "description": "Safe normalized provider version information.",
+      "properties": {
+        "compatibility": {
+          "$ref": "#/$defs/RuntimeVersionCompatibility",
+          "description": "Compatibility derived from required capability and version evidence."
+        },
+        "normalized_version": {
+          "description": "Semantic version normalized by the adapter when parsing succeeds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reported_version": {
+          "description": "Bounded version text returned by the provider.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reported_version",
+        "compatibility"
+      ],
+      "type": "object"
+    },
+    "RuntimeWarning": {
+      "description": "Safe bounded runtime warning.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/RuntimeWarningCode",
+          "description": "Stable warning category."
+        },
+        "message": {
+          "description": "Provider-neutral warning with no raw provider output.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "RuntimeWarningCode": {
+      "description": "Stable warning category for runtime evidence or policy.",
+      "oneOf": [
+        {
+          "const": "external_installation",
+          "description": "The detected installation remains externally managed.",
+          "type": "string"
+        },
+        {
+          "const": "endpoint_exposure",
+          "description": "Provider configuration may expose the endpoint beyond loopback.",
+          "type": "string"
+        },
+        {
+          "const": "version_untested",
+          "description": "The provider version lacks recorded real-provider evidence.",
+          "type": "string"
+        },
+        {
+          "const": "partial_evidence",
+          "description": "Some provider evidence remains explicitly incomplete.",
+          "type": "string"
+        },
+        {
+          "const": "model_inventory_truncated",
+          "description": "The returned model inventory was truncated to a safe bound.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized warning.",
+          "type": "string"
+        }
+      ]
+    },
     "SafeErrorPayload": {
       "description": "Error payload that excludes raw causes, private input, and provider output.",
       "properties": {
@@ -2487,6 +3543,26 @@
           "type": "string"
         },
         {
+          "const": "runtime_status",
+          "description": "Query normalized local runtime status.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_consent",
+          "description": "Record explicit external-runtime reuse consent.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_lifecycle",
+          "description": "Start, observe, and cancel bounded runtime lifecycle operations.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_model_inventory",
+          "description": "List a bounded normalized installed-model inventory.",
+          "type": "string"
+        },
+        {
           "const": "shutdown",
           "description": "Request bounded sidecar shutdown.",
           "type": "string"
@@ -2672,6 +3748,33 @@
     "recommendation_response": {
       "$ref": "#/$defs/RecommendationResponse"
     },
+    "runtime_consent_request": {
+      "$ref": "#/$defs/RuntimeConsentRequest"
+    },
+    "runtime_consent_response": {
+      "$ref": "#/$defs/RuntimeConsentResponse"
+    },
+    "runtime_model_inventory_request": {
+      "$ref": "#/$defs/RuntimeModelInventoryRequest"
+    },
+    "runtime_model_inventory_response": {
+      "$ref": "#/$defs/RuntimeModelInventoryResponse"
+    },
+    "runtime_operation_event": {
+      "$ref": "#/$defs/RuntimeOperationEvent"
+    },
+    "runtime_operation_start_request": {
+      "$ref": "#/$defs/RuntimeOperationStartRequest"
+    },
+    "runtime_operation_start_response": {
+      "$ref": "#/$defs/RuntimeOperationStartResponse"
+    },
+    "runtime_status_request": {
+      "$ref": "#/$defs/RuntimeStatusRequest"
+    },
+    "runtime_status_response": {
+      "$ref": "#/$defs/RuntimeStatusResponse"
+    },
     "safe_error_payload": {
       "$ref": "#/$defs/SafeErrorPayload"
     },
@@ -2703,6 +3806,15 @@
     "hardware_scan_event",
     "recommendation_request",
     "recommendation_response",
+    "runtime_status_request",
+    "runtime_status_response",
+    "runtime_consent_request",
+    "runtime_consent_response",
+    "runtime_model_inventory_request",
+    "runtime_model_inventory_response",
+    "runtime_operation_start_request",
+    "runtime_operation_start_response",
+    "runtime_operation_event",
     "test_operation_start_request",
     "test_operation_start_response",
     "test_operation_event",

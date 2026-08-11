@@ -519,6 +519,7 @@ class CoreHello {
     required this.instanceId,
     required this.readiness,
     required this.requestId,
+    required this.runtimeProviderId,
     required this.selectedProtocol,
     required this.supportedCapabilities,
   });
@@ -528,6 +529,7 @@ class CoreHello {
   final InstanceId instanceId;
   final ReadinessReport readiness;
   final RequestId requestId;
+  final RuntimeProviderId? runtimeProviderId;
   final int selectedProtocol;
   final List<TransportCapability> supportedCapabilities;
 
@@ -538,6 +540,7 @@ class CoreHello {
       instanceId: _contractString(json['instance_id'], 'CoreHello.instance_id'),
       readiness: ReadinessReport.fromJson(_contractMap(json['readiness'], 'CoreHello.readiness')),
       requestId: _contractString(json['request_id'], 'CoreHello.request_id'),
+      runtimeProviderId: json['runtime_provider_id'] == null ? null : _contractString(json['runtime_provider_id'], 'CoreHello.runtime_provider_id'),
       selectedProtocol: _contractInt(json['selected_protocol'], 'CoreHello.selected_protocol'),
       supportedCapabilities: _contractList(json['supported_capabilities'], 'CoreHello.supported_capabilities').map((item) => TransportCapability.fromJson(item)).toList(growable: false),
     );
@@ -550,6 +553,7 @@ class CoreHello {
       'instance_id': instanceId,
       'readiness': readiness.toJson(),
       'request_id': requestId,
+      'runtime_provider_id': runtimeProviderId,
       'selected_protocol': selectedProtocol,
       'supported_capabilities': supportedCapabilities.map((item) => item.toJson()).toList(growable: false),
     };
@@ -1693,6 +1697,915 @@ class ResourceEstimate {
 
 typedef RuleSetVersion = String;
 
+enum RuntimeCapabilityAvailability {
+  available('available'),
+  requiresReuseConsent('requires_reuse_consent'),
+  requiresManagementConsent('requires_management_consent'),
+  unsupported('unsupported'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeCapabilityAvailability(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeCapabilityAvailability fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeCapabilityDescriptor {
+  const RuntimeCapabilityDescriptor({
+    required this.availability,
+    required this.kind,
+    required this.reason,
+  });
+
+  final RuntimeCapabilityAvailability availability;
+  final RuntimeCapabilityKind kind;
+  final String? reason;
+
+  factory RuntimeCapabilityDescriptor.fromJson(Map<String, dynamic> json) {
+    return RuntimeCapabilityDescriptor(
+      availability: RuntimeCapabilityAvailability.fromJson(json['availability']),
+      kind: RuntimeCapabilityKind.fromJson(json['kind']),
+      reason: json['reason'] == null ? null : _contractString(json['reason'], 'RuntimeCapabilityDescriptor.reason'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'availability': availability.toJson(),
+      'kind': kind.toJson(),
+      'reason': reason,
+    };
+  }
+}
+
+enum RuntimeCapabilityKind {
+  detection('detection'),
+  health('health'),
+  version('version'),
+  start('start'),
+  stop('stop'),
+  restart('restart'),
+  modelInventory('model_inventory'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeCapabilityKind(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeCapabilityKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeConsentDecision {
+  approveReuse('approve_reuse'),
+  denyReuse('deny_reuse'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeConsentDecision(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeConsentDecision fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeConsentRequest {
+  const RuntimeConsentRequest({
+    required this.correlationId,
+    required this.decision,
+    required this.providerId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeConsentDecision decision;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+
+  factory RuntimeConsentRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeConsentRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeConsentRequest.correlation_id'),
+      decision: RuntimeConsentDecision.fromJson(json['decision']),
+      providerId: _contractString(json['provider_id'], 'RuntimeConsentRequest.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeConsentRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'decision': decision.toJson(),
+      'provider_id': providerId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeConsentResponse {
+  const RuntimeConsentResponse({
+    required this.correlationId,
+    required this.report,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeHealthReport report;
+  final RequestId requestId;
+
+  factory RuntimeConsentResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeConsentResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeConsentResponse.correlation_id'),
+      report: RuntimeHealthReport.fromJson(_contractMap(json['report'], 'RuntimeConsentResponse.report')),
+      requestId: _contractString(json['request_id'], 'RuntimeConsentResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'report': report.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeConsentState {
+  notRequested('not_requested'),
+  reuseApproved('reuse_approved'),
+  managementApproved('management_approved'),
+  denied('denied'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeConsentState(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeConsentState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+typedef RuntimeDisplayName = String;
+
+enum RuntimeEndpointSafety {
+  loopbackVerified('loopback_verified'),
+  unsafe('unsafe'),
+  unverified('unverified'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeEndpointSafety(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeEndpointSafety fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeHealthReport {
+  const RuntimeHealthReport({
+    required this.capabilities,
+    required this.displayName,
+    required this.endpointSafety,
+    required this.managementConsent,
+    required this.ownership,
+    required this.providerId,
+    required this.reasons,
+    required this.reuseConsent,
+    required this.schemaVersion,
+    required this.state,
+    required this.version,
+    required this.warnings,
+  });
+
+  final List<RuntimeCapabilityDescriptor> capabilities;
+  final RuntimeDisplayName displayName;
+  final RuntimeEndpointSafety endpointSafety;
+  final RuntimeConsentState managementConsent;
+  final RuntimeOwnership ownership;
+  final RuntimeProviderId providerId;
+  final List<RuntimeReason> reasons;
+  final RuntimeConsentState reuseConsent;
+  final int schemaVersion;
+  final RuntimeState state;
+  final RuntimeVersionInfo? version;
+  final List<RuntimeWarning> warnings;
+
+  factory RuntimeHealthReport.fromJson(Map<String, dynamic> json) {
+    return RuntimeHealthReport(
+      capabilities: _contractList(json['capabilities'], 'RuntimeHealthReport.capabilities').map((item) => RuntimeCapabilityDescriptor.fromJson(_contractMap(item, 'RuntimeHealthReport.capabilities[]'))).toList(growable: false),
+      displayName: _contractString(json['display_name'], 'RuntimeHealthReport.display_name'),
+      endpointSafety: RuntimeEndpointSafety.fromJson(json['endpoint_safety']),
+      managementConsent: RuntimeConsentState.fromJson(json['management_consent']),
+      ownership: RuntimeOwnership.fromJson(json['ownership']),
+      providerId: _contractString(json['provider_id'], 'RuntimeHealthReport.provider_id'),
+      reasons: _contractList(json['reasons'], 'RuntimeHealthReport.reasons').map((item) => RuntimeReason.fromJson(_contractMap(item, 'RuntimeHealthReport.reasons[]'))).toList(growable: false),
+      reuseConsent: RuntimeConsentState.fromJson(json['reuse_consent']),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeHealthReport.schema_version'),
+      state: RuntimeState.fromJson(json['state']),
+      version: json['version'] == null ? null : RuntimeVersionInfo.fromJson(_contractMap(json['version'], 'RuntimeHealthReport.version')),
+      warnings: _contractList(json['warnings'], 'RuntimeHealthReport.warnings').map((item) => RuntimeWarning.fromJson(_contractMap(item, 'RuntimeHealthReport.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'capabilities': capabilities.map((item) => item.toJson()).toList(growable: false),
+      'display_name': displayName,
+      'endpoint_safety': endpointSafety.toJson(),
+      'management_consent': managementConsent.toJson(),
+      'ownership': ownership.toJson(),
+      'provider_id': providerId,
+      'reasons': reasons.map((item) => item.toJson()).toList(growable: false),
+      'reuse_consent': reuseConsent.toJson(),
+      'schema_version': schemaVersion,
+      'state': state.toJson(),
+      'version': version?.toJson(),
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class RuntimeModelInventory {
+  const RuntimeModelInventory({
+    required this.collectedAtUnixMs,
+    required this.models,
+    required this.providerId,
+    required this.schemaVersion,
+    required this.truncated,
+  });
+
+  final int collectedAtUnixMs;
+  final List<RuntimeModelSummary> models;
+  final RuntimeProviderId providerId;
+  final int schemaVersion;
+  final bool truncated;
+
+  factory RuntimeModelInventory.fromJson(Map<String, dynamic> json) {
+    return RuntimeModelInventory(
+      collectedAtUnixMs: _contractInt(json['collected_at_unix_ms'], 'RuntimeModelInventory.collected_at_unix_ms'),
+      models: _contractList(json['models'], 'RuntimeModelInventory.models').map((item) => RuntimeModelSummary.fromJson(_contractMap(item, 'RuntimeModelInventory.models[]'))).toList(growable: false),
+      providerId: _contractString(json['provider_id'], 'RuntimeModelInventory.provider_id'),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeModelInventory.schema_version'),
+      truncated: _contractBool(json['truncated'], 'RuntimeModelInventory.truncated'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'collected_at_unix_ms': collectedAtUnixMs,
+      'models': models.map((item) => item.toJson()).toList(growable: false),
+      'provider_id': providerId,
+      'schema_version': schemaVersion,
+      'truncated': truncated,
+    };
+  }
+}
+
+class RuntimeModelInventoryRequest {
+  const RuntimeModelInventoryRequest({
+    required this.correlationId,
+    required this.limit,
+    required this.providerId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final int limit;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+
+  factory RuntimeModelInventoryRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeModelInventoryRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeModelInventoryRequest.correlation_id'),
+      limit: _contractInt(json['limit'], 'RuntimeModelInventoryRequest.limit'),
+      providerId: _contractString(json['provider_id'], 'RuntimeModelInventoryRequest.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeModelInventoryRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'limit': limit,
+      'provider_id': providerId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeModelInventoryResponse {
+  const RuntimeModelInventoryResponse({
+    required this.correlationId,
+    required this.inventory,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeModelInventory inventory;
+  final RequestId requestId;
+
+  factory RuntimeModelInventoryResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeModelInventoryResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeModelInventoryResponse.correlation_id'),
+      inventory: RuntimeModelInventory.fromJson(_contractMap(json['inventory'], 'RuntimeModelInventoryResponse.inventory')),
+      requestId: _contractString(json['request_id'], 'RuntimeModelInventoryResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'inventory': inventory.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeModelMappingStatus {
+  matched('matched'),
+  external('external'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeModelMappingStatus(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeModelMappingStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeModelSummary {
+  const RuntimeModelSummary({
+    required this.displayName,
+    required this.mapping,
+    required this.providerModelId,
+    required this.sizeBytes,
+  });
+
+  final String displayName;
+  final RuntimeProviderModelMapping mapping;
+  final RuntimeProviderModelId providerModelId;
+  final int? sizeBytes;
+
+  factory RuntimeModelSummary.fromJson(Map<String, dynamic> json) {
+    return RuntimeModelSummary(
+      displayName: _contractString(json['display_name'], 'RuntimeModelSummary.display_name'),
+      mapping: RuntimeProviderModelMapping.fromJson(_contractMap(json['mapping'], 'RuntimeModelSummary.mapping')),
+      providerModelId: _contractString(json['provider_model_id'], 'RuntimeModelSummary.provider_model_id'),
+      sizeBytes: json['size_bytes'] == null ? null : _contractInt(json['size_bytes'], 'RuntimeModelSummary.size_bytes'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'display_name': displayName,
+      'mapping': mapping.toJson(),
+      'provider_model_id': providerModelId,
+      'size_bytes': sizeBytes,
+    };
+  }
+}
+
+class RuntimeOperationEvent {
+  const RuntimeOperationEvent({
+    required this.correlationId,
+    required this.error,
+    required this.kind,
+    required this.message,
+    required this.operationId,
+    required this.operationKind,
+    required this.report,
+    required this.schemaVersion,
+    required this.sequence,
+    required this.terminalState,
+    required this.timestampUnixMs,
+  });
+
+  final CorrelationId correlationId;
+  final SafeErrorPayload? error;
+  final RuntimeOperationEventKind kind;
+  final String? message;
+  final OperationId operationId;
+  final RuntimeOperationKind operationKind;
+  final RuntimeHealthReport? report;
+  final int schemaVersion;
+  final int sequence;
+  final RuntimeOperationTerminalState? terminalState;
+  final int timestampUnixMs;
+
+  factory RuntimeOperationEvent.fromJson(Map<String, dynamic> json) {
+    return RuntimeOperationEvent(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeOperationEvent.correlation_id'),
+      error: json['error'] == null ? null : SafeErrorPayload.fromJson(_contractMap(json['error'], 'RuntimeOperationEvent.error')),
+      kind: RuntimeOperationEventKind.fromJson(json['kind']),
+      message: json['message'] == null ? null : _contractString(json['message'], 'RuntimeOperationEvent.message'),
+      operationId: _contractString(json['operation_id'], 'RuntimeOperationEvent.operation_id'),
+      operationKind: RuntimeOperationKind.fromJson(json['operation_kind']),
+      report: json['report'] == null ? null : RuntimeHealthReport.fromJson(_contractMap(json['report'], 'RuntimeOperationEvent.report')),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeOperationEvent.schema_version'),
+      sequence: _contractInt(json['sequence'], 'RuntimeOperationEvent.sequence'),
+      terminalState: json['terminal_state'] == null ? null : RuntimeOperationTerminalState.fromJson(json['terminal_state']),
+      timestampUnixMs: _contractInt(json['timestamp_unix_ms'], 'RuntimeOperationEvent.timestamp_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'error': error?.toJson(),
+      'kind': kind.toJson(),
+      'message': message,
+      'operation_id': operationId,
+      'operation_kind': operationKind.toJson(),
+      'report': report?.toJson(),
+      'schema_version': schemaVersion,
+      'sequence': sequence,
+      'terminal_state': terminalState?.toJson(),
+      'timestamp_unix_ms': timestampUnixMs,
+    };
+  }
+}
+
+enum RuntimeOperationEventKind {
+  started('started'),
+  progress('progress'),
+  completed('completed'),
+  cancelled('cancelled'),
+  failed('failed'),
+  timedOut('timed_out'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeOperationEventKind(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeOperationEventKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeOperationKind {
+  start('start'),
+  stop('stop'),
+  restart('restart'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeOperationKind(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeOperationKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeOperationStartRequest {
+  const RuntimeOperationStartRequest({
+    required this.correlationId,
+    required this.kind,
+    required this.providerId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeOperationKind kind;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+
+  factory RuntimeOperationStartRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeOperationStartRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeOperationStartRequest.correlation_id'),
+      kind: RuntimeOperationKind.fromJson(json['kind']),
+      providerId: _contractString(json['provider_id'], 'RuntimeOperationStartRequest.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeOperationStartRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'kind': kind.toJson(),
+      'provider_id': providerId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeOperationStartResponse {
+  const RuntimeOperationStartResponse({
+    required this.correlationId,
+    required this.operationId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final OperationId operationId;
+  final RequestId requestId;
+
+  factory RuntimeOperationStartResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeOperationStartResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeOperationStartResponse.correlation_id'),
+      operationId: _contractString(json['operation_id'], 'RuntimeOperationStartResponse.operation_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeOperationStartResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'operation_id': operationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeOperationTerminalState {
+  completed('completed'),
+  cancelled('cancelled'),
+  failed('failed'),
+  timedOut('timed_out'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeOperationTerminalState(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeOperationTerminalState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeOwnership {
+  external('external'),
+  gixGizManaged('gix_giz_managed'),
+  bundled('bundled'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeOwnership(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeOwnership fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+typedef RuntimeProviderId = String;
+
+typedef RuntimeProviderModelId = String;
+
+class RuntimeProviderModelMapping {
+  const RuntimeProviderModelMapping({
+    required this.catalogueId,
+    required this.status,
+  });
+
+  final CandidateModelId? catalogueId;
+  final RuntimeModelMappingStatus status;
+
+  factory RuntimeProviderModelMapping.fromJson(Map<String, dynamic> json) {
+    return RuntimeProviderModelMapping(
+      catalogueId: json['catalogue_id'] == null ? null : _contractString(json['catalogue_id'], 'RuntimeProviderModelMapping.catalogue_id'),
+      status: RuntimeModelMappingStatus.fromJson(json['status']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'catalogue_id': catalogueId,
+      'status': status.toJson(),
+    };
+  }
+}
+
+class RuntimeReason {
+  const RuntimeReason({
+    required this.code,
+    required this.message,
+  });
+
+  final RuntimeReasonCode code;
+  final String message;
+
+  factory RuntimeReason.fromJson(Map<String, dynamic> json) {
+    return RuntimeReason(
+      code: RuntimeReasonCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'RuntimeReason.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum RuntimeReasonCode {
+  installationNotFound('installation_not_found'),
+  executableVerified('executable_verified'),
+  endpointUnavailable('endpoint_unavailable'),
+  endpointReachable('endpoint_reachable'),
+  endpointUnsafe('endpoint_unsafe'),
+  versionCompatible('version_compatible'),
+  versionIncompatible('version_incompatible'),
+  versionUnverified('version_unverified'),
+  evidenceIncomplete('evidence_incomplete'),
+  ownershipRequired('ownership_required'),
+  consentRequired('consent_required'),
+  operationUnsupported('operation_unsupported'),
+  processExited('process_exited'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeReasonCode(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeReasonCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeState {
+  notInstalled('not_installed'),
+  installedStopped('installed_stopped'),
+  starting('starting'),
+  ready('ready'),
+  degraded('degraded'),
+  incompatible('incompatible'),
+  updating('updating'),
+  failed('failed'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeState(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeStatusRequest {
+  const RuntimeStatusRequest({
+    required this.correlationId,
+    required this.providerId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+
+  factory RuntimeStatusRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeStatusRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeStatusRequest.correlation_id'),
+      providerId: _contractString(json['provider_id'], 'RuntimeStatusRequest.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeStatusRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'provider_id': providerId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeStatusResponse {
+  const RuntimeStatusResponse({
+    required this.correlationId,
+    required this.report,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeHealthReport report;
+  final RequestId requestId;
+
+  factory RuntimeStatusResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeStatusResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeStatusResponse.correlation_id'),
+      report: RuntimeHealthReport.fromJson(_contractMap(json['report'], 'RuntimeStatusResponse.report')),
+      requestId: _contractString(json['request_id'], 'RuntimeStatusResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'report': report.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeVersionCompatibility {
+  compatible('compatible'),
+  incompatible('incompatible'),
+  untested('untested'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeVersionCompatibility(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeVersionCompatibility fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeVersionInfo {
+  const RuntimeVersionInfo({
+    required this.compatibility,
+    required this.normalizedVersion,
+    required this.reportedVersion,
+  });
+
+  final RuntimeVersionCompatibility compatibility;
+  final String? normalizedVersion;
+  final String reportedVersion;
+
+  factory RuntimeVersionInfo.fromJson(Map<String, dynamic> json) {
+    return RuntimeVersionInfo(
+      compatibility: RuntimeVersionCompatibility.fromJson(json['compatibility']),
+      normalizedVersion: json['normalized_version'] == null ? null : _contractString(json['normalized_version'], 'RuntimeVersionInfo.normalized_version'),
+      reportedVersion: _contractString(json['reported_version'], 'RuntimeVersionInfo.reported_version'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'compatibility': compatibility.toJson(),
+      'normalized_version': normalizedVersion,
+      'reported_version': reportedVersion,
+    };
+  }
+}
+
+class RuntimeWarning {
+  const RuntimeWarning({
+    required this.code,
+    required this.message,
+  });
+
+  final RuntimeWarningCode code;
+  final String message;
+
+  factory RuntimeWarning.fromJson(Map<String, dynamic> json) {
+    return RuntimeWarning(
+      code: RuntimeWarningCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'RuntimeWarning.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum RuntimeWarningCode {
+  externalInstallation('external_installation'),
+  endpointExposure('endpoint_exposure'),
+  versionUntested('version_untested'),
+  partialEvidence('partial_evidence'),
+  modelInventoryTruncated('model_inventory_truncated'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeWarningCode(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeWarningCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
 class SafeErrorPayload {
   const SafeErrorPayload({
     required this.category,
@@ -2184,6 +3097,10 @@ enum TransportCapability {
   cancellation('cancellation'),
   hardwareScan('hardware_scan'),
   capabilityRecommendation('capability_recommendation'),
+  runtimeStatus('runtime_status'),
+  runtimeConsent('runtime_consent'),
+  runtimeLifecycle('runtime_lifecycle'),
+  runtimeModelInventory('runtime_model_inventory'),
   shutdown('shutdown'),
   unknown('unknown'),
   ;

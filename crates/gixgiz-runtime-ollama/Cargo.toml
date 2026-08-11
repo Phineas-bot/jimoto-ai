@@ -1,0 +1,25 @@
+[package]
+name = "gixgiz-runtime-ollama"
+description = "Bounded Windows-first Ollama adapter for the provider-neutral GixGiz runtime API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bytes.workspace = true
+gixgiz-contracts = { path = "../gixgiz-contracts" }
+gixgiz-runtime = { path = "../gixgiz-runtime" }
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
