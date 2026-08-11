@@ -1,11 +1,17 @@
-use std::{fs, time::Duration};
+use std::{
+    fs, thread,
+    time::{Duration, Instant},
+};
 
-use gixgiz_contracts::{CorrelationId, ErrorCategory, RequestId};
+use gixgiz_contracts::{
+    CorrelationId, ErrorCategory, RequestId, RuntimeConsentState, RuntimeOwnership,
+    RuntimeProviderId,
+};
 use gixgiz_persistence::{
     CURRENT_SCHEMA_VERSION, DataRoot, JobId, JobMetadata, JobState, Persistence, PersistenceError,
-    PersistenceOptions,
+    PersistenceOptions, RuntimePolicyRecord,
 };
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::{Connection, TransactionBehavior, params};
 
 fn test_root(temporary: &tempfile::TempDir) -> DataRoot {
     DataRoot::from_override(temporary.path().join("gixgiz-test-root"))
@@ -36,6 +42,240 @@ fn fresh_database_is_configured_and_records_schema_version() {
             .as_deref(),
         Some(env!("CARGO_PKG_VERSION"))
     );
+}
+
+#[test]
+fn fresh_database_has_bounded_runtime_policy_schema() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let persistence = Persistence::open(test_root(&temporary)).expect("fresh database opens");
+    let connection = Connection::open(persistence.data_root().database_path())
+        .expect("inspection connection opens");
+
+    let columns: Vec<String> = connection
+        .prepare("PRAGMA table_info(runtime_policy)")
+        .expect("schema statement prepares")
+        .query_map([], |row| row.get(1))
+        .expect("schema rows query")
+        .collect::<Result<_, _>>()
+        .expect("schema rows decode");
+
+    assert_eq!(
+        columns,
+        vec![
+            "provider_id",
+            "ownership",
+            "reuse_consent",
+            "management_consent",
+            "updated_at_unix_ms",
+        ]
+    );
+}
+
+#[test]
+fn schema_one_database_upgrades_without_losing_existing_data() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let root = test_root(&temporary);
+    let connection = Connection::open(root.database_path()).expect("database opens");
+    connection
+        .execute_batch(include_str!("../migrations/0001_initial.sql"))
+        .expect("version-one schema initializes");
+    connection
+        .execute(
+            "INSERT INTO schema_migrations (version, name, applied_at_unix_ms)
+             VALUES (1, 'initial', 1)",
+            [],
+        )
+        .expect("version-one ledger records");
+    connection
+        .execute(
+            "INSERT INTO application_metadata (key, value, updated_at_unix_ms)
+             VALUES ('last_migrated_application_version', '0.1.0', 1)",
+            [],
+        )
+        .expect("version-one metadata records");
+    connection
+        .execute(
+            "INSERT INTO settings (key, value, updated_at_unix_ms)
+             VALUES ('appearance', 'system', 2)",
+            [],
+        )
+        .expect("version-one setting records");
+    connection
+        .pragma_update(None, "user_version", 1)
+        .expect("version-one marker records");
+    drop(connection);
+
+    let persistence = Persistence::open(root).expect("version-one database upgrades");
+    assert_eq!(
+        persistence
+            .health_check()
+            .expect("upgraded database is healthy")
+            .schema_version,
+        2
+    );
+    assert_eq!(
+        persistence
+            .settings()
+            .get("appearance")
+            .expect("prior setting reads")
+            .as_deref(),
+        Some("system")
+    );
+    assert_eq!(
+        persistence
+            .runtime_policy()
+            .get(&RuntimeProviderId::new("local-runtime"))
+            .expect("runtime policy repository reads"),
+        None
+    );
+    let inspection = Connection::open(persistence.data_root().database_path())
+        .expect("upgraded database inspection opens");
+    let versions: Vec<u32> = inspection
+        .prepare("SELECT version FROM schema_migrations ORDER BY version")
+        .expect("migration ledger statement prepares")
+        .query_map([], |row| row.get(0))
+        .expect("migration ledger rows query")
+        .collect::<Result<_, _>>()
+        .expect("migration ledger rows decode");
+    assert_eq!(versions, vec![1, 2]);
+    assert_eq!(
+        fs::read_dir(persistence.data_root().backups_dir())
+            .expect("backup directory reads")
+            .count(),
+        0,
+        "the additive migration must not create an irreversible-migration backup"
+    );
+}
+
+#[test]
+fn runtime_policy_upsert_keeps_ownership_and_consent_separate() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let persistence = Persistence::open(test_root(&temporary)).expect("database opens");
+    let provider_id = RuntimeProviderId::new("local-runtime");
+    let repository = persistence.runtime_policy();
+    let initial = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::NotRequested,
+        10,
+    )
+    .expect("initial policy is valid");
+    repository.upsert(&initial).expect("initial policy writes");
+    assert_eq!(
+        repository.get(&provider_id).expect("policy reads"),
+        Some(initial)
+    );
+
+    let updated = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::ManagementApproved,
+        11,
+    )
+    .expect("updated policy is valid");
+    repository.upsert(&updated).expect("policy updates");
+    assert_eq!(
+        repository.get(&provider_id).expect("updated policy reads"),
+        Some(updated)
+    );
+
+    assert!(matches!(
+        RuntimePolicyRecord::new(
+            provider_id.clone(),
+            RuntimeOwnership::External,
+            RuntimeConsentState::ManagementApproved,
+            RuntimeConsentState::NotRequested,
+            12,
+        ),
+        Err(PersistenceError::InvalidRecord {
+            field: "runtime_reuse_consent"
+        })
+    ));
+    assert!(matches!(
+        RuntimePolicyRecord::new(
+            provider_id,
+            RuntimeOwnership::External,
+            RuntimeConsentState::NotRequested,
+            RuntimeConsentState::ReuseApproved,
+            12,
+        ),
+        Err(PersistenceError::InvalidRecord {
+            field: "runtime_management_consent"
+        })
+    ));
+}
+
+#[test]
+fn reopening_preserves_runtime_policy() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let root = test_root(&temporary);
+    let provider_id = RuntimeProviderId::new("local-runtime");
+    let policy = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::GixGizManaged,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::ManagementApproved,
+        20,
+    )
+    .expect("policy is valid");
+    {
+        let persistence = Persistence::open(root.clone()).expect("database opens");
+        persistence
+            .runtime_policy()
+            .upsert(&policy)
+            .expect("policy writes");
+    }
+
+    let reopened = Persistence::open(root).expect("database reopens");
+    assert_eq!(
+        reopened
+            .runtime_policy()
+            .get(&provider_id)
+            .expect("policy reads after reopen"),
+        Some(policy)
+    );
+}
+
+#[test]
+fn malformed_runtime_policy_record_fails_closed() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let persistence = Persistence::open(test_root(&temporary)).expect("database opens");
+    let provider_id = RuntimeProviderId::new("local-runtime");
+    persistence
+        .runtime_policy()
+        .upsert(
+            &RuntimePolicyRecord::new(
+                provider_id.clone(),
+                RuntimeOwnership::External,
+                RuntimeConsentState::NotRequested,
+                RuntimeConsentState::NotRequested,
+                1,
+            )
+            .expect("policy is valid"),
+        )
+        .expect("policy writes");
+
+    let connection = Connection::open(persistence.data_root().database_path())
+        .expect("inspection connection opens");
+    connection
+        .pragma_update(None, "ignore_check_constraints", true)
+        .expect("test fixture can bypass schema checks");
+    connection
+        .execute(
+            "UPDATE runtime_policy SET ownership = ?1 WHERE provider_id = ?2",
+            params!["future_unrecognized_ownership", provider_id.as_str()],
+        )
+        .expect("malformed fixture writes");
+    drop(connection);
+
+    assert!(matches!(
+        persistence.runtime_policy().get(&provider_id),
+        Err(PersistenceError::InvalidRecord {
+            field: "runtime_ownership"
+        })
+    ));
 }
 
 #[test]
@@ -182,6 +422,51 @@ fn external_write_contention_honors_the_bounded_busy_timeout() {
     assert_eq!(payload.category, ErrorCategory::Unavailable);
     assert_eq!(payload.code, "persistence.locked");
     transaction.rollback().expect("external lock releases");
+}
+
+#[test]
+fn runtime_policy_write_fails_before_consent_can_outlive_a_request() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let root = test_root(&temporary);
+    let persistence = Persistence::open(root.clone()).expect("database opens");
+    let mut external = Connection::open(root.database_path()).expect("external connection opens");
+    let transaction = external
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .expect("external writer acquires lock");
+    let provider_id = RuntimeProviderId::new("gixgiz.runtime.test.v1");
+    let record = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::NotRequested,
+        1,
+    )
+    .expect("policy record is valid");
+
+    let started = Instant::now();
+    let error = persistence
+        .runtime_policy()
+        .upsert(&record)
+        .expect_err("consent write must fail immediately while locked");
+
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(matches!(error, PersistenceError::Locked { .. }));
+    transaction.rollback().expect("external lock releases");
+    thread::sleep(Duration::from_millis(50));
+    assert_eq!(
+        persistence
+            .runtime_policy()
+            .get(&provider_id)
+            .expect("policy lookup succeeds"),
+        None
+    );
+    assert_eq!(
+        persistence
+            .configuration()
+            .expect("configuration reads")
+            .busy_timeout_millis,
+        5_000
+    );
 }
 
 #[test]

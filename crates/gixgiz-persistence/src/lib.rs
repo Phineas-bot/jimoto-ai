@@ -21,5 +21,6 @@ pub use error::PersistenceError;
 pub use migrations::CURRENT_SCHEMA_VERSION;
 pub use repositories::{
     AuditEvent, AuditEventId, AuditEventRepository, JobId, JobMetadata, JobMetadataRepository,
-    JobState, PlatformMetadataRepository, SettingsRepository,
+    JobState, PlatformMetadataRepository, RuntimePolicyRecord, RuntimePolicyRepository,
+    SettingsRepository,
 };

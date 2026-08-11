@@ -20,23 +20,28 @@ enum PersistenceState {
 }
 
 impl PersistenceHealthSource {
-    pub(crate) fn open_default() -> Self {
+    pub(crate) fn open_default() -> (Self, Result<Persistence, ()>) {
         Self::from_result(DataRoot::resolve_default().and_then(Persistence::open))
     }
 
-    pub(crate) fn open_override(root: impl AsRef<Path>) -> Self {
+    pub(crate) fn open_override(root: impl AsRef<Path>) -> (Self, Result<Persistence, ()>) {
         Self::from_result(DataRoot::from_override(root).and_then(Persistence::open))
     }
 
-    fn from_result(result: Result<Persistence, PersistenceError>) -> Self {
-        let state = match result {
-            Ok(persistence) => PersistenceState::Open(persistence),
-            Err(error) => PersistenceState::Failed {
-                status: error.health_status(),
-                message: error.safe_health_message(),
-            },
+    fn from_result(
+        result: Result<Persistence, PersistenceError>,
+    ) -> (Self, Result<Persistence, ()>) {
+        let (state, access) = match result {
+            Ok(persistence) => (PersistenceState::Open(persistence.clone()), Ok(persistence)),
+            Err(error) => (
+                PersistenceState::Failed {
+                    status: error.health_status(),
+                    message: error.safe_health_message(),
+                },
+                Err(()),
+            ),
         };
-        Self { state }
+        (Self { state }, access)
     }
 }
 

@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File, OpenOptions},
     io,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, TryLockError},
     time::Duration,
 };
 
@@ -9,7 +9,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::{
     AuditEventRepository, DataRoot, JobMetadataRepository, PersistenceError,
-    PlatformMetadataRepository, SettingsRepository, migrations,
+    PlatformMetadataRepository, RuntimePolicyRepository, SettingsRepository, migrations,
 };
 
 const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -69,6 +69,7 @@ pub struct Persistence {
 
 struct DatabaseInner {
     connection: Mutex<Connection>,
+    busy_timeout: Duration,
     root: DataRoot,
     _owner_lock: OwnerLock,
 }
@@ -93,6 +94,7 @@ impl Persistence {
         let persistence = Self {
             inner: Arc::new(DatabaseInner {
                 connection: Mutex::new(connection),
+                busy_timeout: options.busy_timeout(),
                 root,
                 _owner_lock: owner_lock,
             }),
@@ -173,6 +175,12 @@ impl Persistence {
         SettingsRepository::new(self.clone())
     }
 
+    /// Returns the provider-neutral runtime ownership and consent repository.
+    #[must_use]
+    pub fn runtime_policy(&self) -> RuntimePolicyRepository {
+        RuntimePolicyRepository::new(self.clone())
+    }
+
     /// Returns the minimal durable-job metadata repository.
     #[must_use]
     pub fn jobs(&self) -> JobMetadataRepository {
@@ -197,6 +205,22 @@ impl Persistence {
         operation(&connection)
     }
 
+    pub(crate) fn try_with_connection<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, PersistenceError>,
+    ) -> Result<T, PersistenceError> {
+        let connection = self
+            .inner
+            .connection
+            .try_lock()
+            .map_err(|error| match error {
+                TryLockError::Poisoned(_) | TryLockError::WouldBlock => {
+                    PersistenceError::ConnectionUnavailable
+                }
+            })?;
+        operation(&connection)
+    }
+
     pub(crate) fn with_write_transaction<T>(
         &self,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, PersistenceError>,
@@ -214,6 +238,48 @@ impl Persistence {
             .commit()
             .map_err(|source| PersistenceError::sqlite("commit_write", source))?;
         Ok(result)
+    }
+
+    pub(crate) fn try_with_write_transaction<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, PersistenceError>,
+    ) -> Result<T, PersistenceError> {
+        let connection = self
+            .inner
+            .connection
+            .try_lock()
+            .map_err(|error| match error {
+                TryLockError::Poisoned(_) | TryLockError::WouldBlock => {
+                    PersistenceError::ConnectionUnavailable
+                }
+            })?;
+        connection
+            .busy_timeout(Duration::ZERO)
+            .map_err(|source| PersistenceError::sqlite("configure_immediate_write", source))?;
+        let begin_result = connection.execute_batch("BEGIN IMMEDIATE");
+        let restore_result = connection.busy_timeout(self.inner.busy_timeout);
+        match (begin_result, restore_result) {
+            (Err(source), _) => return Err(PersistenceError::sqlite("begin_write", source)),
+            (Ok(()), Err(source)) => {
+                let _ = connection.execute_batch("ROLLBACK");
+                return Err(PersistenceError::sqlite("restore_busy_timeout", source));
+            }
+            (Ok(()), Ok(())) => {}
+        }
+
+        match operation(&connection) {
+            Ok(result) => match connection.execute_batch("COMMIT") {
+                Ok(()) => Ok(result),
+                Err(source) => {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    Err(PersistenceError::sqlite("commit_write", source))
+                }
+            },
+            Err(error) => {
+                let _ = connection.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
     }
 }
 
@@ -326,5 +392,27 @@ mod tests {
                 .expect("setting query succeeds"),
             None
         );
+    }
+
+    #[test]
+    fn try_connection_paths_fail_fast_during_in_process_contention() {
+        let temporary = tempfile::tempdir().expect("temporary directory is available");
+        let root =
+            DataRoot::from_override(temporary.path().join("root")).expect("test root initializes");
+        let persistence = Persistence::open(root).expect("database opens");
+        let _guard = persistence
+            .inner
+            .connection
+            .lock()
+            .expect("test owns connection lock");
+
+        assert!(matches!(
+            persistence.try_with_connection(|_| Ok(())),
+            Err(PersistenceError::ConnectionUnavailable)
+        ));
+        assert!(matches!(
+            persistence.try_with_write_transaction(|_| Ok(())),
+            Err(PersistenceError::ConnectionUnavailable)
+        ));
     }
 }

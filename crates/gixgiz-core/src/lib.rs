@@ -15,6 +15,7 @@ mod hardware;
 mod observability;
 mod operation;
 mod persistence;
+mod runtime;
 mod service;
 
 pub use capability::CapabilityEngine;
@@ -24,4 +25,5 @@ pub use hardware::{
 };
 pub use observability::{TracingInitError, init_tracing};
 pub use operation::{CancellationToken, OperationContext};
+pub use runtime::RuntimeService;
 pub use service::{CoreLifecycle, PlatformCore, ServiceHealthSource, compose_readiness};
