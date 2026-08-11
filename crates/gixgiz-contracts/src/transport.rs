@@ -2,7 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ApplicationInfo, CorrelationId, PlatformStatus, ReadinessReport, RequestId, SCHEMA_VERSION,
+    ApplicationInfo, CorrelationId, PlatformStatus, ReadinessReport, RequestId, RuntimeProviderId,
+    SCHEMA_VERSION,
 };
 
 /// Capabilities negotiated between the desktop and the internal core sidecar.
@@ -20,6 +21,14 @@ pub enum TransportCapability {
     HardwareScan,
     /// Generate a deterministic capability recommendation from supplied evidence.
     CapabilityRecommendation,
+    /// Query normalized local runtime status.
+    RuntimeStatus,
+    /// Record explicit external-runtime reuse consent.
+    RuntimeConsent,
+    /// Start, observe, and cancel bounded runtime lifecycle operations.
+    RuntimeLifecycle,
+    /// List a bounded normalized installed-model inventory.
+    RuntimeModelInventory,
     /// Request bounded sidecar shutdown.
     Shutdown,
     /// A newer peer supplied a capability this build does not recognize.
@@ -55,6 +64,9 @@ pub struct CoreHello {
     pub selected_protocol: u32,
     /// Capabilities supported by this internal core build.
     pub supported_capabilities: Vec<TransportCapability>,
+    /// Opaque identity of the runtime provider registered by the Rust composition root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_provider_id: Option<RuntimeProviderId>,
     /// Authoritative current core readiness.
     pub readiness: ReadinessReport,
     /// Opaque identifier for this sidecar process instance.

@@ -2,7 +2,7 @@
 
 - **GitHub issue:** [#10](https://github.com/Phineas-bot/gixgiz/issues/10)
 - **Depends on:** Tasks 05, 08 and 09
-- **Primary decisions:** ADRs 0001–0005 plus accepted installer/runtime ADRs
+- **Primary decisions:** ADRs 0001–0005 plus [ADR 0006](../adr/0006-runtime-abstraction-and-ollama-provider.md) and [ADR 0007](../adr/0007-privileged-installer-helper-elevation-and-rollback.md)
 - **Blocks:** Task 11
 
 ## Context and user value

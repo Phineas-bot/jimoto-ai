@@ -36,9 +36,9 @@ Use sequential, descriptive names:
 ## Follow-up work
 ```
 
-## Accepted foundation decisions
+## Accepted decisions
 
-These ADRs govern Tasks 02–05 and must be read before changing the desktop shell, Rust core, local boundary, persistence or Windows identity.
+These ADRs govern the current foundation and runtime work. Read the applicable decisions before changing the desktop shell, Rust core, local boundary, persistence, Windows identity, runtime providers, or privileged setup behavior.
 
 | ADR | Decision | Primary task impact |
 |---|---|---|
@@ -47,13 +47,13 @@ These ADRs govern Tasks 02–05 and must be read before changing the desktop she
 | [0003](./0003-flutter-rust-local-transport.md) | Authenticated loopback typed API with version handshake and streaming | Task 04 |
 | [0004](./0004-sqlite-persistence-and-migrations.md) | Core-owned SQLite with transactional migrations and recovery | Task 05 |
 | [0005](./0005-windows-application-identity-and-packaging-direction.md) | Stable GixGiz Windows identity, per-user installation and packaging direction | Tasks 02–05 |
+| [0006](./0006-runtime-abstraction-and-ollama-provider.md) | Provider-neutral runtime abstraction with explicit Ollama adapter ownership and consent | Tasks 09–10 |
+| [0007](./0007-privileged-installer-helper-elevation-and-rollback.md) | Least-privilege helper boundary with structured approval, elevation and rollback | Tasks 09–10 |
 
 ## Deferred ADR backlog
 
 The following decisions remain intentionally deferred until their implementation stage:
 
-- Runtime abstraction and initial Ollama provider.
-- Privileged installer-helper, elevation and rollback strategy.
 - Final Windows installer format and automatic update mechanism.
 - Public local gateway and external-client registration.
 - Tool runtime and sandbox architecture.

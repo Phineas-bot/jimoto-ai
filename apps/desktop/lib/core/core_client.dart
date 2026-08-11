@@ -43,8 +43,25 @@ class CoreOperation {
   final CorrelationId correlationId;
 }
 
+class CoreClientFailure implements Exception {
+  const CoreClientFailure({
+    required this.code,
+    required this.category,
+    required this.recoveryAction,
+  });
+
+  final String code;
+  final ErrorCategory category;
+  final RecoveryAction recoveryAction;
+
+  @override
+  String toString() => 'CoreClientFailure($category, $code)';
+}
+
 abstract class CoreClient {
   const CoreClient();
+
+  bool supportsTransportCapability(TransportCapability capability) => false;
 
   Future<CoreConnectionSnapshot> checkConnection();
 
@@ -101,6 +118,54 @@ abstract class CoreClient {
     return Future.error(
       UnsupportedError(
         'Capability recommendations are not supported by this client.',
+      ),
+    );
+  }
+
+  Future<RuntimeHealthReport> checkRuntimeStatus() {
+    return Future.error(
+      UnsupportedError('Runtime status is not supported by this client.'),
+    );
+  }
+
+  Future<RuntimeHealthReport> decideRuntimeReuse(
+    RuntimeConsentDecision decision,
+  ) {
+    return Future.error(
+      UnsupportedError('Runtime consent is not supported by this client.'),
+    );
+  }
+
+  Future<CoreOperation> startRuntimeOperation(RuntimeOperationKind kind) {
+    return Future.error(
+      UnsupportedError(
+        'Runtime lifecycle operations are not supported by this client.',
+      ),
+    );
+  }
+
+  Stream<RuntimeOperationEvent> observeRuntimeOperation(
+    CoreOperation operation,
+  ) {
+    return Stream.error(
+      UnsupportedError(
+        'Runtime lifecycle events are not supported by this client.',
+      ),
+    );
+  }
+
+  Future<bool> cancelRuntimeOperation(CoreOperation operation) {
+    return Future.error(
+      UnsupportedError(
+        'Runtime lifecycle cancellation is not supported by this client.',
+      ),
+    );
+  }
+
+  Future<RuntimeModelInventory> listRuntimeModels() {
+    return Future.error(
+      UnsupportedError(
+        'Runtime model inventory is not supported by this client.',
       ),
     );
   }

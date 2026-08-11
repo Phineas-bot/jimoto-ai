@@ -12,6 +12,7 @@ gixgiz-desktop-host -> gixgiz-core -> gixgiz-contracts
 
 - `gixgiz-contracts` owns all serialized handshake, health, error, event, cancellation, and shutdown types.
 - `gixgiz-core` owns lifecycle and authoritative readiness policy. It does not depend on HTTP or Flutter.
+- `gixgiz-core` also owns runtime reuse and management authorization; the host only adapts authorized provider-neutral intentions.
 - `gixgiz-desktop-host` adapts core services to the internal authenticated loopback API and owns process bootstrap/supervision.
 - Flutter accesses the core only through `CoreClient`. `SidecarCoreClient` owns production launch and transport behavior; tests can inject fake connectors and sessions.
 
@@ -42,6 +43,12 @@ All routes require `Authorization: Bearer <per-launch-token>`, correlation and r
 | `POST /internal/v1/recommendations` | Generate one deterministic report from supplied typed evidence and preferences. |
 | `GET /internal/v1/hardware-scans/{id}/events` | Stream ordered typed scan events and the terminal machine profile. |
 | `POST /internal/v1/hardware-scans/{id}/cancel` | Propagate cancellation to the Windows evidence process. |
+| `POST /internal/v1/runtime/status` | Return normalized runtime evidence plus authoritative ownership and consent policy. |
+| `POST /internal/v1/runtime/consent` | Record an explicit reuse decision without transferring management ownership. |
+| `POST /internal/v1/runtime/models` | Return a bounded normalized inventory after core policy authorizes read-only reuse. |
+| `POST /internal/v1/runtime/operations` | Start one authorized provider-neutral lifecycle operation. |
+| `GET /internal/v1/runtime/operations/{id}/events` | Stream ordered lifecycle events with an explicit terminal state. |
+| `POST /internal/v1/runtime/operations/{id}/cancel` | Propagate cancellation to the active lifecycle operation. |
 | `POST /internal/v1/shutdown` | Request bounded sidecar shutdown. |
 
 The deterministic operation is transport-foundation behavior only. It is not a product workflow and has no hardware, runtime, model, download, persistence, or chat semantics.
@@ -49,6 +56,8 @@ The deterministic operation is transport-foundation behavior only. It is not a p
 Hardware scans reuse the same authentication, handshake, correlation, bounded SSE, cancellation, and safe-error controls. Only one scan runs at a time, and the host retains at most eight in-process scan records for stream replay. No hardware evidence is exposed through an unauthenticated route or written to SQLite.
 
 Capability recommendations use the same authentication, handshake, body limit, timeout, and identifier checks. The route is an in-memory bounded calculation: it consumes the supplied `MachineProfile`, does not start a scan, does not query Windows or SQLite, and exposes no raw catalogue rules. See [`capability-recommendations.md`](./capability-recommendations.md).
+
+Runtime routes reuse the same authentication, handshake, identifier, body, timeout, and safe-error controls. The handshake supplies the opaque identity of the runtime provider registered by the Rust composition root; Flutter echoes that identity and does not select or name a provider in application code. JSON response bodies have a total configured deadline and a 64 KiB limit, including error responses. Lifecycle SSE consumption separately enforces the configured inactivity timeout, a 512 KiB cumulative body limit, per-event limits, and ordered terminal events before decoding into UI state. The routes expose normalized state and user intentions rather than provider URLs, commands, payloads, executable paths, or raw errors. The host retains at most eight lifecycle operation records and permits only one active lifecycle operation. Core policy keeps discovery, reuse consent, ownership, and management consent separate; external reuse approval permits bounded read-only model inspection but does not authorize start, stop, restart, update, uninstall, or reconfiguration. See [`ollama-runtime.md`](./ollama-runtime.md).
 
 ## Contract generation
 
@@ -76,6 +85,7 @@ The generator intentionally supports only the contract shapes used by this inter
 - Requests with browser `Origin` headers are rejected; no CORS headers or cookies are used.
 - JSON commands require `application/json`, accept at most 16 KiB, run through a five-second request deadline, and share a 16-request concurrency bound.
 - Responses and event lines are bounded by the Dart client. The foundation stream is finite, sequence-checked, correlation-checked, replayable during the process session, and must end with an explicit terminal state.
+- Runtime model inventories are authenticated, requested explicitly, capped by core policy, and never included in routine status or live-region summaries.
 - Boundary failures contain stable codes, safe messages, recovery guidance, correlation IDs, and request IDs. Raw headers, tokens, provider output, panics, and stack traces are not returned.
 - Structured Rust diagnostics write to stderr so stdout remains a one-record bootstrap channel. Request headers and bodies are not logged.
 

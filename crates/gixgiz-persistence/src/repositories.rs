@@ -1,6 +1,6 @@
 use std::fmt;
 
-use gixgiz_contracts::CorrelationId;
+use gixgiz_contracts::{CorrelationId, RuntimeConsentState, RuntimeOwnership, RuntimeProviderId};
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
@@ -153,6 +153,140 @@ pub struct AuditEvent {
     pub correlation_id: CorrelationId,
     /// Caller-supplied UTC Unix timestamp in milliseconds.
     pub occurred_at_unix_ms: i64,
+}
+
+/// Durable provider-neutral ownership and consent policy for one runtime.
+///
+/// Detection evidence is intentionally absent: observing a runtime must not
+/// create, replace, or otherwise mutate this record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimePolicyRecord {
+    /// Stable provider identity without provider-specific configuration.
+    pub provider_id: RuntimeProviderId,
+    /// Installation ownership recorded independently from detection.
+    pub ownership: RuntimeOwnership,
+    /// Explicit decision about reusing an externally managed runtime.
+    pub reuse_consent: RuntimeConsentState,
+    /// Explicit decision about lifecycle management authority.
+    pub management_consent: RuntimeConsentState,
+    /// Caller-supplied UTC Unix timestamp in milliseconds.
+    pub updated_at_unix_ms: i64,
+}
+
+impl RuntimePolicyRecord {
+    /// Creates a validated policy record containing no paths or provider data.
+    pub fn new(
+        provider_id: RuntimeProviderId,
+        ownership: RuntimeOwnership,
+        reuse_consent: RuntimeConsentState,
+        management_consent: RuntimeConsentState,
+        updated_at_unix_ms: i64,
+    ) -> Result<Self, PersistenceError> {
+        validate_text("runtime_provider_id", provider_id.as_str(), KEY_BYTES_MAX)?;
+        validate_runtime_ownership(ownership)?;
+        validate_reuse_consent(reuse_consent)?;
+        validate_management_consent(management_consent)?;
+        validate_timestamp(updated_at_unix_ms)?;
+        Ok(Self {
+            provider_id,
+            ownership,
+            reuse_consent,
+            management_consent,
+            updated_at_unix_ms,
+        })
+    }
+}
+
+/// Repository for provider-neutral runtime ownership and consent policy.
+#[derive(Clone)]
+pub struct RuntimePolicyRepository {
+    persistence: Persistence,
+}
+
+impl RuntimePolicyRepository {
+    pub(crate) fn new(persistence: Persistence) -> Self {
+        Self { persistence }
+    }
+
+    /// Creates or replaces one policy record in a single transaction.
+    pub fn upsert(&self, policy: &RuntimePolicyRecord) -> Result<(), PersistenceError> {
+        let validated = RuntimePolicyRecord::new(
+            policy.provider_id.clone(),
+            policy.ownership,
+            policy.reuse_consent,
+            policy.management_consent,
+            policy.updated_at_unix_ms,
+        )?;
+        self.persistence.try_with_write_transaction(|transaction| {
+            let mut statement = transaction
+                .prepare(
+                    "INSERT INTO runtime_policy
+                     (provider_id, ownership, reuse_consent, management_consent, updated_at_unix_ms)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     ON CONFLICT(provider_id) DO UPDATE SET
+                         ownership = excluded.ownership,
+                         reuse_consent = excluded.reuse_consent,
+                         management_consent = excluded.management_consent,
+                         updated_at_unix_ms = excluded.updated_at_unix_ms",
+                )
+                .map_err(|source| {
+                    PersistenceError::sqlite("prepare_runtime_policy_write", source)
+                })?;
+            statement
+                .execute(params![
+                    validated.provider_id.as_str(),
+                    runtime_ownership_as_str(validated.ownership)?,
+                    runtime_consent_as_str(validated.reuse_consent),
+                    runtime_consent_as_str(validated.management_consent),
+                    validated.updated_at_unix_ms,
+                ])
+                .map_err(|source| PersistenceError::sqlite("write_runtime_policy", source))?;
+            Ok(())
+        })
+    }
+
+    /// Reads one runtime policy without creating detection or ownership state.
+    pub fn get(
+        &self,
+        provider_id: &RuntimeProviderId,
+    ) -> Result<Option<RuntimePolicyRecord>, PersistenceError> {
+        validate_text("runtime_provider_id", provider_id.as_str(), KEY_BYTES_MAX)?;
+        self.persistence.try_with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT provider_id, ownership, reuse_consent, management_consent,
+                            updated_at_unix_ms
+                     FROM runtime_policy WHERE provider_id = ?1",
+                )
+                .map_err(|source| {
+                    PersistenceError::sqlite("prepare_runtime_policy_read", source)
+                })?;
+            let row = statement
+                .query_row(params![provider_id.as_str()], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                })
+                .optional()
+                .map_err(|source| PersistenceError::sqlite("read_runtime_policy", source))?;
+            row.map(
+                |(provider_id, ownership, reuse_consent, management_consent, updated)| {
+                    RuntimePolicyRecord::new(
+                        RuntimeProviderId::new(provider_id),
+                        parse_runtime_ownership(&ownership)?,
+                        parse_reuse_consent(&reuse_consent)?,
+                        parse_management_consent(&management_consent)?,
+                        updated,
+                    )
+                },
+            )
+            .transpose()
+        })
+    }
 }
 
 /// Repository for bounded, non-secret platform metadata.
@@ -474,5 +608,106 @@ fn validate_timestamp(value: i64) -> Result<(), PersistenceError> {
         Err(PersistenceError::InvalidRecord { field: "timestamp" })
     } else {
         Ok(())
+    }
+}
+
+fn validate_runtime_ownership(value: RuntimeOwnership) -> Result<(), PersistenceError> {
+    match value {
+        RuntimeOwnership::External
+        | RuntimeOwnership::GixGizManaged
+        | RuntimeOwnership::Bundled
+        | RuntimeOwnership::Unknown => Ok(()),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_ownership",
+        }),
+    }
+}
+
+fn runtime_ownership_as_str(value: RuntimeOwnership) -> Result<&'static str, PersistenceError> {
+    match value {
+        RuntimeOwnership::External => Ok("external"),
+        RuntimeOwnership::GixGizManaged => Ok("gix_giz_managed"),
+        RuntimeOwnership::Bundled => Ok("bundled"),
+        RuntimeOwnership::Unknown => Ok("unknown"),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_ownership",
+        }),
+    }
+}
+
+fn parse_runtime_ownership(value: &str) -> Result<RuntimeOwnership, PersistenceError> {
+    match value {
+        "external" => Ok(RuntimeOwnership::External),
+        "gix_giz_managed" => Ok(RuntimeOwnership::GixGizManaged),
+        "bundled" => Ok(RuntimeOwnership::Bundled),
+        "unknown" => Ok(RuntimeOwnership::Unknown),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_ownership",
+        }),
+    }
+}
+
+const fn runtime_consent_as_str(value: RuntimeConsentState) -> &'static str {
+    match value {
+        RuntimeConsentState::NotRequested => "not_requested",
+        RuntimeConsentState::ReuseApproved => "reuse_approved",
+        RuntimeConsentState::ManagementApproved => "management_approved",
+        RuntimeConsentState::Denied => "denied",
+        RuntimeConsentState::Unknown => "unknown",
+        _ => "unknown",
+    }
+}
+
+fn validate_reuse_consent(value: RuntimeConsentState) -> Result<(), PersistenceError> {
+    match value {
+        RuntimeConsentState::NotRequested
+        | RuntimeConsentState::ReuseApproved
+        | RuntimeConsentState::Denied
+        | RuntimeConsentState::Unknown => Ok(()),
+        RuntimeConsentState::ManagementApproved => Err(PersistenceError::InvalidRecord {
+            field: "runtime_reuse_consent",
+        }),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_reuse_consent",
+        }),
+    }
+}
+
+fn validate_management_consent(value: RuntimeConsentState) -> Result<(), PersistenceError> {
+    match value {
+        RuntimeConsentState::NotRequested
+        | RuntimeConsentState::ManagementApproved
+        | RuntimeConsentState::Denied
+        | RuntimeConsentState::Unknown => Ok(()),
+        RuntimeConsentState::ReuseApproved => Err(PersistenceError::InvalidRecord {
+            field: "runtime_management_consent",
+        }),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_management_consent",
+        }),
+    }
+}
+
+fn parse_reuse_consent(value: &str) -> Result<RuntimeConsentState, PersistenceError> {
+    match value {
+        "not_requested" => Ok(RuntimeConsentState::NotRequested),
+        "reuse_approved" => Ok(RuntimeConsentState::ReuseApproved),
+        "denied" => Ok(RuntimeConsentState::Denied),
+        "unknown" => Ok(RuntimeConsentState::Unknown),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_reuse_consent",
+        }),
+    }
+}
+
+fn parse_management_consent(value: &str) -> Result<RuntimeConsentState, PersistenceError> {
+    match value {
+        "not_requested" => Ok(RuntimeConsentState::NotRequested),
+        "management_approved" => Ok(RuntimeConsentState::ManagementApproved),
+        "denied" => Ok(RuntimeConsentState::Denied),
+        "unknown" => Ok(RuntimeConsentState::Unknown),
+        _ => Err(PersistenceError::InvalidRecord {
+            field: "runtime_management_consent",
+        }),
     }
 }

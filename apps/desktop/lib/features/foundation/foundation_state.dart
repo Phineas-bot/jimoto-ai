@@ -80,8 +80,7 @@ sealed class CapabilityRecommendationState {
   const CapabilityRecommendationState();
 }
 
-final class CapabilityRecommendationIdle
-    extends CapabilityRecommendationState {
+final class CapabilityRecommendationIdle extends CapabilityRecommendationState {
   const CapabilityRecommendationIdle();
 }
 
@@ -109,4 +108,79 @@ final class CapabilityRecommendationFailed
   const CapabilityRecommendationFailed({required this.diagnosticCode});
 
   final String diagnosticCode;
+}
+
+sealed class RuntimeStatusState {
+  const RuntimeStatusState();
+}
+
+final class RuntimeStatusIdle extends RuntimeStatusState {
+  const RuntimeStatusIdle();
+}
+
+final class RuntimeStatusLoading extends RuntimeStatusState {
+  const RuntimeStatusLoading({this.previousReport});
+
+  final RuntimeHealthReport? previousReport;
+}
+
+final class RuntimeStatusLoaded extends RuntimeStatusState {
+  const RuntimeStatusLoaded({required this.report});
+
+  final RuntimeHealthReport report;
+}
+
+final class RuntimeStatusOperating extends RuntimeStatusState {
+  const RuntimeStatusOperating({required this.report, required this.kind});
+
+  final RuntimeHealthReport report;
+  final RuntimeOperationKind kind;
+}
+
+final class RuntimeStatusFailed extends RuntimeStatusState {
+  const RuntimeStatusFailed({
+    required this.diagnosticCode,
+    this.report,
+    this.operationKind,
+    this.recoveryAction = RecoveryAction.retry,
+  });
+
+  final String diagnosticCode;
+  final RuntimeHealthReport? report;
+  final RuntimeOperationKind? operationKind;
+  final RecoveryAction recoveryAction;
+}
+
+final class RuntimeStatusCancelled extends RuntimeStatusState {
+  const RuntimeStatusCancelled({this.report});
+
+  final RuntimeHealthReport? report;
+}
+
+sealed class RuntimeInventoryState {
+  const RuntimeInventoryState();
+}
+
+final class RuntimeInventoryIdle extends RuntimeInventoryState {
+  const RuntimeInventoryIdle();
+}
+
+final class RuntimeInventoryLoading extends RuntimeInventoryState {
+  const RuntimeInventoryLoading();
+}
+
+final class RuntimeInventoryLoaded extends RuntimeInventoryState {
+  const RuntimeInventoryLoaded({required this.inventory});
+
+  final RuntimeModelInventory inventory;
+}
+
+final class RuntimeInventoryFailed extends RuntimeInventoryState {
+  const RuntimeInventoryFailed({
+    required this.diagnosticCode,
+    this.recoveryAction = RecoveryAction.retry,
+  });
+
+  final String diagnosticCode;
+  final RecoveryAction recoveryAction;
 }

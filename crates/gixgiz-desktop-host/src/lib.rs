@@ -11,12 +11,14 @@ mod bootstrap;
 mod error;
 mod hardware_scans;
 mod operations;
+mod runtime_operations;
 mod server;
 
 use std::time::Duration;
 
 use gixgiz_contracts::{BootstrapReady, InstanceId};
 use gixgiz_core::{CoreError, HardwareProvider, HardwareScanner, OperationContext, PlatformCore};
+use gixgiz_runtime_ollama::OllamaRuntimeProvider;
 use tokio::io::{AsyncWriteExt, BufReader};
 
 pub use error::HostError;
@@ -32,10 +34,13 @@ pub async fn run_sidecar() -> Result<(), HostError> {
     let bootstrap = read_bootstrap(stdin).await?;
     let instance_id = InstanceId::new();
     let context = OperationContext::generated();
-    let (mut core, status) = tokio::task::spawn_blocking(move || {
+    let runtime_provider =
+        std::sync::Arc::new(OllamaRuntimeProvider::for_current_user().map_err(HostError::Runtime)?);
+    let (mut core, status, runtime_service) = tokio::task::spawn_blocking(move || {
         let mut core = PlatformCore::with_default_persistence();
+        let runtime_service = core.runtime_service(runtime_provider);
         let status = core.start(&context)?;
-        Ok::<_, gixgiz_core::CoreError>((core, status))
+        Ok::<_, gixgiz_core::CoreError>((core, status, runtime_service))
     })
     .await
     .map_err(HostError::CoreWorker)?
@@ -50,6 +55,7 @@ pub async fn run_sidecar() -> Result<(), HostError> {
             instance_id,
             status,
             hardware_scanner,
+            runtime_service,
         )
         .await?;
         let ready = BootstrapReady::new(

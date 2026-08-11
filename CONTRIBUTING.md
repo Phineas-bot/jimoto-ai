@@ -106,7 +106,9 @@ git status --short
 The current Rust dependency direction is:
 
 ```text
-gixgiz-desktop-host -> gixgiz-core -> gixgiz-persistence -> gixgiz-contracts
+gixgiz-desktop-host -> gixgiz-runtime-ollama -> gixgiz-runtime -> gixgiz-contracts
+                    -> gixgiz-core -----------^         |
+                                      -> gixgiz-persistence -> gixgiz-contracts
 ```
 
 - Flutter owns presentation, accessibility, localization, navigation, and
@@ -116,8 +118,14 @@ gixgiz-desktop-host -> gixgiz-core -> gixgiz-persistence -> gixgiz-contracts
   bindings from the Rust source of truth; do not hand-edit generated bindings.
 - `gixgiz-persistence` exclusively owns SQLite connections, migrations,
   backups, and SQL.
+- `gixgiz-runtime` owns provider-neutral runtime behavior; concrete provider
+  endpoints, commands, payloads, and model tags belong in the corresponding
+  adapter crate.
+- `gixgiz-core` owns runtime ownership and consent policy. Detection and reuse
+  approval must not silently grant management authority.
 - The desktop host owns only the supervised, authenticated loopback sidecar
-  transport. It must not acquire platform policy.
+  transport and concrete adapter composition. It must not acquire platform
+  policy or proxy raw provider APIs.
 
 Follow the nearest applicable `AGENTS.md` for detailed ownership, security,
 and validation rules. Do not add a dependency, break a public contract, change

@@ -20,6 +20,8 @@ class _FoundationPageState extends State<FoundationPage> {
   HardwareScanState _hardwareScanState = const HardwareScanIdle();
   CapabilityRecommendationState _recommendationState =
       const CapabilityRecommendationIdle();
+  RuntimeStatusState _runtimeStatusState = const RuntimeStatusIdle();
+  RuntimeInventoryState _runtimeInventoryState = const RuntimeInventoryIdle();
   UserPreferenceProfile _preferences = const UserPreferenceProfile(
     workload: WorkloadTier.generalText,
     priority: PreferencePriority.balanced,
@@ -28,6 +30,10 @@ class _FoundationPageState extends State<FoundationPage> {
   CoreOperation? _activeHardwareScan;
   CoreClient? _activeHardwareScanClient;
   StreamSubscription<HardwareScanEvent>? _hardwareScanSubscription;
+  CoreOperation? _activeRuntimeOperation;
+  CoreClient? _activeRuntimeClient;
+  StreamSubscription<RuntimeOperationEvent>? _runtimeOperationSubscription;
+  int _runtimeRevision = 0;
 
   @override
   void initState() {
@@ -40,8 +46,12 @@ class _FoundationPageState extends State<FoundationPage> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.coreClient, widget.coreClient)) {
       unawaited(_stopHardwareScan(cancelRemote: true));
+      unawaited(_stopRuntimeOperation(cancelRemote: true));
       _hardwareScanState = const HardwareScanIdle();
       _recommendationState = const CapabilityRecommendationIdle();
+      _runtimeStatusState = const RuntimeStatusIdle();
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+      _runtimeRevision += 1;
       _checkConnection();
     }
   }
@@ -49,6 +59,7 @@ class _FoundationPageState extends State<FoundationPage> {
   @override
   void dispose() {
     unawaited(_stopHardwareScan(cancelRemote: true));
+    unawaited(_stopRuntimeOperation(cancelRemote: true));
     super.dispose();
   }
 
@@ -58,14 +69,22 @@ class _FoundationPageState extends State<FoundationPage> {
     }
     setState(() => _state = const FoundationLoading());
 
+    final client = widget.coreClient;
     try {
-      final snapshot = await widget.coreClient.checkConnection();
-      if (!mounted) {
+      final snapshot = await client.checkConnection();
+      if (!mounted || !identical(client, widget.coreClient)) {
         return;
       }
-      setState(() => _state = _mapSnapshot(snapshot));
+      final next = _mapSnapshot(snapshot);
+      setState(() => _state = next);
+      if ((next is FoundationReady || next is FoundationDegraded) &&
+          client.supportsTransportCapability(
+            TransportCapability.runtimeStatus,
+          )) {
+        unawaited(_checkRuntimeStatus());
+      }
     } on Object {
-      if (!mounted) {
+      if (!mounted || !identical(client, widget.coreClient)) {
         return;
       }
       setState(
@@ -224,6 +243,459 @@ class _FoundationPageState extends State<FoundationPage> {
     }
   }
 
+  RuntimeHealthReport? _runtimeReport() {
+    return switch (_runtimeStatusState) {
+      RuntimeStatusLoading(:final previousReport) => previousReport,
+      RuntimeStatusLoaded(:final report) ||
+      RuntimeStatusOperating(:final report) => report,
+      RuntimeStatusFailed(:final report) ||
+      RuntimeStatusCancelled(:final report) => report,
+      RuntimeStatusIdle() => null,
+    };
+  }
+
+  Future<void> _checkRuntimeStatus() async {
+    if (!mounted || _activeRuntimeOperation != null) {
+      return;
+    }
+    final client = widget.coreClient;
+    final previousReport = _runtimeReport();
+    final revision = ++_runtimeRevision;
+    setState(() {
+      _runtimeStatusState = RuntimeStatusLoading(
+        previousReport: previousReport,
+      );
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+    });
+    try {
+      final report = await client.checkRuntimeStatus();
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() => _runtimeStatusState = RuntimeStatusLoaded(report: report));
+    } on CoreClientFailure catch (failure) {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: failure.code,
+          report: previousReport,
+          recoveryAction: failure.recoveryAction,
+        );
+      });
+    } on Object {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: 'RUNTIME_STATUS_FAILED',
+          report: previousReport,
+        );
+      });
+    }
+  }
+
+  Future<void> _approveRuntimeReuse() async {
+    final report = _runtimeReport();
+    if (report == null || _activeRuntimeOperation != null) {
+      return;
+    }
+    final client = widget.coreClient;
+    final revision = ++_runtimeRevision;
+    setState(() {
+      _runtimeStatusState = RuntimeStatusLoading(previousReport: report);
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+    });
+    try {
+      final updated = await client.decideRuntimeReuse(
+        RuntimeConsentDecision.approveReuse,
+      );
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusLoaded(report: updated);
+        _runtimeInventoryState = const RuntimeInventoryIdle();
+      });
+    } on CoreClientFailure catch (failure) {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: failure.code,
+          report: report,
+          recoveryAction: failure.recoveryAction,
+        );
+      });
+    } on Object {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: 'RUNTIME_CONSENT_FAILED',
+          report: report,
+        );
+      });
+    }
+  }
+
+  Future<void> _startRuntimeOperation(RuntimeOperationKind kind) async {
+    final report = _runtimeReport();
+    if (report == null || _activeRuntimeOperation != null) {
+      return;
+    }
+    final client = widget.coreClient;
+    _runtimeRevision += 1;
+    setState(() {
+      _runtimeStatusState = RuntimeStatusOperating(report: report, kind: kind);
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+    });
+    try {
+      final operation = await client.startRuntimeOperation(kind);
+      if (!mounted || !identical(client, widget.coreClient)) {
+        unawaited(_cancelRuntimeQuietly(client, operation));
+        return;
+      }
+      _activeRuntimeOperation = operation;
+      _activeRuntimeClient = client;
+      _runtimeOperationSubscription = client
+          .observeRuntimeOperation(operation)
+          .listen(
+            (event) {
+              if (_isActiveRuntimeOperation(client, operation)) {
+                _applyRuntimeOperationEvent(event);
+              }
+            },
+            onError: (Object error) {
+              if (_isActiveRuntimeOperation(client, operation)) {
+                _recoverRuntimeOperationStream(
+                  client,
+                  operation,
+                  failure: error is CoreClientFailure ? error : null,
+                  fallbackDiagnosticCode: 'RUNTIME_OPERATION_STREAM_FAILED',
+                );
+              }
+            },
+            onDone: () {
+              if (_isActiveRuntimeOperation(client, operation) &&
+                  _runtimeStatusState is RuntimeStatusOperating) {
+                _recoverRuntimeOperationStream(client, operation);
+              }
+            },
+          );
+      setState(() {});
+    } on CoreClientFailure catch (failure) {
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      _handleRuntimeOperationFailure(failure, operationKind: kind);
+    } on Object {
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      _failRuntimeOperation(
+        'RUNTIME_OPERATION_START_FAILED',
+        operationKind: kind,
+      );
+    }
+  }
+
+  void _applyRuntimeOperationEvent(RuntimeOperationEvent event) {
+    if (!mounted) {
+      return;
+    }
+    final terminal = event.terminalState;
+    if (terminal == null) {
+      final report = event.report ?? _runtimeReport();
+      if (report != null) {
+        setState(() {
+          _runtimeStatusState = RuntimeStatusOperating(
+            report: report,
+            kind: event.operationKind,
+          );
+        });
+      }
+      return;
+    }
+    final report = event.report;
+
+    _activeRuntimeOperation = null;
+    _activeRuntimeClient = null;
+    setState(() {
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+      _runtimeStatusState = switch (terminal) {
+        RuntimeOperationTerminalState.completed when report != null =>
+          RuntimeStatusLoaded(report: report),
+        RuntimeOperationTerminalState.cancelled => RuntimeStatusCancelled(
+          report: report,
+        ),
+        RuntimeOperationTerminalState.failed ||
+        RuntimeOperationTerminalState.timedOut ||
+        RuntimeOperationTerminalState.unknown => RuntimeStatusFailed(
+          diagnosticCode:
+              event.error?.code ?? 'RUNTIME_OPERATION_${terminal.wireValue}',
+          report: report,
+          operationKind: event.operationKind,
+          recoveryAction: event.error?.recovery.action ?? RecoveryAction.retry,
+        ),
+        _ => RuntimeStatusLoading(previousReport: report),
+      };
+    });
+    if (terminal == RuntimeOperationTerminalState.completed && report == null) {
+      unawaited(_checkRuntimeStatus());
+    }
+  }
+
+  void _recoverRuntimeOperationStream(
+    CoreClient client,
+    CoreOperation operation, {
+    CoreClientFailure? failure,
+    String fallbackDiagnosticCode = 'RUNTIME_OPERATION_STREAM_ENDED',
+  }) {
+    if (!mounted || !_isActiveRuntimeOperation(client, operation)) {
+      return;
+    }
+    final operationKind = switch (_runtimeStatusState) {
+      RuntimeStatusOperating(:final kind) => kind,
+      _ => null,
+    };
+    final revision = ++_runtimeRevision;
+    _activeRuntimeOperation = null;
+    _activeRuntimeClient = null;
+    final subscription = _runtimeOperationSubscription;
+    _runtimeOperationSubscription = null;
+    unawaited(subscription?.cancel());
+    setState(() {
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+      _runtimeStatusState = failure?.category == ErrorCategory.cancelled
+          ? const RuntimeStatusCancelled()
+          : RuntimeStatusFailed(
+              diagnosticCode: failure?.code ?? fallbackDiagnosticCode,
+              operationKind: operationKind,
+              recoveryAction: failure?.recoveryAction ?? RecoveryAction.retry,
+            );
+    });
+    unawaited(
+      _cancelAndRefreshRuntimeStatus(client, operation, revision: revision),
+    );
+  }
+
+  Future<void> _cancelAndRefreshRuntimeStatus(
+    CoreClient client,
+    CoreOperation operation, {
+    required int revision,
+  }) async {
+    try {
+      await client.cancelRuntimeOperation(operation);
+    } on Object {
+      // Status remains authoritative even when cancellation cannot be confirmed.
+    }
+    if (!mounted ||
+        !identical(client, widget.coreClient) ||
+        revision != _runtimeRevision ||
+        !client.supportsTransportCapability(
+          TransportCapability.runtimeStatus,
+        )) {
+      return;
+    }
+    try {
+      final report = await client.checkRuntimeStatus();
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() => _runtimeStatusState = RuntimeStatusLoaded(report: report));
+    } on CoreClientFailure catch (failure) {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: failure.code,
+          recoveryAction: failure.recoveryAction,
+        );
+      });
+    } on Object {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = const RuntimeStatusFailed(
+          diagnosticCode: 'RUNTIME_STATUS_FAILED',
+        );
+      });
+    }
+  }
+
+  void _failRuntimeOperation(
+    String diagnosticCode, {
+    RecoveryAction recoveryAction = RecoveryAction.retry,
+    RuntimeOperationKind? operationKind,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    final report = _runtimeReport();
+    final failedKind =
+        operationKind ??
+        switch (_runtimeStatusState) {
+          RuntimeStatusOperating(:final kind) => kind,
+          RuntimeStatusFailed(:final operationKind) => operationKind,
+          _ => null,
+        };
+    _activeRuntimeOperation = null;
+    _activeRuntimeClient = null;
+    setState(() {
+      _runtimeStatusState = RuntimeStatusFailed(
+        diagnosticCode: diagnosticCode,
+        report: report,
+        operationKind: failedKind,
+        recoveryAction: recoveryAction,
+      );
+    });
+  }
+
+  void _handleRuntimeOperationFailure(
+    CoreClientFailure failure, {
+    RuntimeOperationKind? operationKind,
+  }) {
+    if (failure.category != ErrorCategory.cancelled) {
+      _failRuntimeOperation(
+        failure.code,
+        recoveryAction: failure.recoveryAction,
+        operationKind: operationKind,
+      );
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final report = _runtimeReport();
+    _activeRuntimeOperation = null;
+    _activeRuntimeClient = null;
+    setState(() {
+      _runtimeInventoryState = const RuntimeInventoryIdle();
+      _runtimeStatusState = RuntimeStatusCancelled(report: report);
+    });
+  }
+
+  Future<void> _cancelRuntimeOperation() async {
+    final operation = _activeRuntimeOperation;
+    final client = _activeRuntimeClient;
+    if (operation == null || client == null) {
+      return;
+    }
+    try {
+      await client.cancelRuntimeOperation(operation);
+    } on CoreClientFailure catch (failure) {
+      if (_isActiveRuntimeOperation(client, operation)) {
+        _handleRuntimeOperationFailure(failure);
+      }
+    } on Object {
+      if (_isActiveRuntimeOperation(client, operation)) {
+        _failRuntimeOperation('RUNTIME_OPERATION_CANCEL_FAILED');
+      }
+    }
+  }
+
+  bool _isActiveRuntimeOperation(CoreClient client, CoreOperation operation) {
+    return identical(_activeRuntimeClient, client) &&
+        _activeRuntimeOperation?.operationId == operation.operationId &&
+        _activeRuntimeOperation?.correlationId == operation.correlationId;
+  }
+
+  Future<void> _stopRuntimeOperation({required bool cancelRemote}) async {
+    final operation = _activeRuntimeOperation;
+    final client = _activeRuntimeClient;
+    _activeRuntimeOperation = null;
+    _activeRuntimeClient = null;
+    await _runtimeOperationSubscription?.cancel();
+    _runtimeOperationSubscription = null;
+    if (cancelRemote && operation != null && client != null) {
+      unawaited(_cancelRuntimeQuietly(client, operation));
+    }
+  }
+
+  Future<void> _cancelRuntimeQuietly(
+    CoreClient client,
+    CoreOperation operation,
+  ) async {
+    try {
+      await client.cancelRuntimeOperation(operation);
+    } on Object {
+      // Teardown is already in progress; the supervised sidecar owns cleanup.
+    }
+  }
+
+  Future<void> _toggleRuntimeModels() async {
+    if (_runtimeInventoryState is RuntimeInventoryLoaded) {
+      setState(() => _runtimeInventoryState = const RuntimeInventoryIdle());
+      return;
+    }
+    if (_runtimeInventoryState is RuntimeInventoryLoading ||
+        _activeRuntimeOperation != null) {
+      return;
+    }
+    final client = widget.coreClient;
+    final revision = _runtimeRevision;
+    setState(() => _runtimeInventoryState = const RuntimeInventoryLoading());
+    try {
+      final inventory = await client.listRuntimeModels();
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeInventoryState = RuntimeInventoryLoaded(inventory: inventory);
+      });
+    } on CoreClientFailure catch (failure) {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeInventoryState = RuntimeInventoryFailed(
+          diagnosticCode: failure.code,
+          recoveryAction: failure.recoveryAction,
+        );
+      });
+    } on Object {
+      if (!mounted ||
+          !identical(client, widget.coreClient) ||
+          revision != _runtimeRevision) {
+        return;
+      }
+      setState(() {
+        _runtimeInventoryState = const RuntimeInventoryFailed(
+          diagnosticCode: 'RUNTIME_MODEL_INVENTORY_FAILED',
+        );
+      });
+    }
+  }
+
   void _failHardwareScan(String diagnosticCode) {
     if (!mounted) {
       return;
@@ -279,6 +751,8 @@ class _FoundationPageState extends State<FoundationPage> {
       state: _state,
       hardwareScanState: _hardwareScanState,
       recommendationState: _recommendationState,
+      runtimeStatusState: _runtimeStatusState,
+      runtimeInventoryState: _runtimeInventoryState,
       preferences: _preferences,
       onRetry: _checkConnection,
       onStartHardwareScan: _startHardwareScan,
@@ -287,6 +761,18 @@ class _FoundationPageState extends State<FoundationPage> {
       onPriorityChanged: _setPriority,
       onIncludeOptionalLargerChanged: _setIncludeOptionalLarger,
       onGenerateRecommendation: _generateRecommendation,
+      onRefreshRuntime:
+          widget.coreClient.supportsTransportCapability(
+            TransportCapability.runtimeStatus,
+          )
+          ? _checkRuntimeStatus
+          : null,
+      onApproveRuntimeReuse: _approveRuntimeReuse,
+      onStartRuntimeOperation: _startRuntimeOperation,
+      onCancelRuntimeOperation: _activeRuntimeOperation == null
+          ? null
+          : _cancelRuntimeOperation,
+      onToggleRuntimeModels: _toggleRuntimeModels,
     );
   }
 }

@@ -12,6 +12,7 @@ mod hardware;
 mod identity;
 mod ids;
 mod readiness;
+mod runtime;
 mod transport;
 
 pub use capability::{
@@ -41,6 +42,18 @@ pub use identity::{
 pub use ids::{CorrelationId, RequestId};
 pub use readiness::{
     ReadinessReport, ReadinessStatus, ServiceHealth, ServiceHealthStatus, ServiceRequirement,
+};
+pub use runtime::{
+    RUNTIME_REPORT_SCHEMA_VERSION, RuntimeCapabilityAvailability, RuntimeCapabilityDescriptor,
+    RuntimeCapabilityKind, RuntimeConsentDecision, RuntimeConsentRequest, RuntimeConsentResponse,
+    RuntimeConsentState, RuntimeDisplayName, RuntimeEndpointSafety, RuntimeErrorCode,
+    RuntimeHealthReport, RuntimeModelInventory, RuntimeModelInventoryRequest,
+    RuntimeModelInventoryResponse, RuntimeModelMappingStatus, RuntimeModelSummary,
+    RuntimeOperationEvent, RuntimeOperationEventKind, RuntimeOperationKind,
+    RuntimeOperationStartRequest, RuntimeOperationStartResponse, RuntimeOperationTerminalState,
+    RuntimeOwnership, RuntimeProviderId, RuntimeProviderModelId, RuntimeProviderModelMapping,
+    RuntimeReason, RuntimeReasonCode, RuntimeState, RuntimeStatusRequest, RuntimeStatusResponse,
+    RuntimeVersionCompatibility, RuntimeVersionInfo, RuntimeWarning, RuntimeWarningCode,
 };
 pub use transport::{
     BootstrapReady, BootstrapRequest, CancelOperationRequest, CancelOperationResponse, ClientHello,

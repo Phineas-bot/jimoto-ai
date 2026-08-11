@@ -3,6 +3,7 @@ import 'package:gixgiz_desktop/app/app_keys.dart';
 import 'package:gixgiz_desktop/core/core_client.dart';
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/features/foundation/foundation_state.dart';
+import 'package:gixgiz_desktop/features/foundation/runtime_panel.dart';
 import 'package:gixgiz_desktop/l10n/app_localizations.dart';
 import 'package:gixgiz_desktop/shared/page_header.dart';
 
@@ -23,6 +24,14 @@ class FoundationScreen extends StatelessWidget {
     this.onPriorityChanged,
     this.onIncludeOptionalLargerChanged,
     this.onGenerateRecommendation,
+    this.runtimeStatusState = const RuntimeStatusIdle(),
+    this.runtimeInventoryState = const RuntimeInventoryIdle(),
+    this.onRefreshRuntime,
+    this.onApproveRuntimeReuse,
+    this.onStartRuntimeOperation,
+    this.onCancelRuntimeOperation,
+    this.onToggleRuntimeModels,
+    this.runtimeActionFocusNode,
     this.primaryActionFocusNode,
     super.key,
   });
@@ -31,6 +40,8 @@ class FoundationScreen extends StatelessWidget {
   final HardwareScanState hardwareScanState;
   final CapabilityRecommendationState recommendationState;
   final UserPreferenceProfile preferences;
+  final RuntimeStatusState runtimeStatusState;
+  final RuntimeInventoryState runtimeInventoryState;
   final VoidCallback onRetry;
   final VoidCallback onStartHardwareScan;
   final VoidCallback onCancelHardwareScan;
@@ -38,6 +49,12 @@ class FoundationScreen extends StatelessWidget {
   final ValueChanged<PreferencePriority>? onPriorityChanged;
   final ValueChanged<bool>? onIncludeOptionalLargerChanged;
   final VoidCallback? onGenerateRecommendation;
+  final VoidCallback? onRefreshRuntime;
+  final VoidCallback? onApproveRuntimeReuse;
+  final ValueChanged<RuntimeOperationKind>? onStartRuntimeOperation;
+  final VoidCallback? onCancelRuntimeOperation;
+  final VoidCallback? onToggleRuntimeModels;
+  final FocusNode? runtimeActionFocusNode;
   final FocusNode? primaryActionFocusNode;
 
   @override
@@ -72,6 +89,17 @@ class FoundationScreen extends StatelessWidget {
                   ),
                   if (state is FoundationReady ||
                       state is FoundationDegraded) ...[
+                    const SizedBox(height: 24),
+                    RuntimePanel(
+                      state: runtimeStatusState,
+                      inventoryState: runtimeInventoryState,
+                      onRefresh: onRefreshRuntime,
+                      onApproveReuse: onApproveRuntimeReuse,
+                      onStartOperation: onStartRuntimeOperation,
+                      onCancelOperation: onCancelRuntimeOperation,
+                      onToggleModels: onToggleRuntimeModels,
+                      primaryActionFocusNode: runtimeActionFocusNode,
+                    ),
                     const SizedBox(height: 24),
                     _HardwareScanPanel(
                       state: hardwareScanState,

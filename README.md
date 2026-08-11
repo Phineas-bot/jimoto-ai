@@ -21,7 +21,7 @@ The v0.1 success condition is that a supported non-technical Windows user can mo
 
 ## Status
 
-Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, and deterministic local capability planning.
+Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, deterministic local capability planning, and consent-aware local runtime inspection.
 
 ## Repository map
 
@@ -110,16 +110,20 @@ are documented in [`docs/guides/windows-ci.md`](./docs/guides/windows-ci.md).
 
 ## Rust platform foundation
 
-The root Cargo workspace contains four crates with a strict dependency direction:
+The root Cargo workspace contains six crates with a strict dependency direction:
 
 ```text
-gixgiz-desktop-host -> gixgiz-core -> gixgiz-persistence -> gixgiz-contracts
+gixgiz-desktop-host -> gixgiz-runtime-ollama -> gixgiz-runtime -> gixgiz-contracts
+                    -> gixgiz-core -----------^         |
+                                      -> gixgiz-persistence -> gixgiz-contracts
 ```
 
-- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, machine-profile, capability-plan, handshake, event, cancellation, error, recovery, and request-correlation contracts.
+- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, machine-profile, capability-plan, runtime, handshake, event, cancellation, error, recovery, and request-correlation contracts.
 - `gixgiz-persistence` exclusively owns the SQLite connection, data-root layout, migrations, backups, health checks, and typed repository SQL.
-- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, hardware-scan orchestration, Windows evidence normalization, capability filtering/scoring, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
-- `gixgiz-desktop-host` builds `gixgiz-core.exe`, reads a per-launch secret from the inherited stdin pipe, initializes core services on blocking workers, and exposes only the authenticated HTTP/SSE routes on a dynamic `127.0.0.1` port. It exposes persistence health, typed hardware evidence, and capability reports but no paths, SQL, or database access.
+- `gixgiz-runtime` owns provider-neutral runtime traits, normalized adapter failures, cancellation/deadline conventions, and deterministic fake providers.
+- `gixgiz-runtime-ollama` owns Ollama executable discovery, loopback API details, version and model payloads, owned-child lifecycle control, and provider error normalization.
+- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, runtime ownership/consent authorization, hardware-scan orchestration, Windows evidence normalization, capability filtering/scoring, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
+- `gixgiz-desktop-host` builds `gixgiz-core.exe`, composes the concrete v0.1 adapter, reads a per-launch secret from the inherited stdin pipe, initializes core services on blocking workers, and exposes only authenticated provider-neutral HTTP/SSE routes on a dynamic `127.0.0.1` port. It exposes safe persistence health, runtime status, typed hardware evidence, and capability reports but no provider proxy, paths, SQL, or database access.
 
 Run the Rust checks from the repository root:
 
@@ -137,6 +141,12 @@ cargo run -p gixgiz-contracts --example generate_bindings -- --check
 ```
 
 Transport architecture, bootstrap, routes, security controls, and development checks are documented in [`docs/guides/flutter-rust-transport.md`](./docs/guides/flutter-rust-transport.md).
+
+## Local runtime adapter
+
+The v0.1 composition root registers one Ollama adapter behind provider-neutral core contracts. Detection verifies an approved loopback endpoint, executable evidence when present, provider health, and semantic version evidence without adopting an external installation. Read-only reuse requires an explicit persisted reuse decision; management ownership and consent remain separate, and external start, stop, restart, update, uninstall, or reconfiguration are not authorized by reuse approval.
+
+The adapter uses bounded direct HTTP and structured process execution without a shell. It can report normalized status and list a bounded model inventory; it does not install Ollama, pull or delete models, or run chat/inference. Architecture, version policy, endpoint rules, ownership behavior, troubleshooting, and the opt-in read-only smoke test are documented in [`docs/guides/ollama-runtime.md`](./docs/guides/ollama-runtime.md).
 
 ## Windows hardware evidence
 
@@ -156,7 +166,7 @@ The Windows data root is `%LOCALAPPDATA%\GixGiz`; the database is stored at `dat
 
 Database startup enables foreign keys, WAL, and a five-second busy timeout before applying ordered transactional migrations. `PRAGMA user_version` and the immutable `schema_migrations` ledger track compatibility. Newer schemas fail closed without downgrade. Irreversible migrations require a verified online backup under `backups\` before execution.
 
-The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, and categorical audit events. It does not store secrets, transport tokens, prompts, conversations, logs, model binaries, downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
+The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, categorical audit events, and provider-neutral runtime ownership/consent policy. It does not store detection evidence, executable paths, provider payloads, secrets, transport tokens, prompts, conversations, logs, model binaries, downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
 
 ## Initial development workflow
 

@@ -92,6 +92,38 @@ void main() {
     expect(focusedSide?.width, greaterThanOrEqualTo(2));
   });
 
+  testWidgets(
+    'runtime refresh supports keyboard activation and visible focus',
+    (tester) async {
+      final actionFocusNode = FocusNode();
+      addTearDown(actionFocusNode.dispose);
+      var refreshed = false;
+
+      await _pumpFoundation(
+        tester,
+        const FoundationReady(
+          snapshot: CoreConnectionSnapshot(kind: CoreConnectionKind.ready),
+        ),
+        runtimeActionFocusNode: actionFocusNode,
+        onRefreshRuntime: () => refreshed = true,
+      );
+
+      actionFocusNode.requestFocus();
+      await tester.pump();
+
+      expect(actionFocusNode.hasFocus, isTrue);
+      final button = tester.widget<OutlinedButton>(
+        find.byKey(AppKeys.runtimeRefreshAction),
+      );
+      final focusedSide = button.style?.side?.resolve({WidgetState.focused});
+      expect(focusedSide?.width, greaterThanOrEqualTo(2));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(refreshed, isTrue);
+    },
+  );
+
   testWidgets('primary status and recovery action expose semantics', (
     tester,
   ) async {
@@ -147,6 +179,8 @@ Future<void> _pumpFoundation(
   WidgetTester tester,
   FoundationState state, {
   FocusNode? actionFocusNode,
+  FocusNode? runtimeActionFocusNode,
+  VoidCallback? onRefreshRuntime,
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
@@ -163,6 +197,8 @@ Future<void> _pumpFoundation(
             onRetry: () {},
             onStartHardwareScan: () {},
             onCancelHardwareScan: () {},
+            onRefreshRuntime: onRefreshRuntime,
+            runtimeActionFocusNode: runtimeActionFocusNode,
             primaryActionFocusNode: actionFocusNode,
           ),
         ),

@@ -822,6 +822,672 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Capability planning failed'**
   String get capabilityFailedSemanticLabel;
+
+  /// No description provided for @runtimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local runtime'**
+  String get runtimeTitle;
+
+  /// No description provided for @runtimeIdleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime not checked'**
+  String get runtimeIdleTitle;
+
+  /// No description provided for @runtimeIdleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for a compatible local runtime before continuing.'**
+  String get runtimeIdleMessage;
+
+  /// No description provided for @runtimeCheckingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking runtime'**
+  String get runtimeCheckingTitle;
+
+  /// No description provided for @runtimeCheckingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is checking local runtime evidence without changing the installation.'**
+  String get runtimeCheckingMessage;
+
+  /// No description provided for @runtimeNotInstalledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime not installed'**
+  String get runtimeNotInstalledTitle;
+
+  /// No description provided for @runtimeNotInstalledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No compatible local runtime was verified. Installation is not available in this step.'**
+  String get runtimeNotInstalledMessage;
+
+  /// No description provided for @runtimeInstalledStoppedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime installed but stopped'**
+  String get runtimeInstalledStoppedTitle;
+
+  /// No description provided for @runtimeInstalledStoppedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A compatible local runtime was found, but it is not ready.'**
+  String get runtimeInstalledStoppedMessage;
+
+  /// No description provided for @runtimeStartingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime starting'**
+  String get runtimeStartingTitle;
+
+  /// No description provided for @runtimeStartingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The approved local runtime start is in progress.'**
+  String get runtimeStartingMessage;
+
+  /// No description provided for @runtimeReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime ready'**
+  String get runtimeReadyTitle;
+
+  /// No description provided for @runtimeReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The local endpoint, version, and health checks succeeded.'**
+  String get runtimeReadyMessage;
+
+  /// No description provided for @runtimeDegradedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime needs attention'**
+  String get runtimeDegradedTitle;
+
+  /// No description provided for @runtimeDegradedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime responded, but some health or capability evidence is limited.'**
+  String get runtimeDegradedMessage;
+
+  /// No description provided for @runtimeIncompatibleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime version incompatible'**
+  String get runtimeIncompatibleTitle;
+
+  /// No description provided for @runtimeIncompatibleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The detected runtime version is not supported by this GixGiz release.'**
+  String get runtimeIncompatibleMessage;
+
+  /// No description provided for @runtimeUpdatingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime updating'**
+  String get runtimeUpdatingTitle;
+
+  /// No description provided for @runtimeUpdatingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'An external update is in progress. GixGiz will not change it automatically.'**
+  String get runtimeUpdatingMessage;
+
+  /// No description provided for @runtimeFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime check failed'**
+  String get runtimeFailedTitle;
+
+  /// No description provided for @runtimeFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not obtain a safe runtime status. Review diagnostics, then try again.'**
+  String get runtimeFailedMessage;
+
+  /// No description provided for @runtimeUnknownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime status unknown'**
+  String get runtimeUnknownTitle;
+
+  /// No description provided for @runtimeUnknownMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime reported a state this desktop does not recognize. Update GixGiz before continuing.'**
+  String get runtimeUnknownMessage;
+
+  /// No description provided for @runtimeOperationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime operation in progress'**
+  String get runtimeOperationTitle;
+
+  /// No description provided for @runtimeOperationMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is waiting for the approved operation to reach a verified terminal state.'**
+  String get runtimeOperationMessage;
+
+  /// No description provided for @runtimeOperationFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime {operation} failed'**
+  String runtimeOperationFailedTitle(String operation);
+
+  /// No description provided for @runtimeOperationFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not complete the approved {operation} operation. Review diagnostics and the recommended action.'**
+  String runtimeOperationFailedMessage(String operation);
+
+  /// No description provided for @runtimeOperationKindStart.
+  ///
+  /// In en, this message translates to:
+  /// **'start'**
+  String get runtimeOperationKindStart;
+
+  /// No description provided for @runtimeOperationKindStop.
+  ///
+  /// In en, this message translates to:
+  /// **'stop'**
+  String get runtimeOperationKindStop;
+
+  /// No description provided for @runtimeOperationKindRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'restart'**
+  String get runtimeOperationKindRestart;
+
+  /// No description provided for @runtimeOperationKindUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'lifecycle operation'**
+  String get runtimeOperationKindUnknown;
+
+  /// No description provided for @runtimeCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime operation cancelled'**
+  String get runtimeCancelledTitle;
+
+  /// No description provided for @runtimeCancelledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The operation was cancelled. Check the current runtime status before continuing.'**
+  String get runtimeCancelledMessage;
+
+  /// No description provided for @runtimeProviderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime'**
+  String get runtimeProviderLabel;
+
+  /// No description provided for @runtimeVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get runtimeVersionLabel;
+
+  /// No description provided for @runtimeOwnershipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ownership'**
+  String get runtimeOwnershipLabel;
+
+  /// No description provided for @runtimeReuseConsentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reuse permission'**
+  String get runtimeReuseConsentLabel;
+
+  /// No description provided for @runtimeManagementConsentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Management permission'**
+  String get runtimeManagementConsentLabel;
+
+  /// No description provided for @runtimeEndpointLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Local endpoint'**
+  String get runtimeEndpointLabel;
+
+  /// No description provided for @runtimeOwnershipExternal.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed outside GixGiz'**
+  String get runtimeOwnershipExternal;
+
+  /// No description provided for @runtimeOwnershipManaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by GixGiz'**
+  String get runtimeOwnershipManaged;
+
+  /// No description provided for @runtimeOwnershipBundled.
+  ///
+  /// In en, this message translates to:
+  /// **'Included with GixGiz'**
+  String get runtimeOwnershipBundled;
+
+  /// No description provided for @runtimeOwnershipUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Ownership not verified'**
+  String get runtimeOwnershipUnknown;
+
+  /// No description provided for @runtimeConsentNotRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Reuse permission not granted'**
+  String get runtimeConsentNotRequested;
+
+  /// No description provided for @runtimeConsentReuseApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved for reuse only'**
+  String get runtimeConsentReuseApproved;
+
+  /// No description provided for @runtimeConsentManagementApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved for management'**
+  String get runtimeConsentManagementApproved;
+
+  /// No description provided for @runtimeConsentDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Reuse declined'**
+  String get runtimeConsentDenied;
+
+  /// No description provided for @runtimeConsentUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission state unknown'**
+  String get runtimeConsentUnknown;
+
+  /// No description provided for @runtimeManagementConsentNotRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Management permission not granted'**
+  String get runtimeManagementConsentNotRequested;
+
+  /// No description provided for @runtimeManagementConsentApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved for management'**
+  String get runtimeManagementConsentApproved;
+
+  /// No description provided for @runtimeManagementConsentDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Management declined'**
+  String get runtimeManagementConsentDenied;
+
+  /// No description provided for @runtimeManagementConsentUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Management permission unknown'**
+  String get runtimeManagementConsentUnknown;
+
+  /// No description provided for @runtimeEndpointVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified local endpoint'**
+  String get runtimeEndpointVerified;
+
+  /// No description provided for @runtimeEndpointRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint rejected'**
+  String get runtimeEndpointRejected;
+
+  /// No description provided for @runtimeEndpointUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint not verified'**
+  String get runtimeEndpointUnknown;
+
+  /// No description provided for @runtimeExternalNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation remains externally owned. Reuse does not let GixGiz update, uninstall, reconfigure, or claim it.'**
+  String get runtimeExternalNotice;
+
+  /// No description provided for @runtimeManagementRequiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Start, stop, and restart remain unavailable because management permission is separate from reuse.'**
+  String get runtimeManagementRequiredNotice;
+
+  /// No description provided for @runtimeExternalManagementRequiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Start, stop, and restart remain unavailable because management permission is separate from reuse. Manage this external installation with its existing controls.'**
+  String get runtimeExternalManagementRequiredNotice;
+
+  /// No description provided for @runtimeConsentPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow runtime reuse?'**
+  String get runtimeConsentPromptTitle;
+
+  /// No description provided for @runtimeConsentPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowing reuse lets GixGiz check this local runtime and list its installed models when current health and compatibility evidence permits. Ownership stays external, and this does not approve updates, uninstallation, reconfiguration, or other system changes.'**
+  String get runtimeConsentPromptMessage;
+
+  /// No description provided for @runtimeConsentApproveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow reuse'**
+  String get runtimeConsentApproveAction;
+
+  /// No description provided for @runtimeConsentCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get runtimeConsentCancelAction;
+
+  /// No description provided for @runtimeRefreshAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Check runtime'**
+  String get runtimeRefreshAction;
+
+  /// No description provided for @runtimeStartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Start runtime'**
+  String get runtimeStartAction;
+
+  /// No description provided for @runtimeStopAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop runtime'**
+  String get runtimeStopAction;
+
+  /// No description provided for @runtimeRestartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart runtime'**
+  String get runtimeRestartAction;
+
+  /// No description provided for @runtimeCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel operation'**
+  String get runtimeCancelAction;
+
+  /// No description provided for @runtimeModelsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Show installed models'**
+  String get runtimeModelsAction;
+
+  /// No description provided for @runtimeModelsHideAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide installed models'**
+  String get runtimeModelsHideAction;
+
+  /// No description provided for @runtimeModelsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed models'**
+  String get runtimeModelsTitle;
+
+  /// No description provided for @runtimeModelsProgressSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed model inventory progress'**
+  String get runtimeModelsProgressSemanticLabel;
+
+  /// No description provided for @runtimeModelsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No installed models were reported.'**
+  String get runtimeModelsEmpty;
+
+  /// No description provided for @runtimeModelsFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not list installed models. Review diagnostics, then try again.'**
+  String get runtimeModelsFailedMessage;
+
+  /// No description provided for @runtimeModelsTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'More installed models exist than can be shown safely.'**
+  String get runtimeModelsTruncated;
+
+  /// No description provided for @runtimeExternalModelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'External model'**
+  String get runtimeExternalModelLabel;
+
+  /// No description provided for @runtimeModelSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Size: {size}'**
+  String runtimeModelSizeLabel(String size);
+
+  /// No description provided for @runtimeModelCatalogueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Catalogue model: {model}'**
+  String runtimeModelCatalogueLabel(String model);
+
+  /// No description provided for @runtimeReasonsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status details'**
+  String get runtimeReasonsLabel;
+
+  /// No description provided for @runtimeWarningsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Important considerations'**
+  String get runtimeWarningsLabel;
+
+  /// No description provided for @runtimeReasonInstallationNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No supported local runtime installation was found.'**
+  String get runtimeReasonInstallationNotFound;
+
+  /// No description provided for @runtimeReasonExecutableVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime executable location was verified.'**
+  String get runtimeReasonExecutableVerified;
+
+  /// No description provided for @runtimeReasonEndpointUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The local runtime endpoint did not respond.'**
+  String get runtimeReasonEndpointUnavailable;
+
+  /// No description provided for @runtimeReasonEndpointReachable.
+  ///
+  /// In en, this message translates to:
+  /// **'The local runtime endpoint responded.'**
+  String get runtimeReasonEndpointReachable;
+
+  /// No description provided for @runtimeReasonEndpointUnsafe.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime endpoint was rejected because it was not safely local.'**
+  String get runtimeReasonEndpointUnsafe;
+
+  /// No description provided for @runtimeReasonVersionCompatible.
+  ///
+  /// In en, this message translates to:
+  /// **'The reported runtime version is compatible.'**
+  String get runtimeReasonVersionCompatible;
+
+  /// No description provided for @runtimeReasonVersionIncompatible.
+  ///
+  /// In en, this message translates to:
+  /// **'The reported runtime version is incompatible.'**
+  String get runtimeReasonVersionIncompatible;
+
+  /// No description provided for @runtimeReasonVersionUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime version could not be verified.'**
+  String get runtimeReasonVersionUnverified;
+
+  /// No description provided for @runtimeReasonEvidenceIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Some runtime health evidence is incomplete.'**
+  String get runtimeReasonEvidenceIncomplete;
+
+  /// No description provided for @runtimeReasonOwnershipRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz ownership is required for this operation.'**
+  String get runtimeReasonOwnershipRequired;
+
+  /// No description provided for @runtimeReasonConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Explicit permission is required for this capability.'**
+  String get runtimeReasonConsentRequired;
+
+  /// No description provided for @runtimeReasonOperationUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This runtime operation is not supported.'**
+  String get runtimeReasonOperationUnsupported;
+
+  /// No description provided for @runtimeReasonProcessExited.
+  ///
+  /// In en, this message translates to:
+  /// **'The managed runtime process exited before it became ready.'**
+  String get runtimeReasonProcessExited;
+
+  /// No description provided for @runtimeReasonUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional runtime evidence is not recognized by this GixGiz version.'**
+  String get runtimeReasonUnknown;
+
+  /// No description provided for @runtimeWarningExternalInstallation.
+  ///
+  /// In en, this message translates to:
+  /// **'This runtime is installed and managed outside GixGiz.'**
+  String get runtimeWarningExternalInstallation;
+
+  /// No description provided for @runtimeWarningEndpointExposure.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime endpoint may be exposed beyond this device.'**
+  String get runtimeWarningEndpointExposure;
+
+  /// No description provided for @runtimeWarningVersionUntested.
+  ///
+  /// In en, this message translates to:
+  /// **'This runtime version has not been verified with this GixGiz release.'**
+  String get runtimeWarningVersionUntested;
+
+  /// No description provided for @runtimeWarningPartialEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Only partial runtime evidence is available.'**
+  String get runtimeWarningPartialEvidence;
+
+  /// No description provided for @runtimeWarningModelInventoryTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed model list was limited for safe display.'**
+  String get runtimeWarningModelInventoryTruncated;
+
+  /// No description provided for @runtimeWarningUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'An unrecognized runtime warning was reported.'**
+  String get runtimeWarningUnknown;
+
+  /// No description provided for @runtimeRecommendedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended action: {action}'**
+  String runtimeRecommendedAction(String action);
+
+  /// No description provided for @runtimeRecoveryRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try the operation again.'**
+  String get runtimeRecoveryRetry;
+
+  /// No description provided for @runtimeRecoveryRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart GixGiz, then check the runtime again.'**
+  String get runtimeRecoveryRestart;
+
+  /// No description provided for @runtimeRecoveryCheckPrerequisites.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the runtime prerequisites, then try again.'**
+  String get runtimeRecoveryCheckPrerequisites;
+
+  /// No description provided for @runtimeRecoveryContactSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support with the diagnostic code.'**
+  String get runtimeRecoveryContactSupport;
+
+  /// No description provided for @runtimeRecoveryNoAction.
+  ///
+  /// In en, this message translates to:
+  /// **'No action is required.'**
+  String get runtimeRecoveryNoAction;
+
+  /// No description provided for @runtimeRecoveryUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Review diagnostics before trying again.'**
+  String get runtimeRecoveryUnknown;
+
+  /// No description provided for @runtimeProgressSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime operation progress'**
+  String get runtimeProgressSemanticLabel;
+
+  /// No description provided for @runtimeStatusSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime status: {status}. {message} Ownership: {ownership}. Permission: {consent}.'**
+  String runtimeStatusSemanticLabel(
+    String status,
+    String message,
+    String ownership,
+    String consent,
+  );
+
+  /// No description provided for @runtimeDetailsSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime details: {provider}, version {version}, endpoint {endpoint}, ownership {ownership}, reuse permission {reuseConsent}, management permission {managementConsent}.'**
+  String runtimeDetailsSemanticLabel(
+    String provider,
+    String version,
+    String endpoint,
+    String ownership,
+    String reuseConsent,
+    String managementConsent,
+  );
 }
 
 class _AppLocalizationsDelegate

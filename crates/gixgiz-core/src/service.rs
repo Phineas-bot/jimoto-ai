@@ -5,7 +5,10 @@ use gixgiz_contracts::{
     ServiceHealthStatus, ServiceRequirement,
 };
 
-use crate::{CoreError, OperationContext, persistence::PersistenceHealthSource};
+use gixgiz_persistence::Persistence;
+use gixgiz_runtime::RuntimeProvider;
+
+use crate::{CoreError, OperationContext, RuntimeService, persistence::PersistenceHealthSource};
 
 /// Explicit in-process lifecycle of the Task 03 platform core.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,6 +43,13 @@ pub trait ServiceHealthSource: Send + Sync {
 pub struct PlatformCore {
     lifecycle: CoreLifecycle,
     health_sources: Vec<Box<dyn ServiceHealthSource>>,
+    persistence: PersistenceAccess,
+}
+
+enum PersistenceAccess {
+    NotConfigured,
+    Available(Persistence),
+    Unavailable,
 }
 
 impl PlatformCore {
@@ -49,6 +59,7 @@ impl PlatformCore {
         Self {
             lifecycle: CoreLifecycle::Created,
             health_sources,
+            persistence: PersistenceAccess::NotConfigured,
         }
     }
 
@@ -58,7 +69,14 @@ impl PlatformCore {
     /// must call it from a blocking worker.
     #[must_use]
     pub fn with_default_persistence() -> Self {
-        Self::new(vec![Box::new(PersistenceHealthSource::open_default())])
+        let (source, persistence) = PersistenceHealthSource::open_default();
+        Self {
+            lifecycle: CoreLifecycle::Created,
+            health_sources: vec![Box::new(source)],
+            persistence: persistence
+                .map(PersistenceAccess::Available)
+                .unwrap_or(PersistenceAccess::Unavailable),
+        }
     }
 
     /// Creates a core with persistence beneath an explicit controlled root.
@@ -67,7 +85,26 @@ impl PlatformCore {
     /// default application-data location.
     #[must_use]
     pub fn with_persistence_root(root: impl AsRef<Path>) -> Self {
-        Self::new(vec![Box::new(PersistenceHealthSource::open_override(root))])
+        let (source, persistence) = PersistenceHealthSource::open_override(root);
+        Self {
+            lifecycle: CoreLifecycle::Created,
+            health_sources: vec![Box::new(source)],
+            persistence: persistence
+                .map(PersistenceAccess::Available)
+                .unwrap_or(PersistenceAccess::Unavailable),
+        }
+    }
+
+    /// Composes provider-neutral runtime policy with the core's persistence owner.
+    #[must_use]
+    pub fn runtime_service(&self, provider: std::sync::Arc<dyn RuntimeProvider>) -> RuntimeService {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => {
+                RuntimeService::with_persistence(provider, persistence)
+            }
+            PersistenceAccess::NotConfigured => RuntimeService::in_memory(provider),
+            PersistenceAccess::Unavailable => RuntimeService::policy_unavailable(provider),
+        }
     }
 
     /// Returns the current explicit lifecycle state.

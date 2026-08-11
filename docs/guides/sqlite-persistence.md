@@ -84,15 +84,20 @@ runner validates the applied version/name ledger. A database newer than
 `CURRENT_SCHEMA_VERSION` returns a safe incompatible-version failure. Automatic
 downgrade is never attempted.
 
-The initial schema contains only:
+The current schema contains only:
 
 - migration and application metadata;
 - bounded non-secret settings;
 - minimal provider-neutral durable-job metadata;
-- append-only categorical audit events.
+- append-only categorical audit events; and
+- provider-neutral runtime ownership plus separate reuse and management consent.
 
-It intentionally contains no runtime, model, download, hardware, conversation,
-chat, installer, or Pack tables.
+Schema version 2 adds one `runtime_policy` table. It stores only a bounded
+provider ID, ownership, reuse consent, management consent, and update time.
+Runtime detection is read-only and never creates or changes this policy record.
+Malformed or unknown persisted policy values fail closed. The schema contains
+no executable path, endpoint, raw provider response, model inventory, download,
+hardware, conversation, chat, installer, or Pack data.
 
 ## Backup and recovery
 
@@ -135,7 +140,8 @@ cargo run -p gixgiz-contracts --example generate_bindings -- --check
 git diff --check
 ```
 
-Migration tests cover a fresh version-zero database, the complete currently
-supported upgrade path, ledger ordering, failed transaction rollback,
-newer-schema refusal, and backup-before-irreversible behavior. Add a fixture and
-upgrade test whenever a second released schema version is introduced.
+Migration tests cover a fresh version-zero database, the version 1 to 2 upgrade,
+the complete currently supported upgrade path, ledger ordering, existing-data
+preservation, failed transaction rollback, newer-schema refusal, and
+backup-before-irreversible behavior. Add a fixture and upgrade test for every
+future released schema version.

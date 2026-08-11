@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{DataRoot, PersistenceError};
 
 /// Latest repository-owned schema version supported by this binary.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy)]
 struct Migration {
@@ -16,12 +16,20 @@ struct Migration {
     irreversible: bool,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../migrations/0001_initial.sql"),
-    irreversible: false,
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../migrations/0001_initial.sql"),
+        irreversible: false,
+    },
+    Migration {
+        version: 2,
+        name: "runtime_policy",
+        sql: include_str!("../migrations/0002_runtime_policy.sql"),
+        irreversible: false,
+    },
+];
 
 pub(crate) fn run(connection: &mut Connection, root: &DataRoot) -> Result<(), PersistenceError> {
     run_with(connection, root, MIGRATIONS)
@@ -223,7 +231,7 @@ mod tests {
         let root =
             DataRoot::from_override(temporary.path().join("root")).expect("test root initializes");
         let mut connection = Connection::open(root.database_path()).expect("database opens");
-        run(&mut connection, &root).expect("initial migration runs");
+        run_with(&mut connection, &root, &[MIGRATIONS[0]]).expect("initial migration runs");
         (temporary, root, connection)
     }
 

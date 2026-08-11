@@ -140,6 +140,237 @@ void main() {
     );
   });
 
+  test('runtime status consent lifecycle and inventory remain typed', () async {
+    final session = _FakeSession(readiness: ReadinessStatus.ready);
+    final client = SidecarCoreClient(
+      connector: _FakeConnector.session(session),
+    );
+
+    final initial = await client.checkRuntimeStatus();
+    final approved = await client.decideRuntimeReuse(
+      RuntimeConsentDecision.approveReuse,
+    );
+    final operation = await client.startRuntimeOperation(
+      RuntimeOperationKind.start,
+    );
+    final cancelled = await client.cancelRuntimeOperation(operation);
+    final events = await client.observeRuntimeOperation(operation).toList();
+    final inventory = await client.listRuntimeModels();
+
+    expect(initial.state, RuntimeState.installedStopped);
+    expect(approved.reuseConsent, RuntimeConsentState.reuseApproved);
+    expect(session.lastConsentDecision, RuntimeConsentDecision.approveReuse);
+    expect(cancelled, isTrue);
+    expect(events.map((event) => event.sequence), orderedEquals([1, 2]));
+    expect(events.last.terminalState, RuntimeOperationTerminalState.completed);
+    expect(inventory.models.single.displayName, 'Fixture model');
+    expect(session.lastRuntimeRequestProviderId, session.runtimeProviderId);
+    expect(
+      client.supportsTransportCapability(TransportCapability.runtimeStatus),
+      isTrue,
+    );
+    expect(
+      session.lastHello?.requestedCapabilities,
+      containsAll([
+        TransportCapability.runtimeStatus,
+        TransportCapability.runtimeConsent,
+        TransportCapability.runtimeLifecycle,
+        TransportCapability.runtimeModelInventory,
+      ]),
+    );
+  });
+
+  test(
+    'runtime calls fail locally when capability was not negotiated',
+    () async {
+      final session = _FakeSession(
+        readiness: ReadinessStatus.ready,
+        supportedCapabilities: const [TransportCapability.health],
+      );
+      final client = SidecarCoreClient(
+        connector: _FakeConnector.session(session),
+      );
+
+      await expectLater(
+        client.checkRuntimeStatus(),
+        throwsA(
+          isA<CoreClientFailure>()
+              .having(
+                (failure) => failure.category,
+                'category',
+                ErrorCategory.notSupported,
+              )
+              .having(
+                (failure) => failure.code,
+                'code',
+                'CORE_CAPABILITY_UNSUPPORTED',
+              ),
+        ),
+      );
+
+      expect(session.runtimeStatusCount, 0);
+      expect(
+        client.supportsTransportCapability(TransportCapability.runtimeStatus),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'runtime failures preserve safe category and recovery guidance',
+    () async {
+      final session = _FakeSession(
+        readiness: ReadinessStatus.ready,
+        runtimeStatusFailure: const SidecarFailure(
+          SidecarFailureKind.coreFailure,
+          'runtime.endpoint_unavailable',
+          safeError: SafeErrorPayload(
+            category: ErrorCategory.unavailable,
+            code: 'runtime.endpoint_unavailable',
+            correlationId: '00000000-0000-4000-8000-000000000010',
+            message: 'The runtime endpoint is unavailable.',
+            recovery: RecoveryGuidance(
+              action: RecoveryAction.restart,
+              message: 'Restart the runtime and retry.',
+            ),
+            requestId: '00000000-0000-4000-8000-000000000011',
+          ),
+        ),
+      );
+      final client = SidecarCoreClient(
+        connector: _FakeConnector.session(session),
+      );
+
+      await expectLater(
+        client.checkRuntimeStatus(),
+        throwsA(
+          isA<CoreClientFailure>()
+              .having(
+                (failure) => failure.code,
+                'code',
+                'runtime.endpoint_unavailable',
+              )
+              .having(
+                (failure) => failure.category,
+                'category',
+                ErrorCategory.unavailable,
+              )
+              .having(
+                (failure) => failure.recoveryAction,
+                'recoveryAction',
+                RecoveryAction.restart,
+              ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'local runtime failures map to stable categories and recovery',
+    () async {
+      final cases = <(SidecarFailure, ErrorCategory, RecoveryAction)>[
+        (
+          const SidecarFailure(
+            SidecarFailureKind.connectionLost,
+            'RUNTIME_OPERATION_STREAM_TIMEOUT',
+          ),
+          ErrorCategory.timedOut,
+          RecoveryAction.retry,
+        ),
+        (
+          const SidecarFailure(
+            SidecarFailureKind.connectionLost,
+            'RUNTIME_OPERATION_CONNECTION_LOST',
+          ),
+          ErrorCategory.unavailable,
+          RecoveryAction.retry,
+        ),
+        (
+          const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'RUNTIME_OPERATION_EVENT_INVALID',
+          ),
+          ErrorCategory.integrityFailure,
+          RecoveryAction.contactSupport,
+        ),
+      ];
+
+      for (final (failure, category, recoveryAction) in cases) {
+        final client = SidecarCoreClient(
+          connector: _FakeConnector.session(
+            _FakeSession(
+              readiness: ReadinessStatus.ready,
+              runtimeStatusFailure: failure,
+            ),
+          ),
+        );
+
+        await expectLater(
+          client.checkRuntimeStatus(),
+          throwsA(
+            isA<CoreClientFailure>()
+                .having((mapped) => mapped.code, 'code', failure.diagnosticCode)
+                .having((mapped) => mapped.category, 'category', category)
+                .having(
+                  (mapped) => mapped.recoveryAction,
+                  'recoveryAction',
+                  recoveryAction,
+                ),
+          ),
+        );
+      }
+    },
+  );
+
+  test('runtime provider identity mismatch fails closed', () async {
+    final session = _FakeSession(
+      readiness: ReadinessStatus.ready,
+      reportedRuntimeProviderId: 'unexpected.runtime',
+    );
+    final client = SidecarCoreClient(
+      connector: _FakeConnector.session(session),
+    );
+
+    await expectLater(
+      client.checkRuntimeStatus(),
+      throwsA(
+        isA<CoreClientFailure>().having(
+          (failure) => failure.code,
+          'code',
+          'RUNTIME_PROVIDER_ID_MISMATCH',
+        ),
+      ),
+    );
+  });
+
+  test('runtime capability without a composed provider fails closed', () async {
+    final session = _FakeSession(
+      readiness: ReadinessStatus.ready,
+      runtimeProviderId: null,
+    );
+    final client = SidecarCoreClient(
+      connector: _FakeConnector.session(session),
+    );
+
+    await expectLater(
+      client.checkRuntimeStatus(),
+      throwsA(
+        isA<CoreClientFailure>()
+            .having(
+              (failure) => failure.code,
+              'code',
+              'RUNTIME_PROVIDER_ID_MISSING',
+            )
+            .having(
+              (failure) => failure.category,
+              'category',
+              ErrorCategory.integrityFailure,
+            ),
+      ),
+    );
+    expect(session.runtimeStatusCount, 0);
+  });
+
   test('normal shutdown is delegated once to the sidecar session', () async {
     final session = _FakeSession(readiness: ReadinessStatus.ready);
     final client = SidecarCoreClient(
@@ -186,16 +417,37 @@ class _FakeConnector implements CoreSidecarConnector {
 }
 
 class _FakeSession implements CoreSidecarSession {
-  _FakeSession({required this.readiness, this.healthFailure});
+  _FakeSession({
+    required this.readiness,
+    this.healthFailure,
+    this.runtimeProviderId = 'gixgiz.runtime.test.v1',
+    this.reportedRuntimeProviderId,
+    this.runtimeStatusFailure,
+    this.supportedCapabilities = const [
+      TransportCapability.health,
+      TransportCapability.runtimeStatus,
+      TransportCapability.runtimeConsent,
+      TransportCapability.runtimeLifecycle,
+      TransportCapability.runtimeModelInventory,
+      TransportCapability.cancellation,
+    ],
+  });
 
   static const _instanceId = '00000000-0000-4000-8000-000000000001';
   static const _operationId = '00000000-0000-4000-8000-000000000002';
 
   final ReadinessStatus readiness;
+  final RuntimeProviderId? runtimeProviderId;
+  final RuntimeProviderId? reportedRuntimeProviderId;
+  final SidecarFailure? runtimeStatusFailure;
+  final List<TransportCapability> supportedCapabilities;
   SidecarFailure? healthFailure;
   int handshakeCount = 0;
   int shutdownCount = 0;
+  int runtimeStatusCount = 0;
   ClientHello? lastHello;
+  RuntimeConsentDecision? lastConsentDecision;
+  RuntimeProviderId? lastRuntimeRequestProviderId;
 
   @override
   bool get hasExited => false;
@@ -207,7 +459,8 @@ class _FakeSession implements CoreSidecarSession {
     return CoreHello(
       application: _application,
       selectedProtocol: 1,
-      supportedCapabilities: const [TransportCapability.health],
+      supportedCapabilities: supportedCapabilities,
+      runtimeProviderId: runtimeProviderId,
       readiness: _readiness(readiness),
       instanceId: _instanceId,
       correlationId: hello.correlationId,
@@ -352,9 +605,133 @@ class _FakeSession implements CoreSidecarSession {
   }
 
   @override
+  Future<RuntimeStatusResponse> runtimeStatus(
+    RuntimeStatusRequest request,
+  ) async {
+    runtimeStatusCount += 1;
+    lastRuntimeRequestProviderId = request.providerId;
+    final failure = runtimeStatusFailure;
+    if (failure != null) {
+      throw failure;
+    }
+    return RuntimeStatusResponse(
+      report: _runtimeReport(_responseRuntimeProviderId),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<RuntimeConsentResponse> runtimeConsent(
+    RuntimeConsentRequest request,
+  ) async {
+    lastRuntimeRequestProviderId = request.providerId;
+    lastConsentDecision = request.decision;
+    return RuntimeConsentResponse(
+      report: _runtimeReport(
+        _responseRuntimeProviderId,
+        reuseConsent: request.decision == RuntimeConsentDecision.approveReuse
+            ? RuntimeConsentState.reuseApproved
+            : RuntimeConsentState.denied,
+      ),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<RuntimeModelInventoryResponse> runtimeModels(
+    RuntimeModelInventoryRequest request,
+  ) async {
+    lastRuntimeRequestProviderId = request.providerId;
+    return RuntimeModelInventoryResponse(
+      inventory: RuntimeModelInventory.fromJson({
+        'schema_version': 1,
+        'provider_id': _responseRuntimeProviderId,
+        'models': [
+          {
+            'provider_model_id': 'fixture:latest',
+            'display_name': 'Fixture model',
+            'size_bytes': 1024,
+            'mapping': {'status': 'external', 'catalogue_id': null},
+          },
+        ],
+        'truncated': false,
+        'collected_at_unix_ms': 1,
+      }),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<RuntimeOperationStartResponse> startRuntimeOperation(
+    RuntimeOperationStartRequest request,
+  ) async {
+    lastRuntimeRequestProviderId = request.providerId;
+    return RuntimeOperationStartResponse(
+      operationId: _operationId,
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Stream<RuntimeOperationEvent> runtimeOperationEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  ) async* {
+    yield RuntimeOperationEvent(
+      schemaVersion: 1,
+      operationId: operationId,
+      correlationId: correlationId,
+      sequence: 1,
+      operationKind: RuntimeOperationKind.start,
+      kind: RuntimeOperationEventKind.started,
+      timestampUnixMs: 1,
+      message: 'started',
+      report: null,
+      error: null,
+      terminalState: null,
+    );
+    yield RuntimeOperationEvent(
+      schemaVersion: 1,
+      operationId: operationId,
+      correlationId: correlationId,
+      sequence: 2,
+      operationKind: RuntimeOperationKind.start,
+      kind: RuntimeOperationEventKind.completed,
+      timestampUnixMs: 2,
+      message: 'completed',
+      report: _runtimeReport(_responseRuntimeProviderId),
+      error: null,
+      terminalState: RuntimeOperationTerminalState.completed,
+    );
+  }
+
+  @override
+  Future<CancelOperationResponse> cancelRuntimeOperation(
+    OperationId operationId,
+    CancelOperationRequest request,
+  ) async {
+    return CancelOperationResponse(
+      operationId: operationId,
+      accepted: true,
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
   Future<void> shutdown(ShutdownRequest request) async {
     shutdownCount += 1;
   }
+
+  RuntimeProviderId get _responseRuntimeProviderId =>
+      reportedRuntimeProviderId ??
+      runtimeProviderId ??
+      'gixgiz.runtime.missing-test-provider.v1';
 
   static const _application = ApplicationInfo(
     name: 'GixGiz',
@@ -371,6 +748,26 @@ class _FakeSession implements CoreSidecarSession {
       services: const [],
     );
   }
+}
+
+RuntimeHealthReport _runtimeReport(
+  RuntimeProviderId providerId, {
+  RuntimeConsentState reuseConsent = RuntimeConsentState.notRequested,
+}) {
+  return RuntimeHealthReport.fromJson({
+    'schema_version': 1,
+    'provider_id': providerId,
+    'display_name': 'Ollama',
+    'state': 'installed_stopped',
+    'ownership': 'external',
+    'reuse_consent': reuseConsent.wireValue,
+    'management_consent': 'not_requested',
+    'endpoint_safety': 'loopback_verified',
+    'version': null,
+    'capabilities': <Object?>[],
+    'reasons': <Object?>[],
+    'warnings': <Object?>[],
+  });
 }
 
 MachineProfile _machineProfile() {

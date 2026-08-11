@@ -1,0 +1,19 @@
+[package]
+name = "gixgiz-runtime"
+description = "Provider-neutral runtime abstraction and policy contracts for GixGiz."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+gixgiz-contracts = { path = "../gixgiz-contracts" }
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

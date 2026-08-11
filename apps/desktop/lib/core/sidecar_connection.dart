@@ -22,10 +22,11 @@ enum SidecarFailureKind {
 }
 
 class SidecarFailure implements Exception {
-  const SidecarFailure(this.kind, this.diagnosticCode);
+  const SidecarFailure(this.kind, this.diagnosticCode, {this.safeError});
 
   final SidecarFailureKind kind;
   final String diagnosticCode;
+  final SafeErrorPayload? safeError;
 
   @override
   String toString() => 'SidecarFailure($kind, $diagnosticCode)';
@@ -74,22 +75,50 @@ abstract interface class CoreSidecarSession {
 
   Future<RecommendationResponse> recommend(RecommendationRequest request);
 
+  Future<RuntimeStatusResponse> runtimeStatus(RuntimeStatusRequest request);
+
+  Future<RuntimeConsentResponse> runtimeConsent(RuntimeConsentRequest request);
+
+  Future<RuntimeModelInventoryResponse> runtimeModels(
+    RuntimeModelInventoryRequest request,
+  );
+
+  Future<RuntimeOperationStartResponse> startRuntimeOperation(
+    RuntimeOperationStartRequest request,
+  );
+
+  Stream<RuntimeOperationEvent> runtimeOperationEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  );
+
+  Future<CancelOperationResponse> cancelRuntimeOperation(
+    OperationId operationId,
+    CancelOperationRequest request,
+  );
+
   Future<void> shutdown(ShutdownRequest request);
 }
 
 typedef CorePathResolver = String Function();
+
+// The host allows 30 seconds for lifecycle work and 3 seconds for terminal status.
+const _defaultRuntimeEventInactivityTimeout = Duration(seconds: 40);
 
 class PipeSidecarConnector implements CoreSidecarConnector {
   PipeSidecarConnector({
     CorePathResolver? corePathResolver,
     this.startupTimeout = const Duration(seconds: 5),
     this.requestTimeout = const Duration(seconds: 5),
+    this.runtimeEventInactivityTimeout = _defaultRuntimeEventInactivityTimeout,
     this.shutdownTimeout = const Duration(seconds: 3),
   }) : _corePathResolver = corePathResolver ?? bundledCorePath;
 
   final CorePathResolver _corePathResolver;
   final Duration startupTimeout;
   final Duration requestTimeout;
+  final Duration runtimeEventInactivityTimeout;
   final Duration shutdownTimeout;
 
   @override
@@ -154,6 +183,7 @@ class PipeSidecarConnector implements CoreSidecarConnector {
         ready.instanceId,
         () => exited,
         requestTimeout: requestTimeout,
+        runtimeEventInactivityTimeout: runtimeEventInactivityTimeout,
         shutdownTimeout: shutdownTimeout,
       );
     } on TimeoutException {
@@ -185,6 +215,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     this._instanceId,
     this._hasExited, {
     required this.requestTimeout,
+    this.runtimeEventInactivityTimeout = _defaultRuntimeEventInactivityTimeout,
     required this.shutdownTimeout,
   }) : _client = HttpClient() {
     if (_endpoint.host != '127.0.0.1') {
@@ -198,6 +229,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   }
 
   static const int _maxResponseBytes = 64 * 1024;
+  static const int _maxEventStreamBytes = 512 * 1024;
   static const int _maxEvents = 64;
 
   final Process _process;
@@ -207,6 +239,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   final bool Function() _hasExited;
   final HttpClient _client;
   final Duration requestTimeout;
+  final Duration runtimeEventInactivityTimeout;
   final Duration shutdownTimeout;
   var _closed = false;
 
@@ -308,7 +341,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     }
 
     if (response.statusCode != HttpStatus.ok) {
-      throw await _failureFromResponse(response);
+      throw await _failureFromResponse(response, correlationId, requestId);
     }
 
     var expectedSequence = 1;
@@ -346,6 +379,11 @@ class IoCoreSidecarSession implements CoreSidecarSession {
           return;
         }
       }
+    } on FormatException {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'CORE_EVENT_INVALID',
+      );
     } on SocketException {
       throw const SidecarFailure(
         SidecarFailureKind.connectionLost,
@@ -443,7 +481,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     }
 
     if (response.statusCode != HttpStatus.ok) {
-      throw await _failureFromResponse(response);
+      throw await _failureFromResponse(response, correlationId, requestId);
     }
 
     var expectedSequence = 1;
@@ -481,6 +519,11 @@ class IoCoreSidecarSession implements CoreSidecarSession {
           return;
         }
       }
+    } on FormatException {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'HARDWARE_SCAN_EVENT_INVALID',
+      );
     } on SocketException {
       throw const SidecarFailure(
         SidecarFailureKind.connectionLost,
@@ -529,6 +572,234 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     final response = RecommendationResponse.fromJson(
       await _post(
         '/internal/v1/recommendations',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RuntimeStatusResponse> runtimeStatus(
+    RuntimeStatusRequest request,
+  ) async {
+    final response = RuntimeStatusResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/status',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RuntimeConsentResponse> runtimeConsent(
+    RuntimeConsentRequest request,
+  ) async {
+    final response = RuntimeConsentResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/consent',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RuntimeModelInventoryResponse> runtimeModels(
+    RuntimeModelInventoryRequest request,
+  ) async {
+    final response = RuntimeModelInventoryResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/models',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RuntimeOperationStartResponse> startRuntimeOperation(
+    RuntimeOperationStartRequest request,
+  ) async {
+    final response = RuntimeOperationStartResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/operations',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Stream<RuntimeOperationEvent> runtimeOperationEvents(
+    OperationId operationId,
+    CorrelationId correlationId,
+    RequestId requestId,
+  ) async* {
+    HttpClientResponse response;
+    try {
+      final request = await _client
+          .getUrl(
+            _endpoint.resolve(
+              '/internal/v1/runtime/operations/$operationId/events',
+            ),
+          )
+          .timeout(requestTimeout);
+      _applyHeaders(request.headers, correlationId, requestId);
+      response = await request.close().timeout(requestTimeout);
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_CONNECTION_TIMEOUT',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_CONNECTION_LOST',
+      );
+    }
+
+    if (response.statusCode != HttpStatus.ok) {
+      throw await _failureFromResponse(response, correlationId, requestId);
+    }
+
+    var expectedSequence = 1;
+    var eventCount = 0;
+    var terminal = false;
+    try {
+      var streamedBytes = 0;
+      final bounded = response
+          .timeout(runtimeEventInactivityTimeout)
+          .transform(
+            StreamTransformer<List<int>, List<int>>.fromHandlers(
+              handleData: (chunk, sink) {
+                streamedBytes += chunk.length;
+                if (streamedBytes > _maxEventStreamBytes) {
+                  sink.addError(
+                    const SidecarFailure(
+                      SidecarFailureKind.invalidResponse,
+                      'RUNTIME_OPERATION_STREAM_LIMIT',
+                    ),
+                  );
+                  return;
+                }
+                sink.add(chunk);
+              },
+            ),
+          );
+      await for (final line
+          in bounded.transform(utf8.decoder).transform(const LineSplitter())) {
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+        final data = line.substring(5).trimLeft();
+        if (data.length > _maxResponseBytes || eventCount >= _maxEvents) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'RUNTIME_OPERATION_STREAM_LIMIT',
+          );
+        }
+        final event = RuntimeOperationEvent.fromJson(
+          _decodeObject(data, 'runtime operation event'),
+        );
+        if (event.operationId != operationId ||
+            event.correlationId != correlationId ||
+            event.sequence != expectedSequence) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'RUNTIME_OPERATION_SEQUENCE_INVALID',
+          );
+        }
+        expectedSequence += 1;
+        eventCount += 1;
+        terminal = event.terminalState != null;
+        yield event;
+        if (terminal) {
+          return;
+        }
+      }
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_STREAM_TIMEOUT',
+      );
+    } on FormatException {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'RUNTIME_OPERATION_EVENT_INVALID',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_CONNECTION_LOST',
+      );
+    }
+    if (!terminal) {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'RUNTIME_OPERATION_STREAM_ENDED',
+      );
+    }
+  }
+
+  @override
+  Future<CancelOperationResponse> cancelRuntimeOperation(
+    OperationId operationId,
+    CancelOperationRequest request,
+  ) async {
+    final response = CancelOperationResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/operations/$operationId/cancel',
         request.toJson(),
         request.correlationId,
         request.requestId,
@@ -611,7 +882,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
       final response = await request.close().timeout(requestTimeout);
       if (response.statusCode < HttpStatus.ok ||
           response.statusCode >= HttpStatus.multipleChoices) {
-        throw await _failureFromResponse(response);
+        throw await _failureFromResponse(response, correlationId, requestId);
       }
       return _decodeObject(
         utf8.decode(await _readBounded(response)),
@@ -654,40 +925,66 @@ class IoCoreSidecarSession implements CoreSidecarSession {
 
   Future<SidecarFailure> _failureFromResponse(
     HttpClientResponse response,
+    CorrelationId expectedCorrelationId,
+    RequestId expectedRequestId,
   ) async {
+    late final SafeErrorPayload error;
     try {
-      final error = SafeErrorPayload.fromJson(
+      error = SafeErrorPayload.fromJson(
         _decodeObject(utf8.decode(await _readBounded(response)), 'core error'),
       );
-      final kind = switch (error.code) {
-        'transport.protocol_incompatible' =>
-          SidecarFailureKind.protocolMismatch,
-        'transport.authentication_required' =>
-          SidecarFailureKind.authenticationFailed,
-        'core.operation_cancelled' => SidecarFailureKind.cancelled,
-        _ when error.category == ErrorCategory.cancelled =>
-          SidecarFailureKind.cancelled,
-        _ => SidecarFailureKind.coreFailure,
-      };
-      return SidecarFailure(kind, error.code);
+    } on TimeoutException {
+      rethrow;
     } on Object {
       return const SidecarFailure(
         SidecarFailureKind.invalidResponse,
         'CORE_ERROR_RESPONSE_INVALID',
       );
     }
+    _verifyIds(
+      error.correlationId,
+      error.requestId,
+      expectedCorrelationId,
+      expectedRequestId,
+    );
+    final kind = switch (error.code) {
+      'transport.protocol_incompatible' => SidecarFailureKind.protocolMismatch,
+      'transport.authentication_required' =>
+        SidecarFailureKind.authenticationFailed,
+      'core.operation_cancelled' => SidecarFailureKind.cancelled,
+      _ when error.category == ErrorCategory.cancelled =>
+        SidecarFailureKind.cancelled,
+      _ => SidecarFailureKind.coreFailure,
+    };
+    return SidecarFailure(kind, error.code, safeError: error);
   }
 
   Future<List<int>> _readBounded(HttpClientResponse response) async {
     final bytes = <int>[];
-    await for (final chunk in response) {
-      if (bytes.length + chunk.length > _maxResponseBytes) {
-        throw const SidecarFailure(
-          SidecarFailureKind.invalidResponse,
-          'CORE_RESPONSE_TOO_LARGE',
-        );
+    final chunks = StreamIterator<List<int>>(response);
+    final elapsed = Stopwatch()..start();
+    try {
+      while (true) {
+        final remaining = requestTimeout - elapsed.elapsed;
+        if (remaining <= Duration.zero ||
+            !await chunks.moveNext().timeout(remaining)) {
+          if (remaining <= Duration.zero) {
+            throw TimeoutException('core response body deadline elapsed');
+          }
+          break;
+        }
+        final chunk = chunks.current;
+        if (bytes.length + chunk.length > _maxResponseBytes) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'CORE_RESPONSE_TOO_LARGE',
+          );
+        }
+        bytes.addAll(chunk);
       }
-      bytes.addAll(chunk);
+    } finally {
+      elapsed.stop();
+      await chunks.cancel();
     }
     return bytes;
   }

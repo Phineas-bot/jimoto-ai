@@ -271,6 +271,184 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(AppKeys.capabilityWorkload), findsOneWidget);
   });
+
+  testWidgets('renders every authoritative runtime state distinctly', (
+    tester,
+  ) async {
+    final cases = <String, String>{
+      'not_installed': 'Runtime not installed',
+      'installed_stopped': 'Runtime installed but stopped',
+      'starting': 'Runtime starting',
+      'ready': 'Runtime ready',
+      'degraded': 'Runtime needs attention',
+      'incompatible': 'Runtime version incompatible',
+      'updating': 'Runtime updating',
+      'failed': 'Runtime check failed',
+      'future_state': 'Runtime status unknown',
+    };
+
+    for (final entry in cases.entries) {
+      await _pumpState(
+        tester,
+        _readyFoundation,
+        runtimeStatusState: RuntimeStatusLoaded(
+          report: _runtimeReport(state: entry.key),
+        ),
+      );
+      expect(find.text(entry.value), findsOneWidget);
+    }
+  });
+
+  testWidgets('external runtime reuse requires explicit confirmation', (
+    tester,
+  ) async {
+    var approved = false;
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      runtimeStatusState: RuntimeStatusLoaded(
+        report: _runtimeReport(
+          state: 'installed_stopped',
+          capabilities: const [
+            {
+              'kind': 'model_inventory',
+              'availability': 'requires_reuse_consent',
+              'reason': 'Reuse consent is required.',
+            },
+          ],
+        ),
+      ),
+      onApproveRuntimeReuse: () => approved = true,
+    );
+
+    expect(find.text('Installed outside GixGiz'), findsOneWidget);
+    expect(find.text('Reuse permission not granted'), findsWidgets);
+    expect(find.byKey(AppKeys.runtimeStartAction), findsNothing);
+    final consentAction = find.byKey(AppKeys.runtimeConsentAction);
+    await tester.ensureVisible(consentAction);
+    await tester.tap(consentAction);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Allow runtime reuse?'), findsOneWidget);
+    expect(find.textContaining('Ownership stays external'), findsOneWidget);
+    await tester.tap(find.text('Allow reuse').last);
+    await tester.pumpAndSettle();
+
+    expect(approved, isTrue);
+  });
+
+  testWidgets('runtime actions emit only core-authorized intentions', (
+    tester,
+  ) async {
+    RuntimeOperationKind? operation;
+    var modelsRequested = false;
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      runtimeStatusState: RuntimeStatusLoaded(
+        report: _runtimeReport(
+          state: 'ready',
+          ownership: 'gix_giz_managed',
+          reuseConsent: 'reuse_approved',
+          managementConsent: 'management_approved',
+          capabilities: const [
+            {'kind': 'start', 'availability': 'available', 'reason': null},
+            {'kind': 'stop', 'availability': 'available', 'reason': null},
+            {'kind': 'restart', 'availability': 'available', 'reason': null},
+            {
+              'kind': 'model_inventory',
+              'availability': 'available',
+              'reason': null,
+            },
+          ],
+        ),
+      ),
+      onStartRuntimeOperation: (value) => operation = value,
+      onToggleRuntimeModels: () => modelsRequested = true,
+    );
+
+    final restart = find.byKey(AppKeys.runtimeRestartAction);
+    await tester.ensureVisible(restart);
+    await tester.tap(restart);
+    expect(operation, RuntimeOperationKind.restart);
+
+    final models = find.byKey(AppKeys.runtimeModelsAction);
+    await tester.ensureVisible(models);
+    await tester.tap(models);
+    expect(modelsRequested, isTrue);
+  });
+
+  testWidgets('runtime inventory is bounded and marks external models', (
+    tester,
+  ) async {
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      runtimeStatusState: RuntimeStatusLoaded(
+        report: _runtimeReport(state: 'ready'),
+      ),
+      runtimeInventoryState: RuntimeInventoryLoaded(
+        inventory: _runtimeInventory(),
+      ),
+    );
+
+    expect(find.text('Fixture model'), findsOneWidget);
+    expect(find.text('External model'), findsOneWidget);
+    expect(find.textContaining('More installed models exist'), findsOneWidget);
+  });
+
+  testWidgets('runtime failure exposes only a safe diagnostic code', (
+    tester,
+  ) async {
+    await _pumpState(
+      tester,
+      _readyFoundation,
+      runtimeStatusState: RuntimeStatusFailed(
+        diagnosticCode: 'runtime.provider_unavailable',
+        report: _runtimeReport(state: 'degraded'),
+      ),
+    );
+
+    expect(find.textContaining('runtime.provider_unavailable'), findsNothing);
+    final diagnostics = find.byKey(AppKeys.runtimeDiagnostics);
+    await tester.ensureVisible(diagnostics);
+    await tester.tap(diagnostics);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Diagnostic code: runtime.provider_unavailable'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('runtime status remains accessible with expanded text', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await _pumpState(
+        tester,
+        _readyFoundation,
+        runtimeStatusState: RuntimeStatusLoaded(
+          report: _runtimeReport(state: 'ready'),
+        ),
+        textScaler: const TextScaler.linear(2),
+      );
+
+      expect(tester.takeException(), isNull);
+      final data = tester
+          .getSemantics(find.byKey(AppKeys.runtimeStatus))
+          .getSemanticsData();
+      expect(data.label, contains('Runtime status: Runtime ready'));
+      expect(data.label, contains('Installed outside GixGiz'));
+      final details = tester
+          .getSemantics(find.byKey(AppKeys.runtimeDetails))
+          .getSemanticsData();
+      expect(details.label, contains('management permission'));
+      expect(details.label, contains('Reuse permission not granted'));
+    } finally {
+      semantics.dispose();
+    }
+  });
 }
 
 const _readyFoundation = FoundationReady(
@@ -283,8 +461,13 @@ Future<void> _pumpState(
   HardwareScanState hardwareScanState = const HardwareScanIdle(),
   CapabilityRecommendationState recommendationState =
       const CapabilityRecommendationIdle(),
+  RuntimeStatusState runtimeStatusState = const RuntimeStatusIdle(),
+  RuntimeInventoryState runtimeInventoryState = const RuntimeInventoryIdle(),
   ValueChanged<WorkloadTier>? onWorkloadChanged,
   VoidCallback? onGenerateRecommendation,
+  VoidCallback? onApproveRuntimeReuse,
+  ValueChanged<RuntimeOperationKind>? onStartRuntimeOperation,
+  VoidCallback? onToggleRuntimeModels,
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
@@ -298,17 +481,66 @@ Future<void> _pumpState(
             state: state,
             hardwareScanState: hardwareScanState,
             recommendationState: recommendationState,
+            runtimeStatusState: runtimeStatusState,
+            runtimeInventoryState: runtimeInventoryState,
             onRetry: () {},
             onStartHardwareScan: () {},
             onCancelHardwareScan: () {},
             onWorkloadChanged: onWorkloadChanged,
             onGenerateRecommendation: onGenerateRecommendation,
+            onApproveRuntimeReuse: onApproveRuntimeReuse,
+            onStartRuntimeOperation: onStartRuntimeOperation,
+            onToggleRuntimeModels: onToggleRuntimeModels,
           ),
         ),
       ),
     ),
   );
   await tester.pump();
+}
+
+RuntimeHealthReport _runtimeReport({
+  required String state,
+  String ownership = 'external',
+  String reuseConsent = 'not_requested',
+  String managementConsent = 'not_requested',
+  List<Map<String, Object?>> capabilities = const [],
+}) {
+  return RuntimeHealthReport.fromJson({
+    'schema_version': 1,
+    'provider_id': 'gixgiz.runtime.ollama.v1',
+    'display_name': 'Ollama',
+    'state': state,
+    'ownership': ownership,
+    'reuse_consent': reuseConsent,
+    'management_consent': managementConsent,
+    'endpoint_safety': 'loopback_verified',
+    'version': {
+      'reported_version': '0.11.10',
+      'normalized_version': '0.11.10',
+      'compatibility': 'compatible',
+    },
+    'capabilities': capabilities,
+    'reasons': <Object?>[],
+    'warnings': <Object?>[],
+  });
+}
+
+RuntimeModelInventory _runtimeInventory() {
+  return RuntimeModelInventory.fromJson({
+    'schema_version': 1,
+    'provider_id': 'gixgiz.runtime.ollama.v1',
+    'models': [
+      {
+        'provider_model_id': 'fixture:latest',
+        'display_name': 'Fixture model',
+        'size_bytes': 1073741824,
+        'mapping': {'status': 'external', 'catalogue_id': null},
+      },
+    ],
+    'truncated': true,
+    'collected_at_unix_ms': 1,
+  });
 }
 
 CapabilityReport _plansReport() {
