@@ -32,6 +32,12 @@ pub(crate) enum OllamaAdapterError {
     TimedOut,
     #[error("the provider operation was cancelled")]
     Cancelled,
+    #[error("provider model acquisition did not reach a validated terminal success")]
+    ModelAcquisitionFailed,
+    #[error("provider model storage is unavailable")]
+    StorageUnavailable,
+    #[error("the fixed provider readiness inference failed")]
+    ReadinessFailed,
     #[error("the requested lifecycle operation is unsupported for this installation")]
     LifecycleUnsupported,
     #[error("the requested lifecycle operation conflicts with current owned-process state")]

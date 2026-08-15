@@ -10,16 +10,20 @@ use std::{
 };
 
 use gixgiz_contracts::{
-    CandidateModelId, RUNTIME_REPORT_SCHEMA_VERSION, RuntimeCapabilityAvailability,
+    CandidateModelId, ModelIntegrityState, ModelProviderArtifact, ProviderRegistrationResult,
+    ProviderRegistrationState, RUNTIME_REPORT_SCHEMA_VERSION, RuntimeCapabilityAvailability,
     RuntimeCapabilityDescriptor, RuntimeCapabilityKind, RuntimeDisplayName, RuntimeEndpointSafety,
     RuntimeModelInventory, RuntimeModelMappingStatus, RuntimeModelSummary, RuntimeOperationKind,
     RuntimeProviderId, RuntimeProviderModelId, RuntimeProviderModelMapping, RuntimeReason,
     RuntimeReasonCode, RuntimeState, RuntimeVersionCompatibility, RuntimeVersionInfo,
-    RuntimeWarning, RuntimeWarningCode,
+    RuntimeWarning, RuntimeWarningCode, SetupDestinationCategory,
 };
 use gixgiz_runtime::{
-    RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle, RuntimeModelInventoryProvider,
-    RuntimeObservation, RuntimeOperationContext, RuntimeProvider,
+    ModelProgressSender, RuntimeCancellationSemantics, RuntimeDetector, RuntimeError,
+    RuntimeFuture, RuntimeLifecycle, RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult,
+    RuntimeModelAcquisitionStatus, RuntimeModelInspection, RuntimeModelInventoryProvider,
+    RuntimeModelSetupProvider, RuntimeObservation, RuntimeOperationContext, RuntimeProvider,
+    RuntimeReadinessInferenceResult, RuntimeStorageAvailability, RuntimeStoragePreflight,
 };
 use tracing::Instrument;
 
@@ -29,9 +33,11 @@ use crate::{
     endpoint::ValidatedEndpoint,
     error::OllamaAdapterError,
     http::{HttpLimits, HyperLoopbackHttpClient, OllamaHttpClient, OllamaRoute},
-    models::{MappedModel, map_model},
+    model_http::{HyperLoopbackModelHttpClient, ModelHttpLimits, OllamaModelHttpClient},
+    models::{MappedModel, map_model, provider_tag_for_candidate},
     process::{OwnedProcessControl, OwnedProcessStatus, ProcessLimits, TokioOwnedProcessControl},
     protocol::{TagModel, decode_tags, decode_version},
+    storage::{FsModelStorageProbe, ModelStorageProbe},
     version::{VersionPolicy, VersionSupport},
 };
 
@@ -48,6 +54,16 @@ const PROCESS_TIMEOUT: Duration = Duration::from_secs(3);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_COMMIT_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(7);
 const START_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const MODEL_STORAGE_DISPLAY: &str = "Provider-managed model storage";
+const MODEL_SOURCE_SUMMARY: &str = "Allowlisted provider model mapping.";
+const MODEL_PULL_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const MODEL_PULL_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const MODEL_PULL_BODY_LIMIT: usize = 8 * 1024 * 1024;
+const MODEL_PULL_LINE_LIMIT: usize = 16 * 1024;
+const MODEL_PULL_EVENT_LIMIT: usize = 100_000;
+const READINESS_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const READINESS_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+const READINESS_BODY_LIMIT: usize = 64 * 1024;
 
 /// Concrete v0.1 adapter for a loopback-only local Ollama runtime.
 pub struct OllamaAdapter {
@@ -55,10 +71,13 @@ pub struct OllamaAdapter {
     endpoint: EndpointSelection,
     locator: Arc<dyn ExecutableLocator>,
     http: Arc<dyn OllamaHttpClient>,
+    model_http: Arc<dyn OllamaModelHttpClient>,
+    storage: Arc<dyn ModelStorageProbe>,
     processes: Arc<dyn OwnedProcessControl>,
     clock: Arc<dyn Clock>,
     version_policy: VersionPolicy,
     starting: AtomicBool,
+    acquiring: AtomicBool,
 }
 
 impl OllamaAdapter {
@@ -84,10 +103,13 @@ impl OllamaAdapter {
             endpoint,
             locator: Arc::new(WindowsExecutableLocator::new(explicit_executable)),
             http: Arc::new(HyperLoopbackHttpClient),
+            model_http: Arc::new(HyperLoopbackModelHttpClient),
+            storage: Arc::new(FsModelStorageProbe::default()),
             processes: TokioOwnedProcessControl::shared(),
             clock: Arc::new(SystemClock),
             version_policy: VersionPolicy::v0_1(),
             starting: AtomicBool::new(false),
+            acquiring: AtomicBool::new(false),
         }
     }
 
@@ -105,11 +127,25 @@ impl OllamaAdapter {
             endpoint,
             locator,
             http,
+            model_http: Arc::new(HyperLoopbackModelHttpClient),
+            storage: Arc::new(FsModelStorageProbe::default()),
             processes,
             clock,
             version_policy,
             starting: AtomicBool::new(false),
+            acquiring: AtomicBool::new(false),
         }
+    }
+
+    #[cfg(test)]
+    fn with_model_setup_components(
+        mut self,
+        model_http: Arc<dyn OllamaModelHttpClient>,
+        storage: Arc<dyn ModelStorageProbe>,
+    ) -> Self {
+        self.model_http = model_http;
+        self.storage = storage;
+        self
     }
 
     async fn detect_inner(
@@ -722,6 +758,235 @@ impl OllamaAdapter {
             collected_at_unix_ms: self.clock.unix_ms(),
         })
     }
+
+    fn prepare_model_acquisition_inner(
+        &self,
+        model_id: CandidateModelId,
+        context: &RuntimeOperationContext,
+    ) -> Result<RuntimeModelAcquisitionPlan, RuntimeError> {
+        context.check()?;
+        let provider_tag =
+            provider_tag_for_candidate(&model_id).ok_or(RuntimeError::ModelNotMapped)?;
+        Ok(RuntimeModelAcquisitionPlan {
+            artifact: ModelProviderArtifact {
+                canonical_model_id: model_id,
+                provider_id: self.provider_id.clone(),
+                provider_model_id: RuntimeProviderModelId::new(provider_tag),
+                source_summary: MODEL_SOURCE_SUMMARY.to_owned(),
+            },
+            destination: SetupDestinationCategory::ProviderManaged,
+            destination_display: MODEL_STORAGE_DISPLAY.to_owned(),
+            cancellation: RuntimeCancellationSemantics::ConnectionAbortMayRetainEffects,
+        })
+    }
+
+    async fn preflight_model_storage_inner(
+        &self,
+        plan: RuntimeModelAcquisitionPlan,
+        required_bytes: u64,
+        safety_margin_bytes: u64,
+        context: &RuntimeOperationContext,
+    ) -> Result<RuntimeStoragePreflight, RuntimeError> {
+        self.validate_acquisition_plan(&plan)?;
+        let required_with_margin = required_bytes
+            .checked_add(safety_margin_bytes)
+            .ok_or(RuntimeError::InvalidInput)?;
+        let storage = Arc::clone(&self.storage);
+        let available_result = context
+            .run(async move {
+                tokio::task::spawn_blocking(move || storage.available_bytes())
+                    .await
+                    .map_err(|_| RuntimeError::Internal)?
+                    .map_err(RuntimeError::from)
+            })
+            .await;
+        let (availability, available_bytes) = match available_result {
+            Ok(available) if available >= required_with_margin => {
+                (RuntimeStorageAvailability::Available, Some(available))
+            }
+            Ok(available) => (
+                RuntimeStorageAvailability::InsufficientSpace,
+                Some(available),
+            ),
+            Err(RuntimeError::ModelStorageUnavailable) => {
+                (RuntimeStorageAvailability::Unavailable, None)
+            }
+            Err(error) => return Err(error),
+        };
+        Ok(RuntimeStoragePreflight {
+            destination: plan.destination,
+            destination_display: plan.destination_display,
+            availability,
+            required_bytes,
+            safety_margin_bytes,
+            available_bytes,
+            checked_at_unix_ms: self.clock.unix_ms(),
+        })
+    }
+
+    async fn acquire_model_inner(
+        &self,
+        plan: RuntimeModelAcquisitionPlan,
+        progress: ModelProgressSender,
+        context: &RuntimeOperationContext,
+    ) -> Result<RuntimeModelAcquisitionResult, RuntimeError> {
+        let provider_tag = self.validate_acquisition_plan(&plan)?;
+        let existing = self
+            .inspect_model_inner(plan.artifact.clone(), context)
+            .await?;
+        if existing.available {
+            return Ok(acquisition_result(
+                existing,
+                RuntimeModelAcquisitionStatus::AlreadyPresent,
+                self.clock.unix_ms(),
+            ));
+        }
+        if self
+            .acquiring
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Err(RuntimeError::Busy);
+        }
+        let _guard = AcquiringGuard(&self.acquiring);
+
+        // Recheck after obtaining the single-acquisition guard so a peer completion is reused.
+        let existing = self
+            .inspect_model_inner(plan.artifact.clone(), context)
+            .await?;
+        if existing.available {
+            return Ok(acquisition_result(
+                existing,
+                RuntimeModelAcquisitionStatus::AlreadyPresent,
+                self.clock.unix_ms(),
+            ));
+        }
+        let endpoint = self.valid_endpoint()?;
+        let pull_outcome = run_bounded(
+            context,
+            self.model_http
+                .pull(endpoint, provider_tag, progress, model_pull_limits(context)),
+        )
+        .await
+        .map_err(RuntimeError::from)?;
+        let inspection = self.inspect_model_inner(plan.artifact, context).await?;
+        if !inspection.available
+            || inspection.registration.state != ProviderRegistrationState::Registered
+        {
+            return Err(RuntimeError::ModelRegistrationFailed);
+        }
+        let mut result = acquisition_result(
+            inspection,
+            RuntimeModelAcquisitionStatus::Acquired,
+            self.clock.unix_ms(),
+        );
+        if pull_outcome.provider_integrity {
+            result.integrity = ModelIntegrityState::ProviderReported;
+        }
+        Ok(result)
+    }
+
+    async fn inspect_model_inner(
+        &self,
+        artifact: ModelProviderArtifact,
+        context: &RuntimeOperationContext,
+    ) -> Result<RuntimeModelInspection, RuntimeError> {
+        let provider_tag = self.validate_artifact(&artifact)?;
+        let endpoint = self.valid_endpoint()?;
+        let evidence = match self.probe_server(context, endpoint).await {
+            Ok(evidence) => evidence,
+            Err(OllamaAdapterError::HttpStatus { status: 404 }) => {
+                return Err(RuntimeError::IncompatibleVersion);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if evidence.support == VersionSupport::Incompatible {
+            return Err(RuntimeError::IncompatibleVersion);
+        }
+        let registered = evidence
+            .tags
+            .into_iter()
+            .find(|model| !is_remote_model(model) && provider_model_name(model) == provider_tag);
+        let (available, state, measured_size_bytes, integrity) = if let Some(model) = registered {
+            (
+                true,
+                ProviderRegistrationState::Registered,
+                Some(model.size),
+                ModelIntegrityState::ProviderReported,
+            )
+        } else {
+            (
+                false,
+                ProviderRegistrationState::NotRegistered,
+                None,
+                ModelIntegrityState::Unavailable,
+            )
+        };
+        Ok(RuntimeModelInspection {
+            artifact,
+            available,
+            registration: ProviderRegistrationResult {
+                state,
+                measured_size_bytes,
+                verified_at_unix_ms: self.clock.unix_ms(),
+            },
+            integrity,
+        })
+    }
+
+    async fn run_readiness_inference_inner(
+        &self,
+        artifact: ModelProviderArtifact,
+        context: &RuntimeOperationContext,
+    ) -> Result<RuntimeReadinessInferenceResult, RuntimeError> {
+        let provider_tag = self.validate_artifact(&artifact)?;
+        let inspection = self.inspect_model_inner(artifact, context).await?;
+        if !inspection.available {
+            return Err(RuntimeError::ModelUnavailable);
+        }
+        let endpoint = self.valid_endpoint()?;
+        run_bounded(
+            context,
+            self.model_http
+                .readiness(endpoint, provider_tag, readiness_limits(context)),
+        )
+        .await
+        .map_err(RuntimeError::from)?;
+        Ok(RuntimeReadinessInferenceResult {
+            ready: true,
+            completed_at_unix_ms: self.clock.unix_ms(),
+        })
+    }
+
+    fn validate_acquisition_plan(
+        &self,
+        plan: &RuntimeModelAcquisitionPlan,
+    ) -> Result<&'static str, RuntimeError> {
+        if plan.destination != SetupDestinationCategory::ProviderManaged
+            || plan.destination_display != MODEL_STORAGE_DISPLAY
+            || plan.cancellation != RuntimeCancellationSemantics::ConnectionAbortMayRetainEffects
+        {
+            return Err(RuntimeError::InvalidInput);
+        }
+        self.validate_artifact(&plan.artifact)
+    }
+
+    fn validate_artifact(
+        &self,
+        artifact: &ModelProviderArtifact,
+    ) -> Result<&'static str, RuntimeError> {
+        if artifact.provider_id != self.provider_id {
+            return Err(RuntimeError::InvalidInput);
+        }
+        let provider_tag = provider_tag_for_candidate(&artifact.canonical_model_id)
+            .ok_or(RuntimeError::ModelNotMapped)?;
+        if artifact.provider_model_id.as_str() != provider_tag
+            || artifact.source_summary != MODEL_SOURCE_SUMMARY
+        {
+            return Err(RuntimeError::InvalidInput);
+        }
+        Ok(provider_tag)
+    }
 }
 
 impl Default for OllamaAdapter {
@@ -831,6 +1096,123 @@ impl RuntimeModelInventoryProvider for OllamaAdapter {
     }
 }
 
+impl RuntimeModelSetupProvider for OllamaAdapter {
+    fn prepare_model_acquisition(
+        &self,
+        model_id: CandidateModelId,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelAcquisitionPlan> {
+        let span = tracing::info_span!(
+            "runtime_provider_model_prepare",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+        );
+        Box::pin(
+            async move { self.prepare_model_acquisition_inner(model_id, &context) }
+                .instrument(span),
+        )
+    }
+
+    fn preflight_model_storage(
+        &self,
+        plan: RuntimeModelAcquisitionPlan,
+        required_bytes: u64,
+        safety_margin_bytes: u64,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeStoragePreflight> {
+        let span = tracing::info_span!(
+            "runtime_provider_model_storage_preflight",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+        );
+        Box::pin(
+            async move {
+                self.preflight_model_storage_inner(
+                    plan,
+                    required_bytes,
+                    safety_margin_bytes,
+                    &context,
+                )
+                .await
+            }
+            .instrument(span),
+        )
+    }
+
+    fn acquire_model(
+        &self,
+        plan: RuntimeModelAcquisitionPlan,
+        progress: ModelProgressSender,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelAcquisitionResult> {
+        let span = tracing::info_span!(
+            "runtime_provider_model_acquisition",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+        );
+        Box::pin(
+            async move {
+                let result = self.acquire_model_inner(plan, progress, &context).await;
+                match &result {
+                    Ok(result) => tracing::info!(
+                        acquisition_status = ?result.status,
+                        "runtime provider model acquisition completed"
+                    ),
+                    Err(error) => tracing::warn!(
+                        error_code = ?error.code(),
+                        "runtime provider model acquisition stopped"
+                    ),
+                }
+                result
+            }
+            .instrument(span),
+        )
+    }
+
+    fn inspect_model(
+        &self,
+        artifact: ModelProviderArtifact,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelInspection> {
+        let span = tracing::info_span!(
+            "runtime_provider_model_inspection",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+        );
+        Box::pin(async move { self.inspect_model_inner(artifact, &context).await }.instrument(span))
+    }
+
+    fn run_readiness_inference(
+        &self,
+        artifact: ModelProviderArtifact,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeReadinessInferenceResult> {
+        let span = tracing::info_span!(
+            "runtime_provider_model_readiness",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+        );
+        Box::pin(
+            async move {
+                let result = self.run_readiness_inference_inner(artifact, &context).await;
+                if let Err(error) = &result {
+                    tracing::warn!(
+                        error_code = ?error.code(),
+                        "runtime provider model readiness failed"
+                    );
+                }
+                result
+            }
+            .instrument(span),
+        )
+    }
+}
+
 impl RuntimeProvider for OllamaAdapter {
     fn provider_id(&self) -> &RuntimeProviderId {
         &self.provider_id
@@ -880,6 +1262,60 @@ struct StartingGuard<'a>(&'a AtomicBool);
 impl Drop for StartingGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
+    }
+}
+
+struct AcquiringGuard<'a>(&'a AtomicBool);
+
+impl Drop for AcquiringGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+fn model_pull_limits(context: &RuntimeOperationContext) -> ModelHttpLimits {
+    ModelHttpLimits {
+        connect_timeout: MODEL_PULL_CONNECT_TIMEOUT.min(context.remaining()),
+        idle_timeout: MODEL_PULL_IDLE_TIMEOUT.min(context.remaining()),
+        max_body_bytes: MODEL_PULL_BODY_LIMIT,
+        max_line_bytes: MODEL_PULL_LINE_LIMIT,
+        max_events: MODEL_PULL_EVENT_LIMIT,
+    }
+}
+
+fn readiness_limits(context: &RuntimeOperationContext) -> ModelHttpLimits {
+    ModelHttpLimits {
+        connect_timeout: READINESS_CONNECT_TIMEOUT.min(context.remaining()),
+        idle_timeout: READINESS_IDLE_TIMEOUT.min(context.remaining()),
+        max_body_bytes: READINESS_BODY_LIMIT,
+        max_line_bytes: READINESS_BODY_LIMIT,
+        max_events: 1,
+    }
+}
+
+fn provider_model_name(model: &TagModel) -> &str {
+    if model.model.trim().is_empty() {
+        model.name.as_str()
+    } else {
+        model.model.as_str()
+    }
+}
+
+fn is_remote_model(model: &TagModel) -> bool {
+    !model.remote_model.trim().is_empty() || !model.remote_host.trim().is_empty()
+}
+
+fn acquisition_result(
+    inspection: RuntimeModelInspection,
+    status: RuntimeModelAcquisitionStatus,
+    completed_at_unix_ms: u64,
+) -> RuntimeModelAcquisitionResult {
+    RuntimeModelAcquisitionResult {
+        artifact: inspection.artifact,
+        status,
+        measured_size_bytes: inspection.registration.measured_size_bytes,
+        integrity: inspection.integrity,
+        completed_at_unix_ms,
     }
 }
 
@@ -994,6 +1430,12 @@ fn capabilities(
     } else {
         RuntimeCapabilityAvailability::Unsupported
     };
+    let setup_approval_availability =
+        if health_availability == RuntimeCapabilityAvailability::Available {
+            RuntimeCapabilityAvailability::RequiresSetupApproval
+        } else {
+            RuntimeCapabilityAvailability::Unsupported
+        };
 
     vec![
         capability(
@@ -1006,6 +1448,26 @@ fn capabilities(
         capability(RuntimeCapabilityKind::Stop, owned_availability),
         capability(RuntimeCapabilityKind::Restart, owned_availability),
         capability(RuntimeCapabilityKind::ModelInventory, health_availability),
+        capability(
+            RuntimeCapabilityKind::ModelAcquisitionPreparation,
+            health_availability,
+        ),
+        capability(
+            RuntimeCapabilityKind::ModelStoragePreflight,
+            health_availability,
+        ),
+        capability(
+            RuntimeCapabilityKind::ModelAcquisition,
+            setup_approval_availability,
+        ),
+        capability(
+            RuntimeCapabilityKind::ModelRegistration,
+            setup_approval_availability,
+        ),
+        capability(
+            RuntimeCapabilityKind::ReadinessInference,
+            setup_approval_availability,
+        ),
     ]
 }
 
@@ -1075,6 +1537,9 @@ impl From<OllamaAdapterError> for RuntimeError {
             | OllamaAdapterError::InvalidVersion => Self::InvalidResponse,
             OllamaAdapterError::TimedOut => Self::TimedOut,
             OllamaAdapterError::Cancelled => Self::Cancelled,
+            OllamaAdapterError::ModelAcquisitionFailed => Self::ModelAcquisitionFailed,
+            OllamaAdapterError::StorageUnavailable => Self::ModelStorageUnavailable,
+            OllamaAdapterError::ReadinessFailed => Self::ReadinessInferenceFailed,
             OllamaAdapterError::LifecycleUnsupported => Self::Unsupported,
             OllamaAdapterError::LifecycleConflict => Self::Busy,
             OllamaAdapterError::ProcessStartFailed | OllamaAdapterError::ProcessControlFailed => {
@@ -1095,21 +1560,26 @@ mod tests {
         },
     };
 
-    use gixgiz_contracts::{CorrelationId, RequestId};
+    use gixgiz_contracts::{
+        CorrelationId, ModelAcquisitionPhase, ModelAcquisitionProgress, RequestId,
+    };
     use gixgiz_runtime::RuntimeCancellationToken;
     use tempfile::tempdir;
-    use tokio::sync::Mutex;
+    use tokio::sync::{Mutex, Notify, mpsc};
 
     use crate::{
         discovery::FixedExecutableLocator,
         http::{HttpFuture, tests::FakeHttpClient},
+        model_http::{ModelHttpFuture, PullOutcome, tests::FakeModelHttpClient},
         process::ProcessFuture,
+        storage::tests::FakeModelStorageProbe,
     };
 
     use super::*;
 
     const VERSION_RESPONSE: &[u8] = br#"{"version":"0.12.6"}"#;
     const EMPTY_TAGS_RESPONSE: &[u8] = br#"{"models":[]}"#;
+    const INSTALLED_TAGS_RESPONSE: &[u8] = br#"{"models":[{"name":"qwen2.5:0.5b-instruct","model":"qwen2.5:0.5b-instruct","size":123,"digest":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}]}"#;
 
     fn context(timeout: Duration) -> RuntimeOperationContext {
         RuntimeOperationContext::new(CorrelationId::new(), RequestId::new(), timeout)
@@ -1141,6 +1611,29 @@ mod tests {
             Arc::new(FixedClock(42)),
             policy,
         )
+    }
+
+    fn setup_adapter(
+        responses: impl IntoIterator<Item = Result<Vec<u8>, OllamaAdapterError>>,
+        model_http: Arc<dyn OllamaModelHttpClient>,
+        storage: Result<u64, OllamaAdapterError>,
+    ) -> OllamaAdapter {
+        adapter(
+            absent_locator(),
+            Arc::new(FakeHttpClient::new(responses)),
+            Arc::new(FakeProcesses::new(OwnedProcessStatus::None)),
+            recorded_test_policy(),
+        )
+        .with_model_setup_components(model_http, Arc::new(FakeModelStorageProbe::new(storage)))
+    }
+
+    fn compact_plan(provider: &OllamaAdapter) -> RuntimeModelAcquisitionPlan {
+        provider
+            .prepare_model_acquisition_inner(
+                CandidateModelId::new("qwen2.5.0.5b-instruct"),
+                &context(Duration::from_secs(1)),
+            )
+            .expect("allowlisted compact plan")
     }
 
     fn recorded_test_policy() -> VersionPolicy {
@@ -1554,7 +2047,7 @@ mod tests {
 
     #[tokio::test]
     async fn model_inventory_maps_known_and_preserves_unknown_identifiers() {
-        let tags = br#"{"models":[{"name":"qwen2.5:0.5b-instruct","model":"qwen2.5:0.5b-instruct","size":123,"digest":"known"},{"name":"private:latest","model":"private:latest","size":456,"digest":"external"}]}"#;
+        let tags = br#"{"models":[{"name":"qwen2.5:0.5b-instruct","model":"qwen2.5:0.5b-instruct","size":123,"digest":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},{"name":"private:latest","model":"private:latest","size":456,"digest":"sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}]}"#;
         let provider = adapter(
             absent_locator(),
             Arc::new(FakeHttpClient::new([
@@ -1968,6 +2461,288 @@ mod tests {
         assert_eq!(observation.state, RuntimeState::Ready);
         assert_eq!(processes.stops.load(Ordering::Acquire), 1);
         assert_eq!(processes.starts.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn setup_preparation_is_allowlisted_and_never_returns_a_private_path() {
+        let provider = setup_adapter(
+            [],
+            Arc::new(FakeModelHttpClient::new([], [], Vec::new())),
+            Ok(10_000),
+        );
+
+        let plan = provider
+            .prepare_model_acquisition(
+                CandidateModelId::new("qwen2.5.0.5b-instruct"),
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("allowlisted model maps");
+        let unknown = provider
+            .prepare_model_acquisition(
+                CandidateModelId::new("private.unreviewed"),
+                context(Duration::from_secs(1)),
+            )
+            .await;
+
+        assert_eq!(
+            plan.artifact.provider_model_id.as_str(),
+            "qwen2.5:0.5b-instruct"
+        );
+        assert_eq!(plan.destination, SetupDestinationCategory::ProviderManaged);
+        assert!(!plan.destination_display.contains('\\'));
+        assert!(!plan.destination_display.contains('/'));
+        assert_eq!(unknown, Err(RuntimeError::ModelNotMapped));
+
+        let mut tampered = plan;
+        tampered.artifact.source_summary = "caller supplied source".to_owned();
+        let tampered_result = provider
+            .preflight_model_storage(tampered, 1, 1, context(Duration::from_secs(1)))
+            .await;
+        assert_eq!(tampered_result, Err(RuntimeError::InvalidInput));
+    }
+
+    #[tokio::test]
+    async fn storage_preflight_reports_available_insufficient_and_unavailable() {
+        let sufficient = setup_adapter(
+            [],
+            Arc::new(FakeModelHttpClient::new([], [], Vec::new())),
+            Ok(3_000),
+        );
+        let available = sufficient
+            .preflight_model_storage(
+                compact_plan(&sufficient),
+                1_000,
+                2_000,
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("storage is checked");
+        let insufficient = setup_adapter(
+            [],
+            Arc::new(FakeModelHttpClient::new([], [], Vec::new())),
+            Ok(2_999),
+        );
+        let insufficient_result = insufficient
+            .preflight_model_storage(
+                compact_plan(&insufficient),
+                1_000,
+                2_000,
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("insufficient space is a typed result");
+        let unavailable = setup_adapter(
+            [],
+            Arc::new(FakeModelHttpClient::new([], [], Vec::new())),
+            Err(OllamaAdapterError::StorageUnavailable),
+        );
+        let unavailable_result = unavailable
+            .preflight_model_storage(
+                compact_plan(&unavailable),
+                1_000,
+                2_000,
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("unavailable destination is a typed result");
+
+        assert_eq!(
+            available.availability,
+            RuntimeStorageAvailability::Available
+        );
+        assert_eq!(available.available_bytes, Some(3_000));
+        assert_eq!(
+            insufficient_result.availability,
+            RuntimeStorageAvailability::InsufficientSpace
+        );
+        assert_eq!(
+            unavailable_result.availability,
+            RuntimeStorageAvailability::Unavailable
+        );
+        assert_eq!(unavailable_result.available_bytes, None);
+    }
+
+    #[tokio::test]
+    async fn existing_exact_model_is_reused_without_a_pull() {
+        let provider = setup_adapter(
+            [
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(INSTALLED_TAGS_RESPONSE.to_vec()),
+            ],
+            Arc::new(FakeModelHttpClient::new([], [], Vec::new())),
+            Ok(10_000),
+        );
+        let (sender, _receiver) = mpsc::channel(1);
+
+        let result = provider
+            .acquire_model(
+                compact_plan(&provider),
+                sender,
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("existing exact model is reused");
+
+        assert_eq!(result.status, RuntimeModelAcquisitionStatus::AlreadyPresent);
+        assert_eq!(result.measured_size_bytes, Some(123));
+        assert_eq!(result.integrity, ModelIntegrityState::ProviderReported);
+    }
+
+    #[tokio::test]
+    async fn successful_pull_emits_normalized_progress_and_requires_registration() {
+        let progress = ModelAcquisitionProgress {
+            phase: ModelAcquisitionPhase::Transferring,
+            completed_bytes: Some(50),
+            total_bytes: Some(100),
+            progress_basis_points: Some(5_000),
+        };
+        let provider = setup_adapter(
+            [
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(INSTALLED_TAGS_RESPONSE.to_vec()),
+            ],
+            Arc::new(FakeModelHttpClient::new(
+                [Ok(PullOutcome {
+                    provider_integrity: true,
+                })],
+                [],
+                vec![progress.clone()],
+            )),
+            Ok(10_000),
+        );
+        let (sender, mut receiver) = mpsc::channel(4);
+
+        let result = provider
+            .acquire_model(
+                compact_plan(&provider),
+                sender,
+                context(Duration::from_secs(1)),
+            )
+            .await
+            .expect("pull and exact registration succeed");
+
+        assert_eq!(result.status, RuntimeModelAcquisitionStatus::Acquired);
+        assert_eq!(receiver.try_recv(), Ok(progress));
+    }
+
+    #[tokio::test]
+    async fn successful_pull_without_exact_registration_fails_closed() {
+        let provider = setup_adapter(
+            [
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+            ],
+            Arc::new(FakeModelHttpClient::new(
+                [Ok(PullOutcome {
+                    provider_integrity: true,
+                })],
+                [],
+                Vec::new(),
+            )),
+            Ok(10_000),
+        );
+        let (sender, _receiver) = mpsc::channel(1);
+
+        let result = provider
+            .acquire_model(
+                compact_plan(&provider),
+                sender,
+                context(Duration::from_secs(1)),
+            )
+            .await;
+
+        assert_eq!(result, Err(RuntimeError::ModelRegistrationFailed));
+    }
+
+    #[tokio::test]
+    async fn readiness_failure_is_typed_and_generated_content_never_returns() {
+        let provider = setup_adapter(
+            [
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(INSTALLED_TAGS_RESPONSE.to_vec()),
+            ],
+            Arc::new(FakeModelHttpClient::new(
+                [],
+                [Err(OllamaAdapterError::ReadinessFailed)],
+                Vec::new(),
+            )),
+            Ok(10_000),
+        );
+        let artifact = compact_plan(&provider).artifact;
+
+        let result = provider
+            .run_readiness_inference(artifact, context(Duration::from_secs(1)))
+            .await;
+
+        assert_eq!(result, Err(RuntimeError::ReadinessInferenceFailed));
+    }
+
+    #[tokio::test]
+    async fn cancellation_aborts_the_active_pull_and_releases_the_guard() {
+        let model_http = Arc::new(PendingModelHttpClient::default());
+        let provider = setup_adapter(
+            [
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+                Ok(VERSION_RESPONSE.to_vec()),
+                Ok(EMPTY_TAGS_RESPONSE.to_vec()),
+            ],
+            model_http.clone(),
+            Ok(10_000),
+        );
+        let cancellation = RuntimeCancellationToken::new();
+        let operation_context =
+            context(Duration::from_secs(5)).with_cancellation(cancellation.clone());
+        let (sender, _receiver) = mpsc::channel(1);
+        let operation = provider.acquire_model(compact_plan(&provider), sender, operation_context);
+        tokio::pin!(operation);
+
+        tokio::select! {
+            () = model_http.pull_started.notified() => {}
+            result = &mut operation => panic!("pull completed before cancellation: {result:?}"),
+        }
+        cancellation.cancel();
+
+        assert_eq!(operation.await, Err(RuntimeError::Cancelled));
+        assert!(!provider.acquiring.load(Ordering::Acquire));
+    }
+
+    #[derive(Default)]
+    struct PendingModelHttpClient {
+        pull_started: Notify,
+    }
+
+    impl OllamaModelHttpClient for PendingModelHttpClient {
+        fn pull<'a>(
+            &'a self,
+            _endpoint: &'a ValidatedEndpoint,
+            _provider_model_id: &'a str,
+            _progress: ModelProgressSender,
+            _limits: ModelHttpLimits,
+        ) -> ModelHttpFuture<'a, PullOutcome> {
+            Box::pin(async move {
+                self.pull_started.notify_one();
+                future::pending().await
+            })
+        }
+
+        fn readiness<'a>(
+            &'a self,
+            _endpoint: &'a ValidatedEndpoint,
+            _provider_model_id: &'a str,
+            _limits: ModelHttpLimits,
+        ) -> ModelHttpFuture<'a, ()> {
+            Box::pin(future::pending())
+        }
     }
 
     struct FixedClock(u64);

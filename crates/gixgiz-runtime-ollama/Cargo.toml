@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 bytes.workspace = true
+fs4.workspace = true
 gixgiz-contracts = { path = "../gixgiz-contracts" }
 gixgiz-runtime = { path = "../gixgiz-runtime" }
 http-body-util.workspace = true
