@@ -50,6 +50,30 @@ pub enum RuntimeError {
     /// A managed provider process failed without exposing provider output.
     #[error("the managed runtime process failed")]
     ProcessFailed,
+    /// The canonical model has no validated provider mapping.
+    #[error("the model is not mapped for this runtime")]
+    ModelNotMapped,
+    /// Provider acquisition did not reach a validated terminal success.
+    #[error("the model acquisition failed")]
+    ModelAcquisitionFailed,
+    /// The exact provider model is not locally available.
+    #[error("the model is not available")]
+    ModelUnavailable,
+    /// Exact provider registration could not be established.
+    #[error("the model registration could not be verified")]
+    ModelRegistrationFailed,
+    /// Available model integrity evidence did not match expectations.
+    #[error("the model integrity check failed")]
+    ModelIntegrityFailed,
+    /// The provider-managed model destination is unavailable.
+    #[error("the model storage destination is unavailable")]
+    ModelStorageUnavailable,
+    /// The model destination lacks required free space and margin.
+    #[error("the model storage destination has insufficient space")]
+    ModelStorageExhausted,
+    /// The fixed bounded readiness inference failed.
+    #[error("the model readiness inference failed")]
+    ReadinessInferenceFailed,
     /// Provider output exceeded a fixed bound.
     #[error("runtime provider output exceeded its limit")]
     OutputLimit,
@@ -82,6 +106,14 @@ impl RuntimeError {
             Self::OwnershipConflict => RuntimeErrorCode::OwnershipConflict,
             Self::Busy => RuntimeErrorCode::OperationBusy,
             Self::ProcessFailed => RuntimeErrorCode::ProcessFailed,
+            Self::ModelNotMapped => RuntimeErrorCode::ModelNotMapped,
+            Self::ModelAcquisitionFailed => RuntimeErrorCode::ModelAcquisitionFailed,
+            Self::ModelUnavailable => RuntimeErrorCode::ModelUnavailable,
+            Self::ModelRegistrationFailed => RuntimeErrorCode::ModelRegistrationFailed,
+            Self::ModelIntegrityFailed => RuntimeErrorCode::ModelIntegrityFailed,
+            Self::ModelStorageUnavailable => RuntimeErrorCode::ModelStorageUnavailable,
+            Self::ModelStorageExhausted => RuntimeErrorCode::ModelStorageExhausted,
+            Self::ReadinessInferenceFailed => RuntimeErrorCode::ReadinessInferenceFailed,
             Self::OutputLimit => RuntimeErrorCode::OutputLimit,
             Self::Internal => RuntimeErrorCode::Internal,
         }
@@ -189,6 +221,62 @@ impl RuntimeError {
                 RecoveryAction::Retry,
                 "Check runtime status before retrying.",
             ),
+            Self::ModelNotMapped => (
+                ErrorCategory::InvalidInput,
+                "runtime.model_not_mapped",
+                "The selected model is not available for this runtime.",
+                RecoveryAction::CheckPrerequisites,
+                "Refresh the model recommendation, then review the new plan.",
+            ),
+            Self::ModelAcquisitionFailed => (
+                ErrorCategory::Unavailable,
+                "runtime.model_acquisition_failed",
+                "The local model could not be prepared.",
+                RecoveryAction::Retry,
+                "Check storage and the runtime status, then retry.",
+            ),
+            Self::ModelUnavailable => (
+                ErrorCategory::Unavailable,
+                "runtime.model_unavailable",
+                "The selected local model is not available.",
+                RecoveryAction::Retry,
+                "Retry model preparation or choose another recommended model.",
+            ),
+            Self::ModelRegistrationFailed => (
+                ErrorCategory::Degraded,
+                "runtime.model_registration_failed",
+                "The local model registration could not be verified.",
+                RecoveryAction::Retry,
+                "Check the runtime status, then retry verification.",
+            ),
+            Self::ModelIntegrityFailed => (
+                ErrorCategory::IntegrityFailure,
+                "runtime.model_integrity_failed",
+                "The local model did not pass integrity verification.",
+                RecoveryAction::ContactSupport,
+                "Do not use this model. Review sanitized diagnostics before trying again.",
+            ),
+            Self::ModelStorageUnavailable => (
+                ErrorCategory::Unavailable,
+                "runtime.model_storage_unavailable",
+                "The local model storage destination is unavailable.",
+                RecoveryAction::CheckPrerequisites,
+                "Make the selected destination available, then retry.",
+            ),
+            Self::ModelStorageExhausted => (
+                ErrorCategory::ResourceExhausted,
+                "runtime.model_storage_exhausted",
+                "There is not enough free space for the selected model.",
+                RecoveryAction::CheckPrerequisites,
+                "Free storage space or select a smaller recommended model.",
+            ),
+            Self::ReadinessInferenceFailed => (
+                ErrorCategory::Degraded,
+                "runtime.readiness_inference_failed",
+                "The local model did not pass the readiness test.",
+                RecoveryAction::Retry,
+                "Check the runtime status, then retry model verification.",
+            ),
             Self::PolicyUnavailable => (
                 ErrorCategory::Unavailable,
                 "runtime.policy_unavailable",
@@ -254,5 +342,25 @@ mod tests {
         assert_eq!(payload.code, "runtime.executable_untrusted");
         assert_eq!(payload.recovery.action, RecoveryAction::CheckPrerequisites);
         assert!(!payload.message.contains("Ollama"));
+    }
+
+    #[test]
+    fn model_setup_failures_preserve_stable_categories_and_recovery() {
+        let context = RuntimeOperationContext::new(
+            CorrelationId::new(),
+            RequestId::new(),
+            Duration::from_secs(1),
+        );
+        let storage = RuntimeError::ModelStorageExhausted.to_safe_payload(&context);
+        let integrity = RuntimeError::ModelIntegrityFailed.to_safe_payload(&context);
+        let readiness = RuntimeError::ReadinessInferenceFailed.to_safe_payload(&context);
+
+        assert_eq!(storage.category, ErrorCategory::ResourceExhausted);
+        assert_eq!(storage.code, "runtime.model_storage_exhausted");
+        assert_eq!(integrity.category, ErrorCategory::IntegrityFailure);
+        assert_eq!(integrity.code, "runtime.model_integrity_failed");
+        assert_eq!(readiness.category, ErrorCategory::Degraded);
+        assert_eq!(readiness.code, "runtime.readiness_inference_failed");
+        assert_eq!(readiness.recovery.action, RecoveryAction::Retry);
     }
 }
