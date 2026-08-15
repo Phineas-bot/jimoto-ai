@@ -9,7 +9,8 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::{
     AuditEventRepository, DataRoot, JobMetadataRepository, PersistenceError,
-    PlatformMetadataRepository, RuntimePolicyRepository, SettingsRepository, migrations,
+    PlatformMetadataRepository, RuntimePolicyRepository, SettingsRepository, SetupJobRepository,
+    migrations,
 };
 
 const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -185,6 +186,12 @@ impl Persistence {
     #[must_use]
     pub fn jobs(&self) -> JobMetadataRepository {
         JobMetadataRepository::new(self.clone())
+    }
+
+    /// Returns the durable setup workflow repository.
+    #[must_use]
+    pub fn setup_jobs(&self) -> SetupJobRepository {
+        SetupJobRepository::new(self.clone())
     }
 
     /// Returns the append-only, redaction-safe audit repository.

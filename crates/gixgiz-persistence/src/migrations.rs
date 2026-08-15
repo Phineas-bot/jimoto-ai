@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{DataRoot, PersistenceError};
 
 /// Latest repository-owned schema version supported by this binary.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Clone, Copy)]
 struct Migration {
@@ -27,6 +27,12 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         name: "runtime_policy",
         sql: include_str!("../migrations/0002_runtime_policy.sql"),
+        irreversible: false,
+    },
+    Migration {
+        version: 3,
+        name: "setup_workflow",
+        sql: include_str!("../migrations/0003_setup_workflow.sql"),
         irreversible: false,
     },
 ];
