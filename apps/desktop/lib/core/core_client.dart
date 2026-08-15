@@ -48,11 +48,13 @@ class CoreClientFailure implements Exception {
     required this.code,
     required this.category,
     required this.recoveryAction,
+    this.recoveryMessage,
   });
 
   final String code;
   final ErrorCategory category;
   final RecoveryAction recoveryAction;
+  final String? recoveryMessage;
 
   @override
   String toString() => 'CoreClientFailure($category, $code)';
@@ -167,6 +169,66 @@ abstract class CoreClient {
       UnsupportedError(
         'Runtime model inventory is not supported by this client.',
       ),
+    );
+  }
+
+  Future<SetupJobSnapshot> createSetupPlan(
+    RecommendationPlan recommendation, {
+    SetupDestinationCategory destination =
+        SetupDestinationCategory.providerManaged,
+  }) {
+    return Future.error(
+      UnsupportedError('Model setup planning is not supported by this client.'),
+    );
+  }
+
+  Future<SetupJobSnapshot?> recoverSetupJob() {
+    return Future.error(
+      UnsupportedError('Model setup recovery is not supported by this client.'),
+    );
+  }
+
+  Future<SetupJobSnapshot> decideSetupApproval(
+    SetupJobSnapshot job,
+    SetupApprovalDecision decision,
+  ) {
+    return Future.error(
+      UnsupportedError('Model setup approval is not supported by this client.'),
+    );
+  }
+
+  Future<SetupJobSnapshot> startSetupJob(SetupJobSnapshot job) {
+    return Future.error(
+      UnsupportedError('Model setup is not supported by this client.'),
+    );
+  }
+
+  Future<SetupJobSnapshot> setupJobStatus(SetupJobId jobId) {
+    return Future.error(
+      UnsupportedError('Model setup status is not supported by this client.'),
+    );
+  }
+
+  Stream<SetupJobEvent> observeSetupJob(
+    SetupJobId jobId, {
+    required int afterSequence,
+  }) {
+    return Stream.error(
+      UnsupportedError('Model setup events are not supported by this client.'),
+    );
+  }
+
+  Future<SetupJobSnapshot> cancelSetupJob(SetupJobId jobId) {
+    return Future.error(
+      UnsupportedError(
+        'Model setup cancellation is not supported by this client.',
+      ),
+    );
+  }
+
+  Future<SetupJobSnapshot> retrySetupJob(SetupJobSnapshot job) {
+    return Future.error(
+      UnsupportedError('Model setup retry is not supported by this client.'),
     );
   }
 

@@ -22,6 +22,7 @@ class _FoundationPageState extends State<FoundationPage> {
       const CapabilityRecommendationIdle();
   RuntimeStatusState _runtimeStatusState = const RuntimeStatusIdle();
   RuntimeInventoryState _runtimeInventoryState = const RuntimeInventoryIdle();
+  SetupWorkflowState _setupState = const SetupWorkflowIdle();
   UserPreferenceProfile _preferences = const UserPreferenceProfile(
     workload: WorkloadTier.generalText,
     priority: PreferencePriority.balanced,
@@ -34,6 +35,13 @@ class _FoundationPageState extends State<FoundationPage> {
   CoreClient? _activeRuntimeClient;
   StreamSubscription<RuntimeOperationEvent>? _runtimeOperationSubscription;
   int _runtimeRevision = 0;
+  SetupJobSnapshot? _setupJob;
+  CoreClient? _setupStreamClient;
+  SetupJobId? _setupStreamJobId;
+  StreamSubscription<SetupJobEvent>? _setupSubscription;
+  Timer? _setupReconnectTimer;
+  int _setupAfterSequence = 0;
+  int _setupRevision = 0;
 
   @override
   void initState() {
@@ -47,10 +55,15 @@ class _FoundationPageState extends State<FoundationPage> {
     if (!identical(oldWidget.coreClient, widget.coreClient)) {
       unawaited(_stopHardwareScan(cancelRemote: true));
       unawaited(_stopRuntimeOperation(cancelRemote: true));
+      unawaited(_detachSetupStream());
       _hardwareScanState = const HardwareScanIdle();
       _recommendationState = const CapabilityRecommendationIdle();
       _runtimeStatusState = const RuntimeStatusIdle();
       _runtimeInventoryState = const RuntimeInventoryIdle();
+      _setupState = const SetupWorkflowIdle();
+      _setupJob = null;
+      _setupAfterSequence = 0;
+      _setupRevision += 1;
       _runtimeRevision += 1;
       _checkConnection();
     }
@@ -60,6 +73,7 @@ class _FoundationPageState extends State<FoundationPage> {
   void dispose() {
     unawaited(_stopHardwareScan(cancelRemote: true));
     unawaited(_stopRuntimeOperation(cancelRemote: true));
+    unawaited(_detachSetupStream());
     super.dispose();
   }
 
@@ -82,6 +96,12 @@ class _FoundationPageState extends State<FoundationPage> {
             TransportCapability.runtimeStatus,
           )) {
         unawaited(_checkRuntimeStatus());
+      }
+      if ((next is FoundationReady || next is FoundationDegraded) &&
+          client.supportsTransportCapability(
+            TransportCapability.setupWorkflow,
+          )) {
+        unawaited(_recoverSetupJob());
       }
     } on Object {
       if (!mounted || !identical(client, widget.coreClient)) {
@@ -745,6 +765,375 @@ class _FoundationPageState extends State<FoundationPage> {
     }
   }
 
+  Future<void> _recoverSetupJob() async {
+    await _detachSetupStream();
+    if (!mounted) {
+      return;
+    }
+    final client = widget.coreClient;
+    final revision = ++_setupRevision;
+    final previousJob = _setupJob;
+    if (previousJob != null) {
+      setState(
+        () => _setupState = SetupWorkflowLoading(previousJob: previousJob),
+      );
+    }
+    try {
+      final job = await client.recoverSetupJob();
+      if (!_isCurrentSetupRequest(client, revision)) {
+        return;
+      }
+      _setupAfterSequence = 0;
+      _applySetupSnapshot(job);
+      if (job?.state == SetupJobState.active) {
+        _observeSetupJob(client, job!.jobId, revision);
+      }
+    } on CoreClientFailure catch (failure) {
+      if (!_isCurrentSetupRequest(client, revision)) {
+        return;
+      }
+      _failSetup(failure.code, previousJob, transportFailure: failure);
+    } on Object {
+      if (!_isCurrentSetupRequest(client, revision)) {
+        return;
+      }
+      _failSetup('SETUP_RECOVERY_FAILED', previousJob);
+    }
+  }
+
+  Future<void> _createSetupPlan(RecommendationPlan recommendation) async {
+    if (!_canReviewSetup || !mounted) {
+      return;
+    }
+    await _detachSetupStream();
+    if (!mounted) {
+      return;
+    }
+    final client = widget.coreClient;
+    final revision = ++_setupRevision;
+    setState(() => _setupState = const SetupWorkflowPlanning());
+    try {
+      final job = await client.createSetupPlan(recommendation);
+      if (!_isCurrentSetupRequest(client, revision)) {
+        return;
+      }
+      _setupAfterSequence = 0;
+      _applySetupSnapshot(job);
+    } on CoreClientFailure catch (failure) {
+      if (_isCurrentSetupRequest(client, revision)) {
+        _failSetup(failure.code, null, transportFailure: failure);
+      }
+    } on Object {
+      if (_isCurrentSetupRequest(client, revision)) {
+        _failSetup('SETUP_PLAN_FAILED', null);
+      }
+    }
+  }
+
+  Future<void> _decideSetupApproval(SetupApprovalDecision decision) async {
+    final job = _setupJob;
+    if (job == null || job.state != SetupJobState.awaitingApproval) {
+      return;
+    }
+    await _runSetupSnapshotRequest(
+      job,
+      (client) => client.decideSetupApproval(job, decision),
+      fallbackDiagnosticCode: 'SETUP_APPROVAL_FAILED',
+    );
+  }
+
+  Future<void> _startSetupJob() async {
+    final job = _setupJob;
+    if (job == null || job.state != SetupJobState.approved) {
+      return;
+    }
+    await _runSetupSnapshotRequest(
+      job,
+      (client) => client.startSetupJob(job),
+      fallbackDiagnosticCode: 'SETUP_START_FAILED',
+      observeWhenActive: true,
+    );
+  }
+
+  Future<void> _cancelSetupJob() async {
+    final job = _setupJob;
+    if (job == null || !_cancellableSetupStates.contains(job.state)) {
+      return;
+    }
+    await _runSetupSnapshotRequest(
+      job,
+      (client) => client.cancelSetupJob(job.jobId),
+      fallbackDiagnosticCode: 'SETUP_CANCEL_FAILED',
+      observeWhenActive: true,
+    );
+  }
+
+  Future<void> _retrySetupJob() async {
+    final job = _setupJob;
+    if (job == null || !_isRetryableSetupJob(job)) {
+      return;
+    }
+    await _runSetupSnapshotRequest(
+      job,
+      (client) => client.retrySetupJob(job),
+      fallbackDiagnosticCode: 'SETUP_RETRY_FAILED',
+      observeWhenActive: true,
+    );
+  }
+
+  Future<void> _refreshSetupJob() async {
+    final job = _setupJob;
+    if (job == null) {
+      await _recoverSetupJob();
+      return;
+    }
+    await _runSetupSnapshotRequest(
+      job,
+      (client) => client.setupJobStatus(job.jobId),
+      fallbackDiagnosticCode: 'SETUP_STATUS_FAILED',
+      observeWhenActive: true,
+    );
+  }
+
+  Future<void> _runSetupSnapshotRequest(
+    SetupJobSnapshot previousJob,
+    Future<SetupJobSnapshot> Function(CoreClient client) request, {
+    required String fallbackDiagnosticCode,
+    bool observeWhenActive = false,
+  }) async {
+    await _detachSetupStream();
+    if (!mounted) {
+      return;
+    }
+    final client = widget.coreClient;
+    final revision = ++_setupRevision;
+    setState(
+      () => _setupState = SetupWorkflowLoading(previousJob: previousJob),
+    );
+    try {
+      final job = await request(client);
+      if (!_isCurrentSetupRequest(client, revision)) {
+        return;
+      }
+      _applySetupSnapshot(job);
+      if (observeWhenActive && job.state == SetupJobState.active) {
+        _observeSetupJob(client, job.jobId, revision);
+      }
+    } on CoreClientFailure catch (failure) {
+      if (_isCurrentSetupRequest(client, revision)) {
+        _failSetup(failure.code, previousJob, transportFailure: failure);
+      }
+    } on Object {
+      if (_isCurrentSetupRequest(client, revision)) {
+        _failSetup(fallbackDiagnosticCode, previousJob);
+      }
+    }
+  }
+
+  void _observeSetupJob(CoreClient client, SetupJobId jobId, int revision) {
+    if (!_isCurrentSetupRequest(client, revision) ||
+        _setupSubscription != null) {
+      return;
+    }
+    _setupStreamClient = client;
+    _setupStreamJobId = jobId;
+    late final StreamSubscription<SetupJobEvent> subscription;
+    subscription = client
+        .observeSetupJob(jobId, afterSequence: _setupAfterSequence)
+        .listen(
+          (event) {
+            if (_isObservedSetupJob(client, jobId, revision, subscription)) {
+              _applySetupEvent(event);
+            }
+          },
+          onError: (Object error) {
+            if (_isObservedSetupJob(client, jobId, revision, subscription)) {
+              _setupSubscription = null;
+              _scheduleSetupStatusRecovery(
+                client,
+                jobId,
+                revision,
+                failure: error is CoreClientFailure ? error : null,
+              );
+            }
+          },
+          onDone: () {
+            if (_isObservedSetupJob(client, jobId, revision, subscription)) {
+              _setupSubscription = null;
+              if (_setupJob?.state == SetupJobState.active) {
+                _scheduleSetupStatusRecovery(client, jobId, revision);
+              }
+            }
+          },
+        );
+    _setupSubscription = subscription;
+  }
+
+  void _applySetupEvent(SetupJobEvent event) {
+    if (!mounted || event.sequence <= _setupAfterSequence) {
+      return;
+    }
+    _setupAfterSequence = event.sequence;
+    final current = _setupJob;
+    if (current == null ||
+        event.job.updatedAtUnixMs >= current.updatedAtUnixMs) {
+      _applySetupSnapshot(event.job);
+    }
+  }
+
+  void _scheduleSetupStatusRecovery(
+    CoreClient client,
+    SetupJobId jobId,
+    int revision, {
+    CoreClientFailure? failure,
+  }) {
+    _setupReconnectTimer?.cancel();
+    _setupReconnectTimer = Timer(const Duration(milliseconds: 250), () async {
+      if (!_isCurrentSetupRequest(client, revision) ||
+          _setupStreamJobId != jobId) {
+        return;
+      }
+      final previousJob = _setupJob;
+      try {
+        final job = await client.setupJobStatus(jobId);
+        if (!_isCurrentSetupRequest(client, revision) ||
+            _setupStreamJobId != jobId) {
+          return;
+        }
+        _applySetupSnapshot(job);
+        if (job.state == SetupJobState.active) {
+          _observeSetupJob(client, jobId, revision);
+        }
+      } on CoreClientFailure catch (statusFailure) {
+        if (_isCurrentSetupRequest(client, revision)) {
+          _failSetup(
+            statusFailure.code,
+            previousJob,
+            transportFailure: statusFailure,
+          );
+        }
+      } on Object {
+        if (_isCurrentSetupRequest(client, revision)) {
+          _failSetup(
+            failure?.code ?? 'SETUP_EVENT_STREAM_FAILED',
+            previousJob,
+            transportFailure: failure,
+          );
+        }
+      }
+    });
+  }
+
+  void _applySetupSnapshot(SetupJobSnapshot? job) {
+    if (!mounted) {
+      return;
+    }
+    final previousJobId = _setupJob?.jobId;
+    if (job == null) {
+      _setupAfterSequence = 0;
+    } else if (previousJobId != job.jobId ||
+        job.latestEventSequence > _setupAfterSequence) {
+      _setupAfterSequence = job.latestEventSequence;
+    }
+    _setupJob = job;
+    setState(() {
+      _setupState = job == null
+          ? const SetupWorkflowIdle()
+          : _mapSetupSnapshot(job);
+    });
+  }
+
+  SetupWorkflowState _mapSetupSnapshot(SetupJobSnapshot job) {
+    return switch (job.state) {
+      SetupJobState.awaitingApproval => SetupWorkflowAwaitingApproval(job: job),
+      SetupJobState.approved => SetupWorkflowApproved(job: job),
+      SetupJobState.active => SetupWorkflowActive(job: job),
+      SetupJobState.attentionRequired => SetupWorkflowAttention(job: job),
+      SetupJobState.ready => SetupWorkflowReady(job: job),
+      SetupJobState.failed => SetupWorkflowFailed(
+        diagnosticCode: job.error?.code ?? 'SETUP_JOB_FAILED',
+        job: job,
+        recoveryAction: job.recoveryAction,
+      ),
+      SetupJobState.cancelled => SetupWorkflowCancelled(job: job),
+      SetupJobState.draftPlan ||
+      SetupJobState.unknown => SetupWorkflowUnknown(job: job),
+    };
+  }
+
+  void _failSetup(
+    String diagnosticCode,
+    SetupJobSnapshot? previousJob, {
+    CoreClientFailure? transportFailure,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    _setupJob = previousJob;
+    setState(() {
+      _setupState = SetupWorkflowFailed(
+        diagnosticCode: diagnosticCode,
+        job: previousJob,
+        recoveryAction: previousJob?.recoveryAction,
+        transportCategory: transportFailure?.category,
+        transportRecoveryAction: transportFailure?.recoveryAction,
+        transportRecoveryMessage: transportFailure?.recoveryMessage,
+      );
+    });
+  }
+
+  bool _isCurrentSetupRequest(CoreClient client, int revision) {
+    return mounted &&
+        identical(client, widget.coreClient) &&
+        revision == _setupRevision;
+  }
+
+  bool _isObservedSetupJob(
+    CoreClient client,
+    SetupJobId jobId,
+    int revision,
+    StreamSubscription<SetupJobEvent> subscription,
+  ) {
+    return _isCurrentSetupRequest(client, revision) &&
+        identical(_setupStreamClient, client) &&
+        _setupStreamJobId == jobId &&
+        identical(_setupSubscription, subscription);
+  }
+
+  Future<void> _detachSetupStream() {
+    _setupReconnectTimer?.cancel();
+    _setupReconnectTimer = null;
+    final subscription = _setupSubscription;
+    _setupSubscription = null;
+    _setupStreamClient = null;
+    _setupStreamJobId = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+    return Future<void>.value();
+  }
+
+  bool get _canReviewSetup {
+    final jobState = _setupJob?.state;
+    return widget.coreClient.supportsTransportCapability(
+          TransportCapability.setupWorkflow,
+        ) &&
+        (_setupState is SetupWorkflowIdle ||
+            _setupState is SetupWorkflowReady ||
+            jobState == SetupJobState.failed ||
+            jobState == SetupJobState.cancelled);
+  }
+
+  bool get _canCancelSetup {
+    final job = _setupJob;
+    return job != null && _cancellableSetupStates.contains(job.state);
+  }
+
+  bool get _canRetrySetup {
+    final job = _setupJob;
+    return job != null && _isRetryableSetupJob(job);
+  }
+
   @override
   Widget build(BuildContext context) {
     return FoundationScreen(
@@ -753,6 +1142,7 @@ class _FoundationPageState extends State<FoundationPage> {
       recommendationState: _recommendationState,
       runtimeStatusState: _runtimeStatusState,
       runtimeInventoryState: _runtimeInventoryState,
+      setupState: _setupState,
       preferences: _preferences,
       onRetry: _checkConnection,
       onStartHardwareScan: _startHardwareScan,
@@ -773,6 +1163,38 @@ class _FoundationPageState extends State<FoundationPage> {
           ? null
           : _cancelRuntimeOperation,
       onToggleRuntimeModels: _toggleRuntimeModels,
+      onReviewSetup: _canReviewSetup ? _createSetupPlan : null,
+      onApproveSetup: _setupJob?.state == SetupJobState.awaitingApproval
+          ? () => _decideSetupApproval(SetupApprovalDecision.approve)
+          : null,
+      onDenySetup: _setupJob?.state == SetupJobState.awaitingApproval
+          ? () => _decideSetupApproval(SetupApprovalDecision.deny)
+          : null,
+      onStartSetup: _setupJob?.state == SetupJobState.approved
+          ? _startSetupJob
+          : null,
+      onCancelSetup: _canCancelSetup ? _cancelSetupJob : null,
+      onRetrySetup: _canRetrySetup ? _retrySetupJob : null,
+      onRefreshSetup: _setupState is SetupWorkflowIdle
+          ? null
+          : _refreshSetupJob,
     );
   }
 }
+
+const _retryableSetupStates = {
+  SetupJobState.attentionRequired,
+  SetupJobState.cancelled,
+};
+
+bool _isRetryableSetupJob(SetupJobSnapshot job) {
+  return _retryableSetupStates.contains(job.state) ||
+      (job.state == SetupJobState.failed &&
+          job.recoveryAction == SetupRecoveryAction.retry);
+}
+
+const _cancellableSetupStates = {
+  SetupJobState.approved,
+  SetupJobState.active,
+  SetupJobState.attentionRequired,
+};

@@ -4,6 +4,8 @@ import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/core/sidecar_connection.dart';
 import 'package:gixgiz_desktop/core/sidecar_core_client.dart';
 
+import 'support/setup_fixture.dart';
+
 void main() {
   test(
     'maps authoritative Rust health and version into a ready snapshot',
@@ -385,6 +387,62 @@ void main() {
   });
 
   test(
+    'setup requests use persisted job identity revision and cursor',
+    () async {
+      final session = _FakeSession(
+        readiness: ReadinessStatus.ready,
+        supportedCapabilities: const [
+          TransportCapability.health,
+          TransportCapability.setupWorkflow,
+        ],
+      );
+      final client = SidecarCoreClient(
+        connector: _FakeConnector.session(session),
+      );
+      await client.checkConnection();
+
+      final planned = await client.createSetupPlan(
+        setupRecommendationFixture(),
+      );
+      expect(planned.state, SetupJobState.awaitingApproval);
+      expect(session.lastSetupPlanRequest?.providerId, setupProviderIdFixture);
+      expect(
+        session.lastSetupPlanRequest?.destination,
+        SetupDestinationCategory.providerManaged,
+      );
+
+      final recovered = await client.recoverSetupJob();
+      expect(recovered, isNotNull);
+      final approved = await client.decideSetupApproval(
+        recovered!,
+        SetupApprovalDecision.approve,
+      );
+      expect(approved.state, SetupJobState.approved);
+      expect(session.lastSetupApprovalRequest?.jobId, setupJobIdFixture);
+      expect(session.lastSetupApprovalRequest?.planRevision, 1);
+
+      final started = await client.startSetupJob(approved);
+      expect(started.state, SetupJobState.active);
+      final event = await client
+          .observeSetupJob(started.jobId, afterSequence: 7)
+          .single;
+      expect(event.sequence, 8);
+      expect(session.lastSetupEventsRequest?.limit, 64);
+      expect(session.lastSetupEventsRequest?.afterSequence, 7);
+
+      final cancelling = await client.cancelSetupJob(started.jobId);
+      expect(cancelling.cancellationRequested, isTrue);
+      expect(session.lastSetupCancelRequest?.jobId, started.jobId);
+
+      final retried = await client.retrySetupJob(
+        setupJobFixture(state: 'cancelled', stage: 'cancelled'),
+      );
+      expect(retried.state, SetupJobState.active);
+      expect(session.lastSetupRetryRequest?.planRevision, 1);
+    },
+  );
+
+  test(
     'unknown generated enums retain an explicit forward-compatible value',
     () {
       expect(
@@ -448,6 +506,12 @@ class _FakeSession implements CoreSidecarSession {
   ClientHello? lastHello;
   RuntimeConsentDecision? lastConsentDecision;
   RuntimeProviderId? lastRuntimeRequestProviderId;
+  SetupApprovalRequest? lastSetupApprovalRequest;
+  SetupJobCancelRequest? lastSetupCancelRequest;
+  SetupJobEventsRequest? lastSetupEventsRequest;
+  SetupJobRetryRequest? lastSetupRetryRequest;
+  SetupJobStartRequest? lastSetupStartRequest;
+  SetupPlanRequest? lastSetupPlanRequest;
 
   @override
   bool get hasExited => false;
@@ -718,6 +782,124 @@ class _FakeSession implements CoreSidecarSession {
     return CancelOperationResponse(
       operationId: operationId,
       accepted: true,
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupPlanResponse> createSetupPlan(SetupPlanRequest request) async {
+    lastSetupPlanRequest = request;
+    return SetupPlanResponse(
+      job: setupJobFixture(),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupJobRecoveryResponse> recoverSetupJob(
+    SetupJobRecoveryRequest request,
+  ) async {
+    return SetupJobRecoveryResponse(
+      job: setupJobFixture(),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupApprovalResponse> decideSetupApproval(
+    SetupApprovalRequest request,
+  ) async {
+    lastSetupApprovalRequest = request;
+    final job = setupJobFixture(
+      state: request.decision == SetupApprovalDecision.approve
+          ? 'approved'
+          : 'cancelled',
+      stage: request.decision == SetupApprovalDecision.approve
+          ? 'approved'
+          : 'cancelled',
+    );
+    final plan = job.plan;
+    return SetupApprovalResponse(
+      job: job,
+      approval: SetupApprovalRecord(
+        approvedEffects: plan.requiredEffects,
+        canonicalModelId: plan.model.artifact.canonicalModelId,
+        correlationId: request.correlationId,
+        decidedAtUnixMs: 5,
+        decision: request.decision,
+        destination: plan.model.destination,
+        expectedSizeBytes: plan.model.expectedSizeBytes,
+        externalRuntimeEffect: true,
+        jobId: request.jobId,
+        licenceSpdx: plan.model.licenceSpdx,
+        planRevision: request.planRevision,
+        provenance: plan.model.provenance,
+        providerId: plan.model.artifact.providerId,
+        providerModelId: plan.model.artifact.providerModelId,
+        requestId: request.requestId,
+      ),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupJobStartResponse> startSetupJob(
+    SetupJobStartRequest request,
+  ) async {
+    lastSetupStartRequest = request;
+    return SetupJobStartResponse(
+      job: setupJobFixture(state: 'active', stage: 'preparing'),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupJobStatusResponse> setupJobStatus(
+    SetupJobStatusRequest request,
+  ) async {
+    return SetupJobStatusResponse(
+      job: setupJobFixture(state: 'active', stage: 'acquiring'),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Stream<SetupJobEvent> setupJobEvents(SetupJobEventsRequest request) async* {
+    lastSetupEventsRequest = request;
+    final job = setupJobFixture(state: 'active', stage: 'acquiring');
+    yield setupEventFixture(sequence: request.afterSequence + 1, job: job);
+  }
+
+  @override
+  Future<SetupJobCancelResponse> cancelSetupJob(
+    SetupJobCancelRequest request,
+  ) async {
+    lastSetupCancelRequest = request;
+    return SetupJobCancelResponse(
+      accepted: true,
+      job: setupJobFixture(
+        state: 'active',
+        stage: 'acquiring',
+        cancellationRequested: true,
+      ),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
+  Future<SetupJobRetryResponse> retrySetupJob(
+    SetupJobRetryRequest request,
+  ) async {
+    lastSetupRetryRequest = request;
+    return SetupJobRetryResponse(
+      job: setupJobFixture(state: 'active', stage: 'preparing'),
       correlationId: request.correlationId,
       requestId: request.requestId,
     );

@@ -4,6 +4,7 @@ import 'package:gixgiz_desktop/core/core_client.dart';
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/features/foundation/foundation_state.dart';
 import 'package:gixgiz_desktop/features/foundation/runtime_panel.dart';
+import 'package:gixgiz_desktop/features/foundation/setup_panel.dart';
 import 'package:gixgiz_desktop/l10n/app_localizations.dart';
 import 'package:gixgiz_desktop/shared/page_header.dart';
 
@@ -31,6 +32,14 @@ class FoundationScreen extends StatelessWidget {
     this.onStartRuntimeOperation,
     this.onCancelRuntimeOperation,
     this.onToggleRuntimeModels,
+    this.setupState = const SetupWorkflowIdle(),
+    this.onReviewSetup,
+    this.onApproveSetup,
+    this.onDenySetup,
+    this.onStartSetup,
+    this.onCancelSetup,
+    this.onRetrySetup,
+    this.onRefreshSetup,
     this.runtimeActionFocusNode,
     this.primaryActionFocusNode,
     super.key,
@@ -54,6 +63,14 @@ class FoundationScreen extends StatelessWidget {
   final ValueChanged<RuntimeOperationKind>? onStartRuntimeOperation;
   final VoidCallback? onCancelRuntimeOperation;
   final VoidCallback? onToggleRuntimeModels;
+  final SetupWorkflowState setupState;
+  final ValueChanged<RecommendationPlan>? onReviewSetup;
+  final VoidCallback? onApproveSetup;
+  final VoidCallback? onDenySetup;
+  final VoidCallback? onStartSetup;
+  final VoidCallback? onCancelSetup;
+  final VoidCallback? onRetrySetup;
+  final VoidCallback? onRefreshSetup;
   final FocusNode? runtimeActionFocusNode;
   final FocusNode? primaryActionFocusNode;
 
@@ -100,6 +117,18 @@ class FoundationScreen extends StatelessWidget {
                       onToggleModels: onToggleRuntimeModels,
                       primaryActionFocusNode: runtimeActionFocusNode,
                     ),
+                    if (setupState is! SetupWorkflowIdle) ...[
+                      const SizedBox(height: 24),
+                      SetupPanel(
+                        state: setupState,
+                        onApprove: onApproveSetup,
+                        onDeny: onDenySetup,
+                        onStart: onStartSetup,
+                        onCancel: onCancelSetup,
+                        onRetry: onRetrySetup,
+                        onRefresh: onRefreshSetup,
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     _HardwareScanPanel(
                       state: hardwareScanState,
@@ -116,6 +145,7 @@ class FoundationScreen extends StatelessWidget {
                         onIncludeOptionalLargerChanged:
                             onIncludeOptionalLargerChanged,
                         onGenerate: onGenerateRecommendation,
+                        onReviewSetup: onReviewSetup,
                       ),
                     ],
                   ],
@@ -393,6 +423,7 @@ class _RecommendationPanel extends StatelessWidget {
     required this.onPriorityChanged,
     required this.onIncludeOptionalLargerChanged,
     required this.onGenerate,
+    required this.onReviewSetup,
   });
 
   final CapabilityRecommendationState state;
@@ -401,6 +432,7 @@ class _RecommendationPanel extends StatelessWidget {
   final ValueChanged<PreferencePriority>? onPriorityChanged;
   final ValueChanged<bool>? onIncludeOptionalLargerChanged;
   final VoidCallback? onGenerate;
+  final ValueChanged<RecommendationPlan>? onReviewSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -515,16 +547,20 @@ class _RecommendationPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        _RecommendationResult(state: state),
+        _RecommendationResult(state: state, onReviewSetup: onReviewSetup),
       ],
     );
   }
 }
 
 class _RecommendationResult extends StatelessWidget {
-  const _RecommendationResult({required this.state});
+  const _RecommendationResult({
+    required this.state,
+    required this.onReviewSetup,
+  });
 
   final CapabilityRecommendationState state;
+  final ValueChanged<RecommendationPlan>? onReviewSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -545,6 +581,7 @@ class _RecommendationResult extends StatelessWidget {
       ),
       CapabilityRecommendationReady(:final report) => _PlansResult(
         report: report,
+        onReviewSetup: onReviewSetup,
       ),
       CapabilityRecommendationNoPlan(:final report) => _NoPlanResultView(
         report: report,
@@ -578,9 +615,10 @@ class _RecommendationResult extends StatelessWidget {
 }
 
 class _PlansResult extends StatelessWidget {
-  const _PlansResult({required this.report});
+  const _PlansResult({required this.report, required this.onReviewSetup});
 
   final CapabilityReport report;
+  final ValueChanged<RecommendationPlan>? onReviewSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -612,6 +650,8 @@ class _PlansResult extends StatelessWidget {
             key: AppKeys.capabilityRecommendedPlan,
             title: localizations.capabilityRecommendedTitle,
             plan: recommended,
+            reviewActionKey: AppKeys.setupReviewAction,
+            onReviewSetup: onReviewSetup,
           ),
           if (report.fallbackPlan case final fallback?) ...[
             const SizedBox(height: 12),
@@ -619,6 +659,8 @@ class _PlansResult extends StatelessWidget {
               key: AppKeys.capabilityFallbackPlan,
               title: localizations.capabilityFallbackTitle,
               plan: fallback,
+              reviewActionKey: const ValueKey('setup-review-fallback'),
+              onReviewSetup: onReviewSetup,
             ),
           ],
           if (report.optionalLargerPlan case final larger?) ...[
@@ -627,6 +669,8 @@ class _PlansResult extends StatelessWidget {
               key: AppKeys.capabilityLargerPlan,
               title: localizations.capabilityLargerTitle,
               plan: larger,
+              reviewActionKey: const ValueKey('setup-review-larger'),
+              onReviewSetup: onReviewSetup,
             ),
           ],
           if (additionalWarnings.isNotEmpty) ...[
@@ -652,10 +696,18 @@ class _PlansResult extends StatelessWidget {
 }
 
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.title, required this.plan, super.key});
+  const _PlanCard({
+    required this.title,
+    required this.plan,
+    required this.reviewActionKey,
+    required this.onReviewSetup,
+    super.key,
+  });
 
   final String title;
   final RecommendationPlan plan;
+  final Key reviewActionKey;
+  final ValueChanged<RecommendationPlan>? onReviewSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -742,6 +794,18 @@ class _PlanCard extends StatelessWidget {
               localizations.capabilitySourceLabel(plan.model.provenanceUrl),
               style: textTheme.bodySmall,
             ),
+            if (onReviewSetup != null) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.icon(
+                  key: reviewActionKey,
+                  onPressed: () => onReviewSetup!(plan),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: Text(localizations.setupReviewAction),
+                ),
+              ),
+            ],
           ],
         ),
       ),

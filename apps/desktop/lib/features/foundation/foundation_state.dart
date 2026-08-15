@@ -184,3 +184,81 @@ final class RuntimeInventoryFailed extends RuntimeInventoryState {
   final String diagnosticCode;
   final RecoveryAction recoveryAction;
 }
+
+sealed class SetupWorkflowState {
+  const SetupWorkflowState();
+}
+
+final class SetupWorkflowIdle extends SetupWorkflowState {
+  const SetupWorkflowIdle();
+}
+
+final class SetupWorkflowPlanning extends SetupWorkflowState {
+  const SetupWorkflowPlanning();
+}
+
+final class SetupWorkflowLoading extends SetupWorkflowState {
+  const SetupWorkflowLoading({this.previousJob});
+
+  final SetupJobSnapshot? previousJob;
+}
+
+final class SetupWorkflowAwaitingApproval extends SetupWorkflowState {
+  const SetupWorkflowAwaitingApproval({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowApproved extends SetupWorkflowState {
+  const SetupWorkflowApproved({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowActive extends SetupWorkflowState {
+  const SetupWorkflowActive({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowReady extends SetupWorkflowState {
+  const SetupWorkflowReady({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowAttention extends SetupWorkflowState {
+  const SetupWorkflowAttention({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowFailed extends SetupWorkflowState {
+  const SetupWorkflowFailed({
+    required this.diagnosticCode,
+    this.job,
+    this.recoveryAction,
+    this.transportCategory,
+    this.transportRecoveryAction,
+    this.transportRecoveryMessage,
+  });
+
+  final String diagnosticCode;
+  final SetupJobSnapshot? job;
+  final SetupRecoveryAction? recoveryAction;
+  final ErrorCategory? transportCategory;
+  final RecoveryAction? transportRecoveryAction;
+  final String? transportRecoveryMessage;
+}
+
+final class SetupWorkflowCancelled extends SetupWorkflowState {
+  const SetupWorkflowCancelled({required this.job});
+
+  final SetupJobSnapshot job;
+}
+
+final class SetupWorkflowUnknown extends SetupWorkflowState {
+  const SetupWorkflowUnknown({required this.job});
+
+  final SetupJobSnapshot job;
+}
