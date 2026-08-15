@@ -8,7 +8,9 @@ use gixgiz_contracts::{
 use gixgiz_persistence::Persistence;
 use gixgiz_runtime::RuntimeProvider;
 
-use crate::{CoreError, OperationContext, RuntimeService, persistence::PersistenceHealthSource};
+use crate::{
+    CoreError, OperationContext, RuntimeService, SetupService, persistence::PersistenceHealthSource,
+};
 
 /// Explicit in-process lifecycle of the Task 03 platform core.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,6 +106,23 @@ impl PlatformCore {
             }
             PersistenceAccess::NotConfigured => RuntimeService::in_memory(provider),
             PersistenceAccess::Unavailable => RuntimeService::policy_unavailable(provider),
+        }
+    }
+
+    /// Composes durable model setup independently from the core lifecycle state.
+    ///
+    /// `None` means persistence failed to initialize or was not configured; setup
+    /// never falls back to volatile state because approval and recovery are durable.
+    #[must_use]
+    pub fn setup_service(
+        &self,
+        provider: std::sync::Arc<dyn RuntimeProvider>,
+    ) -> Option<SetupService> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => {
+                Some(SetupService::with_persistence(provider, persistence))
+            }
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
         }
     }
 

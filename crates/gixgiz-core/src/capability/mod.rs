@@ -34,6 +34,24 @@ impl CapabilityEngine {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn setup_versions(&self) -> (&CatalogueVersion, &RuleSetVersion) {
+        (&self.catalogue.version, &self.rule_set_version)
+    }
+
+    pub(crate) fn validate_setup_versions(
+        &self,
+        catalogue_version: &CatalogueVersion,
+        rule_set_version: &RuleSetVersion,
+    ) -> Result<(), CoreError> {
+        if catalogue_version != &self.catalogue.version
+            || rule_set_version != &self.rule_set_version
+        {
+            return Err(CoreError::InvalidSetupPlan);
+        }
+        Ok(())
+    }
+
     /// Generates a deterministic report from supplied evidence and preferences.
     pub fn recommend(
         &self,
@@ -176,6 +194,49 @@ impl CapabilityEngine {
             warnings,
             recommended_plan: Some(recommended_plan),
         })
+    }
+
+    /// Revalidates setup-critical recommendation fields against the compiled catalogue.
+    pub(crate) fn validate_setup_recommendation(
+        &self,
+        plan: &RecommendationPlan,
+    ) -> Result<(), CoreError> {
+        let candidate = self
+            .catalogue
+            .candidates
+            .iter()
+            .find(|candidate| candidate.model.catalogue_id == plan.model.catalogue_id)
+            .ok_or(CoreError::InvalidSetupPlan)?;
+        let acceleration_valid = if plan.resources.cpu_only {
+            plan.resources.acceleration.is_none() && plan.resources.gpu_memory_bytes.is_none()
+        } else {
+            matches!(
+                (plan.resources.acceleration, plan.resources.gpu_memory_bytes),
+                (Some(acceleration), Some(gpu_memory))
+                    if candidate.runtime.optional_accelerations.contains(&acceleration)
+                        && gpu_memory >= candidate.optional_gpu_memory_bytes
+            )
+        };
+        let role_valid = matches!(
+            plan.role,
+            PlanRole::Recommended | PlanRole::Fallback | PlanRole::OptionalLarger
+        );
+        if plan.catalogue_version != self.catalogue.version
+            || plan.rule_set_version != self.rule_set_version
+            || plan.compatibility != CompatibilityStatus::Compatible
+            || !role_valid
+            || plan.model != candidate.model
+            || plan.runtime != candidate.runtime
+            || plan.resources.memory.required_bytes != candidate.required_memory_bytes
+            || plan.resources.memory.safety_margin_bytes != candidate.memory_safety_margin_bytes
+            || plan.resources.storage.required_bytes != candidate.required_storage_bytes
+            || plan.resources.storage.safety_margin_bytes != candidate.storage_safety_margin_bytes
+            || plan.resources.planned_context_tokens != candidate.planned_context_tokens
+            || !acceleration_valid
+        {
+            return Err(CoreError::InvalidSetupPlan);
+        }
+        Ok(())
     }
 
     fn no_plan(
