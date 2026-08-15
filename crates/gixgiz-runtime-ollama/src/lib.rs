@@ -8,9 +8,11 @@ mod discovery;
 mod endpoint;
 mod error;
 mod http;
+mod model_http;
 mod models;
 mod process;
 mod protocol;
+mod storage;
 mod version;
 
 pub use adapter::{OLLAMA_PROVIDER_ID, OllamaAdapter};

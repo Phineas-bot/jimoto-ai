@@ -14,6 +14,7 @@ mod database;
 mod error;
 mod migrations;
 mod repositories;
+mod setup;
 
 pub use data_root::DataRoot;
 pub use database::{DatabaseConfiguration, Persistence, PersistenceHealth, PersistenceOptions};
@@ -23,4 +24,13 @@ pub use repositories::{
     AuditEvent, AuditEventId, AuditEventRepository, JobId, JobMetadata, JobMetadataRepository,
     JobState, PlatformMetadataRepository, RuntimePolicyRecord, RuntimePolicyRepository,
     SettingsRepository,
+};
+pub use setup::{
+    PersistedArtifactUpdate, PersistedDestinationCategory, PersistedEffectDisposition,
+    PersistedModelArtifact, PersistedModelIntegrity, PersistedModelLifecycle,
+    PersistedModelVerification, PersistedSetupApproval, PersistedSetupApprovalDecision,
+    PersistedSetupApprovalInput, PersistedSetupEffect, PersistedSetupEffectInput,
+    PersistedSetupEvent, PersistedSetupEventKind, PersistedSetupJob, PersistedSetupNotice,
+    PersistedSetupPlan, PersistedSetupProgress, PersistedSetupStage, PersistedSetupState,
+    PersistedSetupTransition, PersistedSetupWriteResult, SetupJobRepository,
 };

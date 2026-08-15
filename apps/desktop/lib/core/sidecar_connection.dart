@@ -98,6 +98,26 @@ abstract interface class CoreSidecarSession {
     CancelOperationRequest request,
   );
 
+  Future<SetupPlanResponse> createSetupPlan(SetupPlanRequest request);
+
+  Future<SetupJobRecoveryResponse> recoverSetupJob(
+    SetupJobRecoveryRequest request,
+  );
+
+  Future<SetupApprovalResponse> decideSetupApproval(
+    SetupApprovalRequest request,
+  );
+
+  Future<SetupJobStartResponse> startSetupJob(SetupJobStartRequest request);
+
+  Future<SetupJobStatusResponse> setupJobStatus(SetupJobStatusRequest request);
+
+  Stream<SetupJobEvent> setupJobEvents(SetupJobEventsRequest request);
+
+  Future<SetupJobCancelResponse> cancelSetupJob(SetupJobCancelRequest request);
+
+  Future<SetupJobRetryResponse> retrySetupJob(SetupJobRetryRequest request);
+
   Future<void> shutdown(ShutdownRequest request);
 }
 
@@ -105,6 +125,7 @@ typedef CorePathResolver = String Function();
 
 // The host allows 30 seconds for lifecycle work and 3 seconds for terminal status.
 const _defaultRuntimeEventInactivityTimeout = Duration(seconds: 40);
+const _defaultSetupEventInactivityTimeout = Duration(seconds: 75);
 
 class PipeSidecarConnector implements CoreSidecarConnector {
   PipeSidecarConnector({
@@ -112,6 +133,7 @@ class PipeSidecarConnector implements CoreSidecarConnector {
     this.startupTimeout = const Duration(seconds: 5),
     this.requestTimeout = const Duration(seconds: 5),
     this.runtimeEventInactivityTimeout = _defaultRuntimeEventInactivityTimeout,
+    this.setupEventInactivityTimeout = _defaultSetupEventInactivityTimeout,
     this.shutdownTimeout = const Duration(seconds: 3),
   }) : _corePathResolver = corePathResolver ?? bundledCorePath;
 
@@ -119,6 +141,7 @@ class PipeSidecarConnector implements CoreSidecarConnector {
   final Duration startupTimeout;
   final Duration requestTimeout;
   final Duration runtimeEventInactivityTimeout;
+  final Duration setupEventInactivityTimeout;
   final Duration shutdownTimeout;
 
   @override
@@ -184,6 +207,7 @@ class PipeSidecarConnector implements CoreSidecarConnector {
         () => exited,
         requestTimeout: requestTimeout,
         runtimeEventInactivityTimeout: runtimeEventInactivityTimeout,
+        setupEventInactivityTimeout: setupEventInactivityTimeout,
         shutdownTimeout: shutdownTimeout,
       );
     } on TimeoutException {
@@ -216,6 +240,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
     this._hasExited, {
     required this.requestTimeout,
     this.runtimeEventInactivityTimeout = _defaultRuntimeEventInactivityTimeout,
+    this.setupEventInactivityTimeout = _defaultSetupEventInactivityTimeout,
     required this.shutdownTimeout,
   }) : _client = HttpClient() {
     if (_endpoint.host != '127.0.0.1') {
@@ -240,6 +265,7 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   final HttpClient _client;
   final Duration requestTimeout;
   final Duration runtimeEventInactivityTimeout;
+  final Duration setupEventInactivityTimeout;
   final Duration shutdownTimeout;
   var _closed = false;
 
@@ -815,6 +841,289 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   }
 
   @override
+  Future<SetupPlanResponse> createSetupPlan(SetupPlanRequest request) async {
+    final response = SetupPlanResponse.fromJson(
+      await _post(
+        '/internal/v1/setup/plan',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SetupJobRecoveryResponse> recoverSetupJob(
+    SetupJobRecoveryRequest request,
+  ) async {
+    final response = SetupJobRecoveryResponse.fromJson(
+      await _post(
+        '/internal/v1/setup/jobs/recovery',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SetupApprovalResponse> decideSetupApproval(
+    SetupApprovalRequest request,
+  ) async {
+    final response = SetupApprovalResponse.fromJson(
+      await _post(
+        _setupJobPath(request.jobId, 'approve'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SetupJobStartResponse> startSetupJob(
+    SetupJobStartRequest request,
+  ) async {
+    final response = SetupJobStartResponse.fromJson(
+      await _post(
+        '/internal/v1/setup/jobs',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SetupJobStatusResponse> setupJobStatus(
+    SetupJobStatusRequest request,
+  ) async {
+    final response = SetupJobStatusResponse.fromJson(
+      await _post(
+        _setupJobPath(request.jobId, 'status'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Stream<SetupJobEvent> setupJobEvents(SetupJobEventsRequest request) async* {
+    if (request.afterSequence < 0 ||
+        request.limit < 1 ||
+        request.limit > _maxEvents ||
+        !isValidTransportUuid(request.jobId)) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'SETUP_JOB_EVENT_REQUEST_INVALID',
+      );
+    }
+
+    HttpClientResponse response;
+    try {
+      final endpoint = _endpoint.resolve(
+        _setupJobPath(request.jobId, 'events'),
+      );
+      final eventRequest = await _client
+          .getUrl(
+            endpoint.replace(
+              queryParameters: {
+                'after_sequence': request.afterSequence.toString(),
+                'limit': request.limit.toString(),
+              },
+            ),
+          )
+          .timeout(requestTimeout);
+      _applyHeaders(
+        eventRequest.headers,
+        request.correlationId,
+        request.requestId,
+      );
+      response = await eventRequest.close().timeout(requestTimeout);
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_CONNECTION_TIMEOUT',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_CONNECTION_LOST',
+      );
+    }
+
+    if (response.statusCode != HttpStatus.ok) {
+      throw await _failureFromResponse(
+        response,
+        request.correlationId,
+        request.requestId,
+      );
+    }
+
+    var expectedSequence = request.afterSequence + 1;
+    var eventCount = 0;
+    try {
+      var streamedBytes = 0;
+      final bounded = response
+          .timeout(setupEventInactivityTimeout)
+          .transform(
+            StreamTransformer<List<int>, List<int>>.fromHandlers(
+              handleData: (chunk, sink) {
+                streamedBytes += chunk.length;
+                if (streamedBytes > _maxEventStreamBytes) {
+                  sink.addError(
+                    const SidecarFailure(
+                      SidecarFailureKind.invalidResponse,
+                      'SETUP_JOB_STREAM_LIMIT',
+                    ),
+                  );
+                  return;
+                }
+                sink.add(chunk);
+              },
+            ),
+          );
+      await for (final line
+          in bounded.transform(utf8.decoder).transform(const LineSplitter())) {
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+        final data = line.substring(5).trimLeft();
+        if (data.length > _maxResponseBytes ||
+            eventCount >= request.limit ||
+            eventCount >= _maxEvents) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'SETUP_JOB_STREAM_LIMIT',
+          );
+        }
+        final event = SetupJobEvent.fromJson(
+          _decodeObject(data, 'setup job event'),
+        );
+        if (event.jobId != request.jobId ||
+            event.job.jobId != request.jobId ||
+            event.sequence != expectedSequence) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'SETUP_JOB_SEQUENCE_INVALID',
+          );
+        }
+        expectedSequence += 1;
+        eventCount += 1;
+        yield event;
+        if (event.terminalState != null) {
+          return;
+        }
+      }
+    } on SidecarFailure {
+      rethrow;
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_STREAM_TIMEOUT',
+      );
+    } on FormatException {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'SETUP_JOB_EVENT_INVALID',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'SETUP_JOB_CONNECTION_LOST',
+      );
+    }
+  }
+
+  @override
+  Future<SetupJobCancelResponse> cancelSetupJob(
+    SetupJobCancelRequest request,
+  ) async {
+    final response = SetupJobCancelResponse.fromJson(
+      await _post(
+        _setupJobPath(request.jobId, 'cancel'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SetupJobRetryResponse> retrySetupJob(
+    SetupJobRetryRequest request,
+  ) async {
+    final response = SetupJobRetryResponse.fromJson(
+      await _post(
+        _setupJobPath(request.jobId, 'retry'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
   Future<void> shutdown(ShutdownRequest request) async {
     if (_closed) {
       return;
@@ -911,6 +1220,16 @@ class IoCoreSidecarSession implements CoreSidecarSession {
         'CORE_RESPONSE_INVALID',
       );
     }
+  }
+
+  String _setupJobPath(SetupJobId jobId, String action) {
+    if (!isValidTransportUuid(jobId)) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'SETUP_JOB_ID_INVALID',
+      );
+    }
+    return '/internal/v1/setup/jobs/$jobId/$action';
   }
 
   void _applyHeaders(
@@ -1038,6 +1357,14 @@ String _newUuid() {
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
       '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
       '${hex.substring(20)}';
+}
+
+final _transportUuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+bool isValidTransportUuid(String value) {
+  return _transportUuidPattern.hasMatch(value);
 }
 
 String newCorrelationId() => _newUuid();

@@ -55,6 +55,35 @@ abstract final class AppKeys {
   static const capabilityNoPlan = ValueKey<String>(
     'foundation.capability.no_plan',
   );
+  static const setupPanel = ValueKey<String>('foundation.setup');
+  static const setupStatus = ValueKey<String>('foundation.setup.status');
+  static const setupProgress = ValueKey<String>('foundation.setup.progress');
+  static const setupPlan = ValueKey<String>('foundation.setup.plan');
+  static const setupReviewAction = ValueKey<String>(
+    'foundation.setup.review_action',
+  );
+  static const setupApproveAction = ValueKey<String>(
+    'foundation.setup.approve_action',
+  );
+  static const setupDenyAction = ValueKey<String>(
+    'foundation.setup.deny_action',
+  );
+  static const setupStartAction = ValueKey<String>(
+    'foundation.setup.start_action',
+  );
+  static const setupCancelAction = ValueKey<String>(
+    'foundation.setup.cancel_action',
+  );
+  static const setupRetryAction = ValueKey<String>(
+    'foundation.setup.retry_action',
+  );
+  static const setupRefreshAction = ValueKey<String>(
+    'foundation.setup.refresh_action',
+  );
+  static const setupEffects = ValueKey<String>('foundation.setup.effects');
+  static const setupDiagnostics = ValueKey<String>(
+    'foundation.setup.diagnostics',
+  );
   static const runtimePanel = ValueKey<String>('foundation.runtime');
   static const runtimeStatus = ValueKey<String>('foundation.runtime.status');
   static const runtimeDetails = ValueKey<String>('foundation.runtime.details');

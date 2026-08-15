@@ -2,11 +2,17 @@
 
 use std::sync::{Arc, Mutex};
 
-use gixgiz_contracts::{RuntimeModelInventory, RuntimeOperationKind, RuntimeProviderId};
+use gixgiz_contracts::{
+    CandidateModelId, ModelAcquisitionProgress, ModelProviderArtifact, RuntimeModelInventory,
+    RuntimeOperationKind, RuntimeProviderId,
+};
 
 use crate::{
-    RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle, RuntimeModelInventoryProvider,
-    RuntimeObservation, RuntimeOperationContext, RuntimeProvider,
+    ModelProgressSender, RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle,
+    RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult, RuntimeModelInspection,
+    RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
+    RuntimeOperationContext, RuntimeProvider, RuntimeReadinessInferenceResult,
+    RuntimeStoragePreflight,
 };
 
 /// Recorded deterministic fake-provider call.
@@ -18,6 +24,16 @@ pub enum FakeRuntimeCall {
     Lifecycle(RuntimeOperationKind),
     /// A model inventory was requested.
     ListModels(u16),
+    /// Canonical model preparation was requested.
+    PrepareModelAcquisition,
+    /// Provider-managed storage preflight was requested.
+    PreflightModelStorage,
+    /// Exact provider artifact acquisition was requested.
+    AcquireModel,
+    /// Exact provider artifact inspection was requested.
+    InspectModel,
+    /// Fixed bounded readiness inference was requested.
+    RunReadinessInference,
 }
 
 /// Configurable provider that performs no process, filesystem, or network I/O.
@@ -27,6 +43,12 @@ pub struct FakeRuntimeProvider {
     observation: Arc<Mutex<Result<RuntimeObservation, RuntimeError>>>,
     lifecycle: Arc<Mutex<Result<RuntimeObservation, RuntimeError>>>,
     inventory: Arc<Mutex<Result<RuntimeModelInventory, RuntimeError>>>,
+    acquisition_plan: Arc<Mutex<Result<RuntimeModelAcquisitionPlan, RuntimeError>>>,
+    storage_preflight: Arc<Mutex<Result<RuntimeStoragePreflight, RuntimeError>>>,
+    acquisition: Arc<Mutex<Result<RuntimeModelAcquisitionResult, RuntimeError>>>,
+    inspection: Arc<Mutex<Result<RuntimeModelInspection, RuntimeError>>>,
+    readiness: Arc<Mutex<Result<RuntimeReadinessInferenceResult, RuntimeError>>>,
+    progress: Arc<Mutex<Vec<ModelAcquisitionProgress>>>,
     calls: Arc<Mutex<Vec<FakeRuntimeCall>>>,
 }
 
@@ -44,8 +66,39 @@ impl FakeRuntimeProvider {
             observation: Arc::new(Mutex::new(observation)),
             lifecycle: Arc::new(Mutex::new(lifecycle)),
             inventory: Arc::new(Mutex::new(inventory)),
+            acquisition_plan: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
+            storage_preflight: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
+            acquisition: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
+            inspection: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
+            readiness: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
+            progress: Arc::new(Mutex::new(Vec::new())),
             calls: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Configures fixed deterministic model-setup results without changing the legacy constructor.
+    #[must_use]
+    pub fn with_model_setup_results(
+        mut self,
+        acquisition_plan: Result<RuntimeModelAcquisitionPlan, RuntimeError>,
+        storage_preflight: Result<RuntimeStoragePreflight, RuntimeError>,
+        acquisition: Result<RuntimeModelAcquisitionResult, RuntimeError>,
+        inspection: Result<RuntimeModelInspection, RuntimeError>,
+        readiness: Result<RuntimeReadinessInferenceResult, RuntimeError>,
+    ) -> Self {
+        self.acquisition_plan = Arc::new(Mutex::new(acquisition_plan));
+        self.storage_preflight = Arc::new(Mutex::new(storage_preflight));
+        self.acquisition = Arc::new(Mutex::new(acquisition));
+        self.inspection = Arc::new(Mutex::new(inspection));
+        self.readiness = Arc::new(Mutex::new(readiness));
+        self
+    }
+
+    /// Configures normalized progress emitted during fake model acquisition.
+    #[must_use]
+    pub fn with_model_progress(mut self, progress: Vec<ModelAcquisitionProgress>) -> Self {
+        self.progress = Arc::new(Mutex::new(progress));
+        self
     }
 
     /// Returns the ordered call log, or an empty list after lock poisoning.
@@ -105,6 +158,94 @@ impl RuntimeModelInventoryProvider for FakeRuntimeProvider {
             context.check()?;
             self.record(FakeRuntimeCall::ListModels(limit))?;
             self.inventory
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+}
+
+impl RuntimeModelSetupProvider for FakeRuntimeProvider {
+    fn prepare_model_acquisition(
+        &self,
+        _model_id: CandidateModelId,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelAcquisitionPlan> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::PrepareModelAcquisition)?;
+            self.acquisition_plan
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+
+    fn preflight_model_storage(
+        &self,
+        _plan: RuntimeModelAcquisitionPlan,
+        _required_bytes: u64,
+        _safety_margin_bytes: u64,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeStoragePreflight> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::PreflightModelStorage)?;
+            self.storage_preflight
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+
+    fn acquire_model(
+        &self,
+        _plan: RuntimeModelAcquisitionPlan,
+        progress: ModelProgressSender,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelAcquisitionResult> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::AcquireModel)?;
+            let updates = self
+                .progress
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone();
+            for update in updates {
+                let _ = progress.try_send(update);
+            }
+            self.acquisition
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+
+    fn inspect_model(
+        &self,
+        _artifact: ModelProviderArtifact,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeModelInspection> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::InspectModel)?;
+            self.inspection
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+
+    fn run_readiness_inference(
+        &self,
+        _artifact: ModelProviderArtifact,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeReadinessInferenceResult> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::RunReadinessInference)?;
+            self.readiness
                 .lock()
                 .map_err(|_| RuntimeError::Internal)?
                 .clone()

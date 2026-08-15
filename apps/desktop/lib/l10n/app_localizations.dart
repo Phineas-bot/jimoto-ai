@@ -1488,6 +1488,796 @@ abstract class AppLocalizations {
     String reuseConsent,
     String managementConsent,
   );
+
+  /// No description provided for @setupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local model setup'**
+  String get setupTitle;
+
+  /// No description provided for @setupPlanningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing setup plan'**
+  String get setupPlanningTitle;
+
+  /// No description provided for @setupPlanningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is validating the selected recommendation and its local effects.'**
+  String get setupPlanningMessage;
+
+  /// No description provided for @setupUpdatingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating setup status'**
+  String get setupUpdatingTitle;
+
+  /// No description provided for @setupUpdatingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is loading the latest persisted setup state.'**
+  String get setupUpdatingMessage;
+
+  /// No description provided for @setupPlanReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review setup plan'**
+  String get setupPlanReadyTitle;
+
+  /// No description provided for @setupPlanReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the model, storage, licence, resources, and provider effects before continuing.'**
+  String get setupPlanReadyMessage;
+
+  /// No description provided for @setupAwaitingApprovalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval required'**
+  String get setupAwaitingApprovalTitle;
+
+  /// No description provided for @setupAwaitingApprovalMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No model data will be added until you approve this exact plan.'**
+  String get setupAwaitingApprovalMessage;
+
+  /// No description provided for @setupApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup approved'**
+  String get setupApprovedTitle;
+
+  /// No description provided for @setupApprovedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The approved plan is ready to start.'**
+  String get setupApprovedMessage;
+
+  /// No description provided for @setupPreparingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing model setup'**
+  String get setupPreparingTitle;
+
+  /// No description provided for @setupPreparingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is rechecking the runtime and approved setup plan.'**
+  String get setupPreparingMessage;
+
+  /// No description provided for @setupCheckingStorageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking storage'**
+  String get setupCheckingStorageTitle;
+
+  /// No description provided for @setupCheckingStorageMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is checking destination availability and the required safety margin.'**
+  String get setupCheckingStorageMessage;
+
+  /// No description provided for @setupAcquiringTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Acquiring model'**
+  String get setupAcquiringTitle;
+
+  /// No description provided for @setupAcquiringMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The local runtime is acquiring the approved model artifact.'**
+  String get setupAcquiringMessage;
+
+  /// No description provided for @setupCancellingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation requested'**
+  String get setupCancellingTitle;
+
+  /// No description provided for @setupCancellingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is waiting for the local runtime to stop safely and report retained effects.'**
+  String get setupCancellingMessage;
+
+  /// No description provided for @setupRegisteringTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Registering model'**
+  String get setupRegisteringTitle;
+
+  /// No description provided for @setupRegisteringMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is checking the model registration reported by the runtime.'**
+  String get setupRegisteringMessage;
+
+  /// No description provided for @setupVerifyingRuntimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying runtime'**
+  String get setupVerifyingRuntimeTitle;
+
+  /// No description provided for @setupVerifyingRuntimeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is confirming that the local runtime is healthy.'**
+  String get setupVerifyingRuntimeMessage;
+
+  /// No description provided for @setupVerifyingModelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying model'**
+  String get setupVerifyingModelTitle;
+
+  /// No description provided for @setupVerifyingModelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is confirming model availability and registration.'**
+  String get setupVerifyingModelMessage;
+
+  /// No description provided for @setupInferenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing readiness'**
+  String get setupInferenceTitle;
+
+  /// No description provided for @setupInferenceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz is running a fixed, private-content-free readiness check.'**
+  String get setupInferenceMessage;
+
+  /// No description provided for @setupReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local model ready'**
+  String get setupReadyTitle;
+
+  /// No description provided for @setupReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime health, model availability, registration, and bounded inference were verified.'**
+  String get setupReadyMessage;
+
+  /// No description provided for @setupAttentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup needs attention'**
+  String get setupAttentionTitle;
+
+  /// No description provided for @setupAttentionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the recommended action before continuing.'**
+  String get setupAttentionMessage;
+
+  /// No description provided for @setupFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Model setup failed'**
+  String get setupFailedTitle;
+
+  /// No description provided for @setupFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The setup stopped safely. Review diagnostics and the recommended action.'**
+  String get setupFailedMessage;
+
+  /// No description provided for @setupCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Model setup cancelled'**
+  String get setupCancelledTitle;
+
+  /// No description provided for @setupCancelledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The setup stopped after recording completed, retained, rolled-back, and uncertain effects.'**
+  String get setupCancelledMessage;
+
+  /// No description provided for @setupUnknownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup state needs review'**
+  String get setupUnknownTitle;
+
+  /// No description provided for @setupUnknownMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This GixGiz version does not recognize the reported setup state. No readiness claim was made.'**
+  String get setupUnknownMessage;
+
+  /// No description provided for @setupStatusSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model setup status: {status}. {message} Model: {model}. Stage: {stage}.'**
+  String setupStatusSemanticLabel(
+    String status,
+    String message,
+    String model,
+    String stage,
+  );
+
+  /// No description provided for @setupProgressSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model setup progress'**
+  String get setupProgressSemanticLabel;
+
+  /// No description provided for @setupProgressPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% complete'**
+  String setupProgressPercent(String percent);
+
+  /// No description provided for @setupProgressBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{completed} of {total}'**
+  String setupProgressBytes(String completed, String total);
+
+  /// No description provided for @setupModelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get setupModelLabel;
+
+  /// No description provided for @setupFamilyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Family'**
+  String get setupFamilyLabel;
+
+  /// No description provided for @setupProviderArtifactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider artifact'**
+  String get setupProviderArtifactLabel;
+
+  /// No description provided for @setupRuntimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Local runtime'**
+  String get setupRuntimeLabel;
+
+  /// No description provided for @setupRuntimeVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime version'**
+  String get setupRuntimeVersionLabel;
+
+  /// No description provided for @setupLicenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Licence'**
+  String get setupLicenceLabel;
+
+  /// No description provided for @setupProvenanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get setupProvenanceLabel;
+
+  /// No description provided for @setupDestinationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get setupDestinationLabel;
+
+  /// No description provided for @setupExpectedSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected size'**
+  String get setupExpectedSizeLabel;
+
+  /// No description provided for @setupPlanComponentsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan components'**
+  String get setupPlanComponentsLabel;
+
+  /// No description provided for @setupComponentRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Compatible local runtime'**
+  String get setupComponentRuntime;
+
+  /// No description provided for @setupComponentModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected local model'**
+  String get setupComponentModel;
+
+  /// No description provided for @setupComponentStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved storage destination'**
+  String get setupComponentStorage;
+
+  /// No description provided for @setupComponentVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime, model, registration, and inference verification'**
+  String get setupComponentVerification;
+
+  /// No description provided for @setupComponentUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognized setup component'**
+  String get setupComponentUnknown;
+
+  /// No description provided for @setupComponentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'{component} (required)'**
+  String setupComponentRequired(String component);
+
+  /// No description provided for @setupComponentOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'{component} (optional)'**
+  String setupComponentOptional(String component);
+
+  /// No description provided for @setupRequiredEffectsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'This approval allows'**
+  String get setupRequiredEffectsLabel;
+
+  /// No description provided for @setupReasonsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Why this plan was selected'**
+  String get setupReasonsLabel;
+
+  /// No description provided for @setupReasonRecommendationSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'This model comes from the deterministic recommendation shown above.'**
+  String get setupReasonRecommendationSelected;
+
+  /// No description provided for @setupReasonExistingModelReusable.
+  ///
+  /// In en, this message translates to:
+  /// **'The exact provider model is already available and may be reused.'**
+  String get setupReasonExistingModelReusable;
+
+  /// No description provided for @setupReasonAcquisitionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected provider model must be added before verification.'**
+  String get setupReasonAcquisitionRequired;
+
+  /// No description provided for @setupReasonApprovalRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'The listed local effects require approval before setup starts.'**
+  String get setupReasonApprovalRequired;
+
+  /// No description provided for @setupReasonStorageVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage was checked with the required safety margin.'**
+  String get setupReasonStorageVerified;
+
+  /// No description provided for @setupReasonRuntimeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'The compatible local runtime was verified.'**
+  String get setupReasonRuntimeVerified;
+
+  /// No description provided for @setupReasonRegistrationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'The exact provider model registration was verified.'**
+  String get setupReasonRegistrationVerified;
+
+  /// No description provided for @setupReasonReadinessVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'The bounded readiness check was verified.'**
+  String get setupReasonReadinessVerified;
+
+  /// No description provided for @setupReasonUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The core reported an unrecognized setup reason.'**
+  String get setupReasonUnknown;
+
+  /// No description provided for @setupWarningsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Important considerations'**
+  String get setupWarningsLabel;
+
+  /// No description provided for @setupWarningExternalRuntimeModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup changes an externally managed local runtime without transferring its ownership to GixGiz.'**
+  String get setupWarningExternalRuntimeModified;
+
+  /// No description provided for @setupWarningProviderManagedStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'The local runtime owns and controls this model storage.'**
+  String get setupWarningProviderManagedStorage;
+
+  /// No description provided for @setupWarningIntegrityMetadataUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No trusted independent checksum is available for this provider model.'**
+  String get setupWarningIntegrityMetadataUnavailable;
+
+  /// No description provided for @setupWarningCancellationMayRetainEffects.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation may leave provider-owned partial or completed model data in place.'**
+  String get setupWarningCancellationMayRetainEffects;
+
+  /// No description provided for @setupWarningDestinationEvidenceIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Some storage destination evidence could not be verified.'**
+  String get setupWarningDestinationEvidenceIncomplete;
+
+  /// No description provided for @setupWarningUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The core reported an unrecognized setup warning.'**
+  String get setupWarningUnknown;
+
+  /// No description provided for @setupProviderManagedDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider-managed local storage'**
+  String get setupProviderManagedDestination;
+
+  /// No description provided for @setupApplicationDataDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz application storage'**
+  String get setupApplicationDataDestination;
+
+  /// No description provided for @setupUserSelectedDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved user-selected storage'**
+  String get setupUserSelectedDestination;
+
+  /// No description provided for @setupUnknownDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Unverified storage destination'**
+  String get setupUnknownDestination;
+
+  /// No description provided for @setupReviewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Review setup'**
+  String get setupReviewAction;
+
+  /// No description provided for @setupApproveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve plan'**
+  String get setupApproveAction;
+
+  /// No description provided for @setupDenyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline plan'**
+  String get setupDenyAction;
+
+  /// No description provided for @setupApprovalBackAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get setupApprovalBackAction;
+
+  /// No description provided for @setupStartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Start setup'**
+  String get setupStartAction;
+
+  /// No description provided for @setupCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel setup'**
+  String get setupCancelAction;
+
+  /// No description provided for @setupKeepRunningAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep running'**
+  String get setupKeepRunningAction;
+
+  /// No description provided for @setupRetryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry setup'**
+  String get setupRetryAction;
+
+  /// No description provided for @setupRefreshAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh status'**
+  String get setupRefreshAction;
+
+  /// No description provided for @setupApprovalPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve this model setup?'**
+  String get setupApprovalPromptTitle;
+
+  /// No description provided for @setupApprovalPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve adding {model} to {runtime}. This exact approval covers {size} in {destination} and only the listed effects.'**
+  String setupApprovalPromptMessage(
+    String model,
+    String runtime,
+    String size,
+    String destination,
+  );
+
+  /// No description provided for @setupCancelPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel model setup?'**
+  String get setupCancelPromptTitle;
+
+  /// No description provided for @setupCancelPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation is cooperative. Provider-owned partial data may be retained and will be reported honestly.'**
+  String get setupCancelPromptMessage;
+
+  /// No description provided for @setupCancelApprovedPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this approved setup before it starts. No provider work will begin.'**
+  String get setupCancelApprovedPromptMessage;
+
+  /// No description provided for @setupCancelAttentionPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this setup after reviewing its attention state. Existing completed, retained, rolled-back, and uncertain effects will remain recorded.'**
+  String get setupCancelAttentionPromptMessage;
+
+  /// No description provided for @setupEffectProviderAcquisition.
+  ///
+  /// In en, this message translates to:
+  /// **'Add provider-owned model data'**
+  String get setupEffectProviderAcquisition;
+
+  /// No description provided for @setupEffectProviderRegistration.
+  ///
+  /// In en, this message translates to:
+  /// **'Register the approved model'**
+  String get setupEffectProviderRegistration;
+
+  /// No description provided for @setupEffectReadinessInference.
+  ///
+  /// In en, this message translates to:
+  /// **'Run a bounded readiness check'**
+  String get setupEffectReadinessInference;
+
+  /// No description provided for @setupEffectMetadataPersistence.
+  ///
+  /// In en, this message translates to:
+  /// **'Store setup and model metadata'**
+  String get setupEffectMetadataPersistence;
+
+  /// No description provided for @setupEffectUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognized setup effect'**
+  String get setupEffectUnknown;
+
+  /// No description provided for @setupEffectsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded effects'**
+  String get setupEffectsTitle;
+
+  /// No description provided for @setupEffectCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get setupEffectCompleted;
+
+  /// No description provided for @setupEffectRetained.
+  ///
+  /// In en, this message translates to:
+  /// **'Retained'**
+  String get setupEffectRetained;
+
+  /// No description provided for @setupEffectRolledBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Rolled back'**
+  String get setupEffectRolledBack;
+
+  /// No description provided for @setupEffectUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncertain'**
+  String get setupEffectUncertain;
+
+  /// No description provided for @setupEffectDispositionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognized'**
+  String get setupEffectDispositionUnknown;
+
+  /// No description provided for @setupAttentionRuntimeNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'The required local runtime is not installed.'**
+  String get setupAttentionRuntimeNotInstalled;
+
+  /// No description provided for @setupAttentionRuntimeConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and approve the local runtime preparation before continuing.'**
+  String get setupAttentionRuntimeConsentRequired;
+
+  /// No description provided for @setupAttentionRuntimeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The local runtime is currently unavailable.'**
+  String get setupAttentionRuntimeUnavailable;
+
+  /// No description provided for @setupAttentionPrivilegedRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime installation requires a separate privileged approval.'**
+  String get setupAttentionPrivilegedRuntime;
+
+  /// No description provided for @setupAttentionDestinationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The approved storage destination is unavailable.'**
+  String get setupAttentionDestinationUnavailable;
+
+  /// No description provided for @setupAttentionInsufficientStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'The approved destination does not have enough free storage with the required safety margin.'**
+  String get setupAttentionInsufficientStorage;
+
+  /// No description provided for @setupAttentionAcquisitionInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'Model acquisition was interrupted before verification completed.'**
+  String get setupAttentionAcquisitionInterrupted;
+
+  /// No description provided for @setupAttentionRegistrationUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime could not verify model registration.'**
+  String get setupAttentionRegistrationUnverified;
+
+  /// No description provided for @setupAttentionModelUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The approved model is not available to the runtime.'**
+  String get setupAttentionModelUnavailable;
+
+  /// No description provided for @setupAttentionIntegrityMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The acquired model did not pass integrity verification.'**
+  String get setupAttentionIntegrityMismatch;
+
+  /// No description provided for @setupAttentionReadinessTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'The bounded readiness check timed out.'**
+  String get setupAttentionReadinessTimedOut;
+
+  /// No description provided for @setupAttentionReadinessFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime or model readiness check did not succeed.'**
+  String get setupAttentionReadinessFailed;
+
+  /// No description provided for @setupAttentionRecoveryRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Persisted setup state requires recovery before work can continue.'**
+  String get setupAttentionRecoveryRequired;
+
+  /// No description provided for @setupAttentionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup reported an unrecognized attention state. Review diagnostics before continuing.'**
+  String get setupAttentionUnknown;
+
+  /// No description provided for @setupRecoveryReviewApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and approve the exact current plan.'**
+  String get setupRecoveryReviewApproval;
+
+  /// No description provided for @setupRecoveryRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry after GixGiz rechecks current conditions.'**
+  String get setupRecoveryRetry;
+
+  /// No description provided for @setupRecoveryRestoreDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect or restore the approved destination.'**
+  String get setupRecoveryRestoreDestination;
+
+  /// No description provided for @setupRecoveryFreeStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Free storage while preserving the required safety margin.'**
+  String get setupRecoveryFreeStorage;
+
+  /// No description provided for @setupRecoveryRestoreRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore the compatible local runtime using its existing controls.'**
+  String get setupRecoveryRestoreRuntime;
+
+  /// No description provided for @setupRecoveryCheckPrerequisites.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the local runtime and platform prerequisites.'**
+  String get setupRecoveryCheckPrerequisites;
+
+  /// No description provided for @setupRecoveryContactSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support with the diagnostic code.'**
+  String get setupRecoveryContactSupport;
+
+  /// No description provided for @setupRecoveryNoAction.
+  ///
+  /// In en, this message translates to:
+  /// **'No action is required.'**
+  String get setupRecoveryNoAction;
+
+  /// No description provided for @setupRecoveryUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Review diagnostics before continuing.'**
+  String get setupRecoveryUnknown;
+
+  /// No description provided for @setupRecommendedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended action: {action}'**
+  String setupRecommendedAction(String action);
 }
 
 class _AppLocalizationsDelegate

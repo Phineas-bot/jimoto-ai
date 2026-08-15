@@ -1140,6 +1140,228 @@ class MemoryEstimate {
   }
 }
 
+enum ModelAcquisitionPhase {
+  preparing('preparing'),
+  transferring('transferring'),
+  verifying('verifying'),
+  registering('registering'),
+  completed('completed'),
+  unknown('unknown'),
+  ;
+
+  const ModelAcquisitionPhase(this.wireValue);
+
+  final String wireValue;
+
+  static ModelAcquisitionPhase fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ModelAcquisitionProgress {
+  const ModelAcquisitionProgress({
+    required this.completedBytes,
+    required this.phase,
+    required this.progressBasisPoints,
+    required this.totalBytes,
+  });
+
+  final int? completedBytes;
+  final ModelAcquisitionPhase phase;
+  final int? progressBasisPoints;
+  final int? totalBytes;
+
+  factory ModelAcquisitionProgress.fromJson(Map<String, dynamic> json) {
+    return ModelAcquisitionProgress(
+      completedBytes: json['completed_bytes'] == null ? null : _contractInt(json['completed_bytes'], 'ModelAcquisitionProgress.completed_bytes'),
+      phase: ModelAcquisitionPhase.fromJson(json['phase']),
+      progressBasisPoints: json['progress_basis_points'] == null ? null : _contractInt(json['progress_basis_points'], 'ModelAcquisitionProgress.progress_basis_points'),
+      totalBytes: json['total_bytes'] == null ? null : _contractInt(json['total_bytes'], 'ModelAcquisitionProgress.total_bytes'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'completed_bytes': completedBytes,
+      'phase': phase.toJson(),
+      'progress_basis_points': progressBasisPoints,
+      'total_bytes': totalBytes,
+    };
+  }
+}
+
+enum ModelIntegrityState {
+  unavailable('unavailable'),
+  providerReported('provider_reported'),
+  verified('verified'),
+  mismatch('mismatch'),
+  unknown('unknown'),
+  ;
+
+  const ModelIntegrityState(this.wireValue);
+
+  final String wireValue;
+
+  static ModelIntegrityState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum ModelLifecycleState {
+  planned('planned'),
+  acquiring('acquiring'),
+  acquired('acquired'),
+  registering('registering'),
+  verifying('verifying'),
+  available('available'),
+  attentionRequired('attention_required'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const ModelLifecycleState(this.wireValue);
+
+  final String wireValue;
+
+  static ModelLifecycleState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ModelMetadata {
+  const ModelMetadata({
+    required this.artifact,
+    required this.catalogueVersion,
+    required this.destination,
+    required this.destinationDisplay,
+    required this.displayName,
+    required this.expectedSizeBytes,
+    required this.family,
+    required this.licenceSpdx,
+    required this.lifecycleState,
+    required this.measuredSizeBytes,
+    required this.provenance,
+    required this.ruleSetVersion,
+    required this.schemaVersion,
+    required this.sizeClass,
+    required this.verification,
+    required this.verificationState,
+  });
+
+  final ModelProviderArtifact artifact;
+  final CatalogueVersion catalogueVersion;
+  final SetupDestinationCategory destination;
+  final String destinationDisplay;
+  final String displayName;
+  final int expectedSizeBytes;
+  final String family;
+  final String licenceSpdx;
+  final ModelLifecycleState lifecycleState;
+  final int? measuredSizeBytes;
+  final String provenance;
+  final RuleSetVersion ruleSetVersion;
+  final int schemaVersion;
+  final ModelSizeClass sizeClass;
+  final ModelVerificationResult? verification;
+  final ModelVerificationState verificationState;
+
+  factory ModelMetadata.fromJson(Map<String, dynamic> json) {
+    return ModelMetadata(
+      artifact: ModelProviderArtifact.fromJson(_contractMap(json['artifact'], 'ModelMetadata.artifact')),
+      catalogueVersion: _contractString(json['catalogue_version'], 'ModelMetadata.catalogue_version'),
+      destination: SetupDestinationCategory.fromJson(json['destination']),
+      destinationDisplay: _contractString(json['destination_display'], 'ModelMetadata.destination_display'),
+      displayName: _contractString(json['display_name'], 'ModelMetadata.display_name'),
+      expectedSizeBytes: _contractInt(json['expected_size_bytes'], 'ModelMetadata.expected_size_bytes'),
+      family: _contractString(json['family'], 'ModelMetadata.family'),
+      licenceSpdx: _contractString(json['licence_spdx'], 'ModelMetadata.licence_spdx'),
+      lifecycleState: ModelLifecycleState.fromJson(json['lifecycle_state']),
+      measuredSizeBytes: json['measured_size_bytes'] == null ? null : _contractInt(json['measured_size_bytes'], 'ModelMetadata.measured_size_bytes'),
+      provenance: _contractString(json['provenance'], 'ModelMetadata.provenance'),
+      ruleSetVersion: _contractString(json['rule_set_version'], 'ModelMetadata.rule_set_version'),
+      schemaVersion: _contractInt(json['schema_version'], 'ModelMetadata.schema_version'),
+      sizeClass: ModelSizeClass.fromJson(json['size_class']),
+      verification: json['verification'] == null ? null : ModelVerificationResult.fromJson(_contractMap(json['verification'], 'ModelMetadata.verification')),
+      verificationState: ModelVerificationState.fromJson(json['verification_state']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'artifact': artifact.toJson(),
+      'catalogue_version': catalogueVersion,
+      'destination': destination.toJson(),
+      'destination_display': destinationDisplay,
+      'display_name': displayName,
+      'expected_size_bytes': expectedSizeBytes,
+      'family': family,
+      'licence_spdx': licenceSpdx,
+      'lifecycle_state': lifecycleState.toJson(),
+      'measured_size_bytes': measuredSizeBytes,
+      'provenance': provenance,
+      'rule_set_version': ruleSetVersion,
+      'schema_version': schemaVersion,
+      'size_class': sizeClass.toJson(),
+      'verification': verification?.toJson(),
+      'verification_state': verificationState.toJson(),
+    };
+  }
+}
+
+class ModelProviderArtifact {
+  const ModelProviderArtifact({
+    required this.canonicalModelId,
+    required this.providerId,
+    required this.providerModelId,
+    required this.sourceSummary,
+  });
+
+  final CandidateModelId canonicalModelId;
+  final RuntimeProviderId providerId;
+  final RuntimeProviderModelId providerModelId;
+  final String sourceSummary;
+
+  factory ModelProviderArtifact.fromJson(Map<String, dynamic> json) {
+    return ModelProviderArtifact(
+      canonicalModelId: _contractString(json['canonical_model_id'], 'ModelProviderArtifact.canonical_model_id'),
+      providerId: _contractString(json['provider_id'], 'ModelProviderArtifact.provider_id'),
+      providerModelId: _contractString(json['provider_model_id'], 'ModelProviderArtifact.provider_model_id'),
+      sourceSummary: _contractString(json['source_summary'], 'ModelProviderArtifact.source_summary'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'canonical_model_id': canonicalModelId,
+      'provider_id': providerId,
+      'provider_model_id': providerModelId,
+      'source_summary': sourceSummary,
+    };
+  }
+}
+
 enum ModelSizeClass {
   compact('compact'),
   standard('standard'),
@@ -1152,6 +1374,73 @@ enum ModelSizeClass {
   final String wireValue;
 
   static ModelSizeClass fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ModelVerificationResult {
+  const ModelVerificationResult({
+    required this.inferenceVerified,
+    required this.integrity,
+    required this.modelAvailable,
+    required this.registrationVerified,
+    required this.runtimeHealthVerified,
+    required this.verifiedAtUnixMs,
+  });
+
+  final bool inferenceVerified;
+  final ModelIntegrityState integrity;
+  final bool modelAvailable;
+  final bool registrationVerified;
+  final bool runtimeHealthVerified;
+  final int verifiedAtUnixMs;
+
+  factory ModelVerificationResult.fromJson(Map<String, dynamic> json) {
+    return ModelVerificationResult(
+      inferenceVerified: _contractBool(json['inference_verified'], 'ModelVerificationResult.inference_verified'),
+      integrity: ModelIntegrityState.fromJson(json['integrity']),
+      modelAvailable: _contractBool(json['model_available'], 'ModelVerificationResult.model_available'),
+      registrationVerified: _contractBool(json['registration_verified'], 'ModelVerificationResult.registration_verified'),
+      runtimeHealthVerified: _contractBool(json['runtime_health_verified'], 'ModelVerificationResult.runtime_health_verified'),
+      verifiedAtUnixMs: _contractInt(json['verified_at_unix_ms'], 'ModelVerificationResult.verified_at_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'inference_verified': inferenceVerified,
+      'integrity': integrity.toJson(),
+      'model_available': modelAvailable,
+      'registration_verified': registrationVerified,
+      'runtime_health_verified': runtimeHealthVerified,
+      'verified_at_unix_ms': verifiedAtUnixMs,
+    };
+  }
+}
+
+enum ModelVerificationState {
+  notStarted('not_started'),
+  runtimeVerified('runtime_verified'),
+  availabilityVerified('availability_verified'),
+  registrationVerified('registration_verified'),
+  verified('verified'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const ModelVerificationState(this.wireValue);
+
+  final String wireValue;
+
+  static ModelVerificationState fromJson(Object? value) {
     for (final candidate in values) {
       if (candidate.wireValue == value) {
         return candidate;
@@ -1701,6 +1990,7 @@ enum RuntimeCapabilityAvailability {
   available('available'),
   requiresReuseConsent('requires_reuse_consent'),
   requiresManagementConsent('requires_management_consent'),
+  requiresSetupApproval('requires_setup_approval'),
   unsupported('unsupported'),
   unknown('unknown'),
   ;
@@ -1757,6 +2047,11 @@ enum RuntimeCapabilityKind {
   stop('stop'),
   restart('restart'),
   modelInventory('model_inventory'),
+  modelAcquisitionPreparation('model_acquisition_preparation'),
+  modelStoragePreflight('model_storage_preflight'),
+  modelAcquisition('model_acquisition'),
+  modelRegistration('model_registration'),
+  readinessInference('readiness_inference'),
   unknown('unknown'),
   ;
 
@@ -2728,6 +3023,1263 @@ enum ServiceRequirement {
   String toJson() => wireValue;
 }
 
+enum SetupApprovalDecision {
+  approve('approve'),
+  deny('deny'),
+  unknown('unknown'),
+  ;
+
+  const SetupApprovalDecision(this.wireValue);
+
+  final String wireValue;
+
+  static SetupApprovalDecision fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupApprovalRecord {
+  const SetupApprovalRecord({
+    required this.approvedEffects,
+    required this.canonicalModelId,
+    required this.correlationId,
+    required this.decidedAtUnixMs,
+    required this.decision,
+    required this.destination,
+    required this.expectedSizeBytes,
+    required this.externalRuntimeEffect,
+    required this.jobId,
+    required this.licenceSpdx,
+    required this.planRevision,
+    required this.provenance,
+    required this.providerId,
+    required this.providerModelId,
+    required this.requestId,
+  });
+
+  final List<SetupEffectKind> approvedEffects;
+  final CandidateModelId canonicalModelId;
+  final CorrelationId correlationId;
+  final int decidedAtUnixMs;
+  final SetupApprovalDecision decision;
+  final SetupDestinationCategory destination;
+  final int expectedSizeBytes;
+  final bool externalRuntimeEffect;
+  final SetupJobId jobId;
+  final String licenceSpdx;
+  final int planRevision;
+  final String provenance;
+  final RuntimeProviderId providerId;
+  final RuntimeProviderModelId providerModelId;
+  final RequestId requestId;
+
+  factory SetupApprovalRecord.fromJson(Map<String, dynamic> json) {
+    return SetupApprovalRecord(
+      approvedEffects: _contractList(json['approved_effects'], 'SetupApprovalRecord.approved_effects').map((item) => SetupEffectKind.fromJson(item)).toList(growable: false),
+      canonicalModelId: _contractString(json['canonical_model_id'], 'SetupApprovalRecord.canonical_model_id'),
+      correlationId: _contractString(json['correlation_id'], 'SetupApprovalRecord.correlation_id'),
+      decidedAtUnixMs: _contractInt(json['decided_at_unix_ms'], 'SetupApprovalRecord.decided_at_unix_ms'),
+      decision: SetupApprovalDecision.fromJson(json['decision']),
+      destination: SetupDestinationCategory.fromJson(json['destination']),
+      expectedSizeBytes: _contractInt(json['expected_size_bytes'], 'SetupApprovalRecord.expected_size_bytes'),
+      externalRuntimeEffect: _contractBool(json['external_runtime_effect'], 'SetupApprovalRecord.external_runtime_effect'),
+      jobId: _contractString(json['job_id'], 'SetupApprovalRecord.job_id'),
+      licenceSpdx: _contractString(json['licence_spdx'], 'SetupApprovalRecord.licence_spdx'),
+      planRevision: _contractInt(json['plan_revision'], 'SetupApprovalRecord.plan_revision'),
+      provenance: _contractString(json['provenance'], 'SetupApprovalRecord.provenance'),
+      providerId: _contractString(json['provider_id'], 'SetupApprovalRecord.provider_id'),
+      providerModelId: _contractString(json['provider_model_id'], 'SetupApprovalRecord.provider_model_id'),
+      requestId: _contractString(json['request_id'], 'SetupApprovalRecord.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'approved_effects': approvedEffects.map((item) => item.toJson()).toList(growable: false),
+      'canonical_model_id': canonicalModelId,
+      'correlation_id': correlationId,
+      'decided_at_unix_ms': decidedAtUnixMs,
+      'decision': decision.toJson(),
+      'destination': destination.toJson(),
+      'expected_size_bytes': expectedSizeBytes,
+      'external_runtime_effect': externalRuntimeEffect,
+      'job_id': jobId,
+      'licence_spdx': licenceSpdx,
+      'plan_revision': planRevision,
+      'provenance': provenance,
+      'provider_id': providerId,
+      'provider_model_id': providerModelId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupApprovalRequest {
+  const SetupApprovalRequest({
+    required this.correlationId,
+    required this.decision,
+    required this.jobId,
+    required this.planRevision,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupApprovalDecision decision;
+  final SetupJobId jobId;
+  final int planRevision;
+  final RequestId requestId;
+
+  factory SetupApprovalRequest.fromJson(Map<String, dynamic> json) {
+    return SetupApprovalRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupApprovalRequest.correlation_id'),
+      decision: SetupApprovalDecision.fromJson(json['decision']),
+      jobId: _contractString(json['job_id'], 'SetupApprovalRequest.job_id'),
+      planRevision: _contractInt(json['plan_revision'], 'SetupApprovalRequest.plan_revision'),
+      requestId: _contractString(json['request_id'], 'SetupApprovalRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'decision': decision.toJson(),
+      'job_id': jobId,
+      'plan_revision': planRevision,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupApprovalResponse {
+  const SetupApprovalResponse({
+    required this.approval,
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final SetupApprovalRecord approval;
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupApprovalResponse.fromJson(Map<String, dynamic> json) {
+    return SetupApprovalResponse(
+      approval: SetupApprovalRecord.fromJson(_contractMap(json['approval'], 'SetupApprovalResponse.approval')),
+      correlationId: _contractString(json['correlation_id'], 'SetupApprovalResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupApprovalResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupApprovalResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'approval': approval.toJson(),
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum SetupAttentionReason {
+  runtimeNotInstalled('runtime_not_installed'),
+  runtimeConsentRequired('runtime_consent_required'),
+  runtimeUnavailable('runtime_unavailable'),
+  privilegedRuntimeInstallationRequired('privileged_runtime_installation_required'),
+  destinationUnavailable('destination_unavailable'),
+  insufficientStorage('insufficient_storage'),
+  acquisitionInterrupted('acquisition_interrupted'),
+  registrationUnverified('registration_unverified'),
+  modelUnavailable('model_unavailable'),
+  integrityMismatch('integrity_mismatch'),
+  readinessTimedOut('readiness_timed_out'),
+  readinessFailed('readiness_failed'),
+  recoveryRequired('recovery_required'),
+  unknown('unknown'),
+  ;
+
+  const SetupAttentionReason(this.wireValue);
+
+  final String wireValue;
+
+  static SetupAttentionReason fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupCancellationReport {
+  const SetupCancellationReport({
+    required this.effectReport,
+    required this.observedAtUnixMs,
+    required this.requestedAtUnixMs,
+  });
+
+  final SetupEffectReport effectReport;
+  final int observedAtUnixMs;
+  final int requestedAtUnixMs;
+
+  factory SetupCancellationReport.fromJson(Map<String, dynamic> json) {
+    return SetupCancellationReport(
+      effectReport: SetupEffectReport.fromJson(_contractMap(json['effect_report'], 'SetupCancellationReport.effect_report')),
+      observedAtUnixMs: _contractInt(json['observed_at_unix_ms'], 'SetupCancellationReport.observed_at_unix_ms'),
+      requestedAtUnixMs: _contractInt(json['requested_at_unix_ms'], 'SetupCancellationReport.requested_at_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'effect_report': effectReport.toJson(),
+      'observed_at_unix_ms': observedAtUnixMs,
+      'requested_at_unix_ms': requestedAtUnixMs,
+    };
+  }
+}
+
+enum SetupDestinationCategory {
+  providerManaged('provider_managed'),
+  applicationData('application_data'),
+  userSelected('user_selected'),
+  unknown('unknown'),
+  ;
+
+  const SetupDestinationCategory(this.wireValue);
+
+  final String wireValue;
+
+  static SetupDestinationCategory fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupEffect {
+  const SetupEffect({
+    required this.disposition,
+    required this.kind,
+    required this.message,
+  });
+
+  final SetupEffectDisposition disposition;
+  final SetupEffectKind kind;
+  final String message;
+
+  factory SetupEffect.fromJson(Map<String, dynamic> json) {
+    return SetupEffect(
+      disposition: SetupEffectDisposition.fromJson(json['disposition']),
+      kind: SetupEffectKind.fromJson(json['kind']),
+      message: _contractString(json['message'], 'SetupEffect.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'disposition': disposition.toJson(),
+      'kind': kind.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum SetupEffectDisposition {
+  completed('completed'),
+  retained('retained'),
+  rolledBack('rolled_back'),
+  uncertain('uncertain'),
+  unknown('unknown'),
+  ;
+
+  const SetupEffectDisposition(this.wireValue);
+
+  final String wireValue;
+
+  static SetupEffectDisposition fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum SetupEffectKind {
+  providerModelAcquisition('provider_model_acquisition'),
+  providerModelRegistration('provider_model_registration'),
+  readinessInference('readiness_inference'),
+  metadataPersistence('metadata_persistence'),
+  unknown('unknown'),
+  ;
+
+  const SetupEffectKind(this.wireValue);
+
+  final String wireValue;
+
+  static SetupEffectKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupEffectReport {
+  const SetupEffectReport({
+    required this.effects,
+  });
+
+  final List<SetupEffect> effects;
+
+  factory SetupEffectReport.fromJson(Map<String, dynamic> json) {
+    return SetupEffectReport(
+      effects: _contractList(json['effects'], 'SetupEffectReport.effects').map((item) => SetupEffect.fromJson(_contractMap(item, 'SetupEffectReport.effects[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'effects': effects.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class SetupJobCancelRequest {
+  const SetupJobCancelRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobId jobId;
+  final RequestId requestId;
+
+  factory SetupJobCancelRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobCancelRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobCancelRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'SetupJobCancelRequest.job_id'),
+      requestId: _contractString(json['request_id'], 'SetupJobCancelRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobCancelResponse {
+  const SetupJobCancelResponse({
+    required this.accepted,
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final bool accepted;
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupJobCancelResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobCancelResponse(
+      accepted: _contractBool(json['accepted'], 'SetupJobCancelResponse.accepted'),
+      correlationId: _contractString(json['correlation_id'], 'SetupJobCancelResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobCancelResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupJobCancelResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'accepted': accepted,
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobEvent {
+  const SetupJobEvent({
+    required this.correlationId,
+    required this.job,
+    required this.jobId,
+    required this.kind,
+    required this.schemaVersion,
+    required this.sequence,
+    required this.terminalState,
+    required this.timestampUnixMs,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final SetupJobId jobId;
+  final SetupJobEventKind kind;
+  final int schemaVersion;
+  final int sequence;
+  final SetupJobTerminalState? terminalState;
+  final int timestampUnixMs;
+
+  factory SetupJobEvent.fromJson(Map<String, dynamic> json) {
+    return SetupJobEvent(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobEvent.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobEvent.job')),
+      jobId: _contractString(json['job_id'], 'SetupJobEvent.job_id'),
+      kind: SetupJobEventKind.fromJson(json['kind']),
+      schemaVersion: _contractInt(json['schema_version'], 'SetupJobEvent.schema_version'),
+      sequence: _contractInt(json['sequence'], 'SetupJobEvent.sequence'),
+      terminalState: json['terminal_state'] == null ? null : SetupJobTerminalState.fromJson(json['terminal_state']),
+      timestampUnixMs: _contractInt(json['timestamp_unix_ms'], 'SetupJobEvent.timestamp_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'job_id': jobId,
+      'kind': kind.toJson(),
+      'schema_version': schemaVersion,
+      'sequence': sequence,
+      'terminal_state': terminalState?.toJson(),
+      'timestamp_unix_ms': timestampUnixMs,
+    };
+  }
+}
+
+enum SetupJobEventKind {
+  started('started'),
+  progress('progress'),
+  attentionRequired('attention_required'),
+  ready('ready'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const SetupJobEventKind(this.wireValue);
+
+  final String wireValue;
+
+  static SetupJobEventKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupJobEventsRequest {
+  const SetupJobEventsRequest({
+    required this.afterSequence,
+    required this.correlationId,
+    required this.jobId,
+    required this.limit,
+    required this.requestId,
+  });
+
+  final int afterSequence;
+  final CorrelationId correlationId;
+  final SetupJobId jobId;
+  final int limit;
+  final RequestId requestId;
+
+  factory SetupJobEventsRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobEventsRequest(
+      afterSequence: _contractInt(json['after_sequence'], 'SetupJobEventsRequest.after_sequence'),
+      correlationId: _contractString(json['correlation_id'], 'SetupJobEventsRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'SetupJobEventsRequest.job_id'),
+      limit: _contractInt(json['limit'], 'SetupJobEventsRequest.limit'),
+      requestId: _contractString(json['request_id'], 'SetupJobEventsRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'after_sequence': afterSequence,
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'limit': limit,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobEventsResponse {
+  const SetupJobEventsResponse({
+    required this.correlationId,
+    required this.events,
+    required this.hasMore,
+    required this.nextAfterSequence,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final List<SetupJobEvent> events;
+  final bool hasMore;
+  final int nextAfterSequence;
+  final RequestId requestId;
+
+  factory SetupJobEventsResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobEventsResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobEventsResponse.correlation_id'),
+      events: _contractList(json['events'], 'SetupJobEventsResponse.events').map((item) => SetupJobEvent.fromJson(_contractMap(item, 'SetupJobEventsResponse.events[]'))).toList(growable: false),
+      hasMore: _contractBool(json['has_more'], 'SetupJobEventsResponse.has_more'),
+      nextAfterSequence: _contractInt(json['next_after_sequence'], 'SetupJobEventsResponse.next_after_sequence'),
+      requestId: _contractString(json['request_id'], 'SetupJobEventsResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'events': events.map((item) => item.toJson()).toList(growable: false),
+      'has_more': hasMore,
+      'next_after_sequence': nextAfterSequence,
+      'request_id': requestId,
+    };
+  }
+}
+
+typedef SetupJobId = String;
+
+class SetupJobRecoveryRequest {
+  const SetupJobRecoveryRequest({
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory SetupJobRecoveryRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobRecoveryRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobRecoveryRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'SetupJobRecoveryRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobRecoveryResponse {
+  const SetupJobRecoveryResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot? job;
+  final RequestId requestId;
+
+  factory SetupJobRecoveryResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobRecoveryResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobRecoveryResponse.correlation_id'),
+      job: json['job'] == null ? null : SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobRecoveryResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupJobRecoveryResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job?.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobRetryRequest {
+  const SetupJobRetryRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.planRevision,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobId jobId;
+  final int planRevision;
+  final RequestId requestId;
+
+  factory SetupJobRetryRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobRetryRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobRetryRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'SetupJobRetryRequest.job_id'),
+      planRevision: _contractInt(json['plan_revision'], 'SetupJobRetryRequest.plan_revision'),
+      requestId: _contractString(json['request_id'], 'SetupJobRetryRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'plan_revision': planRevision,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobRetryResponse {
+  const SetupJobRetryResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupJobRetryResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobRetryResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobRetryResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobRetryResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupJobRetryResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobSnapshot {
+  const SetupJobSnapshot({
+    required this.attentionReason,
+    required this.cancellationReport,
+    required this.cancellationRequested,
+    required this.createdAtUnixMs,
+    required this.effectReport,
+    required this.error,
+    required this.jobId,
+    required this.latestEventSequence,
+    required this.plan,
+    required this.progress,
+    required this.recoveryAction,
+    required this.retryCount,
+    required this.schemaVersion,
+    required this.stage,
+    required this.state,
+    required this.updatedAtUnixMs,
+  });
+
+  final SetupAttentionReason? attentionReason;
+  final SetupCancellationReport? cancellationReport;
+  final bool cancellationRequested;
+  final int createdAtUnixMs;
+  final SetupEffectReport? effectReport;
+  final SafeErrorPayload? error;
+  final SetupJobId jobId;
+  final int latestEventSequence;
+  final SetupPlan plan;
+  final ModelAcquisitionProgress? progress;
+  final SetupRecoveryAction? recoveryAction;
+  final int retryCount;
+  final int schemaVersion;
+  final SetupStage stage;
+  final SetupJobState state;
+  final int updatedAtUnixMs;
+
+  factory SetupJobSnapshot.fromJson(Map<String, dynamic> json) {
+    return SetupJobSnapshot(
+      attentionReason: json['attention_reason'] == null ? null : SetupAttentionReason.fromJson(json['attention_reason']),
+      cancellationReport: json['cancellation_report'] == null ? null : SetupCancellationReport.fromJson(_contractMap(json['cancellation_report'], 'SetupJobSnapshot.cancellation_report')),
+      cancellationRequested: _contractBool(json['cancellation_requested'], 'SetupJobSnapshot.cancellation_requested'),
+      createdAtUnixMs: _contractInt(json['created_at_unix_ms'], 'SetupJobSnapshot.created_at_unix_ms'),
+      effectReport: json['effect_report'] == null ? null : SetupEffectReport.fromJson(_contractMap(json['effect_report'], 'SetupJobSnapshot.effect_report')),
+      error: json['error'] == null ? null : SafeErrorPayload.fromJson(_contractMap(json['error'], 'SetupJobSnapshot.error')),
+      jobId: _contractString(json['job_id'], 'SetupJobSnapshot.job_id'),
+      latestEventSequence: _contractInt(json['latest_event_sequence'], 'SetupJobSnapshot.latest_event_sequence'),
+      plan: SetupPlan.fromJson(_contractMap(json['plan'], 'SetupJobSnapshot.plan')),
+      progress: json['progress'] == null ? null : ModelAcquisitionProgress.fromJson(_contractMap(json['progress'], 'SetupJobSnapshot.progress')),
+      recoveryAction: json['recovery_action'] == null ? null : SetupRecoveryAction.fromJson(json['recovery_action']),
+      retryCount: _contractInt(json['retry_count'], 'SetupJobSnapshot.retry_count'),
+      schemaVersion: _contractInt(json['schema_version'], 'SetupJobSnapshot.schema_version'),
+      stage: SetupStage.fromJson(json['stage']),
+      state: SetupJobState.fromJson(json['state']),
+      updatedAtUnixMs: _contractInt(json['updated_at_unix_ms'], 'SetupJobSnapshot.updated_at_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'attention_reason': attentionReason?.toJson(),
+      'cancellation_report': cancellationReport?.toJson(),
+      'cancellation_requested': cancellationRequested,
+      'created_at_unix_ms': createdAtUnixMs,
+      'effect_report': effectReport?.toJson(),
+      'error': error?.toJson(),
+      'job_id': jobId,
+      'latest_event_sequence': latestEventSequence,
+      'plan': plan.toJson(),
+      'progress': progress?.toJson(),
+      'recovery_action': recoveryAction?.toJson(),
+      'retry_count': retryCount,
+      'schema_version': schemaVersion,
+      'stage': stage.toJson(),
+      'state': state.toJson(),
+      'updated_at_unix_ms': updatedAtUnixMs,
+    };
+  }
+}
+
+class SetupJobStartRequest {
+  const SetupJobStartRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.planRevision,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobId jobId;
+  final int planRevision;
+  final RequestId requestId;
+
+  factory SetupJobStartRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobStartRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobStartRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'SetupJobStartRequest.job_id'),
+      planRevision: _contractInt(json['plan_revision'], 'SetupJobStartRequest.plan_revision'),
+      requestId: _contractString(json['request_id'], 'SetupJobStartRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'plan_revision': planRevision,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobStartResponse {
+  const SetupJobStartResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupJobStartResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobStartResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobStartResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobStartResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupJobStartResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum SetupJobState {
+  draftPlan('draft_plan'),
+  awaitingApproval('awaiting_approval'),
+  approved('approved'),
+  active('active'),
+  attentionRequired('attention_required'),
+  ready('ready'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const SetupJobState(this.wireValue);
+
+  final String wireValue;
+
+  static SetupJobState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupJobStatusRequest {
+  const SetupJobStatusRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobId jobId;
+  final RequestId requestId;
+
+  factory SetupJobStatusRequest.fromJson(Map<String, dynamic> json) {
+    return SetupJobStatusRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobStatusRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'SetupJobStatusRequest.job_id'),
+      requestId: _contractString(json['request_id'], 'SetupJobStatusRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupJobStatusResponse {
+  const SetupJobStatusResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupJobStatusResponse.fromJson(Map<String, dynamic> json) {
+    return SetupJobStatusResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupJobStatusResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupJobStatusResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupJobStatusResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum SetupJobTerminalState {
+  ready('ready'),
+  attentionRequired('attention_required'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const SetupJobTerminalState(this.wireValue);
+
+  final String wireValue;
+
+  static SetupJobTerminalState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupPlan {
+  const SetupPlan({
+    required this.components,
+    required this.jobId,
+    required this.model,
+    required this.reasons,
+    required this.requiredEffects,
+    required this.resources,
+    required this.revision,
+    required this.runtimeDisplayName,
+    required this.runtimeVersion,
+    required this.schemaVersion,
+    required this.warnings,
+  });
+
+  final List<SetupPlanComponent> components;
+  final SetupJobId jobId;
+  final ModelMetadata model;
+  final List<SetupReason> reasons;
+  final List<SetupEffectKind> requiredEffects;
+  final ResourceEstimate resources;
+  final int revision;
+  final String runtimeDisplayName;
+  final String? runtimeVersion;
+  final int schemaVersion;
+  final List<SetupWarning> warnings;
+
+  factory SetupPlan.fromJson(Map<String, dynamic> json) {
+    return SetupPlan(
+      components: _contractList(json['components'], 'SetupPlan.components').map((item) => SetupPlanComponent.fromJson(_contractMap(item, 'SetupPlan.components[]'))).toList(growable: false),
+      jobId: _contractString(json['job_id'], 'SetupPlan.job_id'),
+      model: ModelMetadata.fromJson(_contractMap(json['model'], 'SetupPlan.model')),
+      reasons: _contractList(json['reasons'], 'SetupPlan.reasons').map((item) => SetupReason.fromJson(_contractMap(item, 'SetupPlan.reasons[]'))).toList(growable: false),
+      requiredEffects: _contractList(json['required_effects'], 'SetupPlan.required_effects').map((item) => SetupEffectKind.fromJson(item)).toList(growable: false),
+      resources: ResourceEstimate.fromJson(_contractMap(json['resources'], 'SetupPlan.resources')),
+      revision: _contractInt(json['revision'], 'SetupPlan.revision'),
+      runtimeDisplayName: _contractString(json['runtime_display_name'], 'SetupPlan.runtime_display_name'),
+      runtimeVersion: json['runtime_version'] == null ? null : _contractString(json['runtime_version'], 'SetupPlan.runtime_version'),
+      schemaVersion: _contractInt(json['schema_version'], 'SetupPlan.schema_version'),
+      warnings: _contractList(json['warnings'], 'SetupPlan.warnings').map((item) => SetupWarning.fromJson(_contractMap(item, 'SetupPlan.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'components': components.map((item) => item.toJson()).toList(growable: false),
+      'job_id': jobId,
+      'model': model.toJson(),
+      'reasons': reasons.map((item) => item.toJson()).toList(growable: false),
+      'required_effects': requiredEffects.map((item) => item.toJson()).toList(growable: false),
+      'resources': resources.toJson(),
+      'revision': revision,
+      'runtime_display_name': runtimeDisplayName,
+      'runtime_version': runtimeVersion,
+      'schema_version': schemaVersion,
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class SetupPlanComponent {
+  const SetupPlanComponent({
+    required this.detail,
+    required this.kind,
+    required this.required,
+    required this.title,
+  });
+
+  final String detail;
+  final SetupPlanComponentKind kind;
+  final bool required;
+  final String title;
+
+  factory SetupPlanComponent.fromJson(Map<String, dynamic> json) {
+    return SetupPlanComponent(
+      detail: _contractString(json['detail'], 'SetupPlanComponent.detail'),
+      kind: SetupPlanComponentKind.fromJson(json['kind']),
+      required: _contractBool(json['required'], 'SetupPlanComponent.required'),
+      title: _contractString(json['title'], 'SetupPlanComponent.title'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'detail': detail,
+      'kind': kind.toJson(),
+      'required': required,
+      'title': title,
+    };
+  }
+}
+
+enum SetupPlanComponentKind {
+  runtime('runtime'),
+  model('model'),
+  storage('storage'),
+  verification('verification'),
+  unknown('unknown'),
+  ;
+
+  const SetupPlanComponentKind(this.wireValue);
+
+  final String wireValue;
+
+  static SetupPlanComponentKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupPlanRequest {
+  const SetupPlanRequest({
+    required this.correlationId,
+    required this.destination,
+    required this.providerId,
+    required this.recommendation,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupDestinationCategory destination;
+  final RuntimeProviderId providerId;
+  final RecommendationPlan recommendation;
+  final RequestId requestId;
+
+  factory SetupPlanRequest.fromJson(Map<String, dynamic> json) {
+    return SetupPlanRequest(
+      correlationId: _contractString(json['correlation_id'], 'SetupPlanRequest.correlation_id'),
+      destination: SetupDestinationCategory.fromJson(json['destination']),
+      providerId: _contractString(json['provider_id'], 'SetupPlanRequest.provider_id'),
+      recommendation: RecommendationPlan.fromJson(_contractMap(json['recommendation'], 'SetupPlanRequest.recommendation')),
+      requestId: _contractString(json['request_id'], 'SetupPlanRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'destination': destination.toJson(),
+      'provider_id': providerId,
+      'recommendation': recommendation.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupPlanResponse {
+  const SetupPlanResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final SetupJobSnapshot job;
+  final RequestId requestId;
+
+  factory SetupPlanResponse.fromJson(Map<String, dynamic> json) {
+    return SetupPlanResponse(
+      correlationId: _contractString(json['correlation_id'], 'SetupPlanResponse.correlation_id'),
+      job: SetupJobSnapshot.fromJson(_contractMap(json['job'], 'SetupPlanResponse.job')),
+      requestId: _contractString(json['request_id'], 'SetupPlanResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class SetupReason {
+  const SetupReason({
+    required this.code,
+    required this.message,
+  });
+
+  final SetupReasonCode code;
+  final String message;
+
+  factory SetupReason.fromJson(Map<String, dynamic> json) {
+    return SetupReason(
+      code: SetupReasonCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'SetupReason.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum SetupReasonCode {
+  recommendationSelected('recommendation_selected'),
+  existingModelReusable('existing_model_reusable'),
+  acquisitionRequired('acquisition_required'),
+  approvalRequired('approval_required'),
+  storageVerified('storage_verified'),
+  runtimeVerified('runtime_verified'),
+  registrationVerified('registration_verified'),
+  readinessVerified('readiness_verified'),
+  unknown('unknown'),
+  ;
+
+  const SetupReasonCode(this.wireValue);
+
+  final String wireValue;
+
+  static SetupReasonCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum SetupRecoveryAction {
+  reviewApproval('review_approval'),
+  retry('retry'),
+  restoreDestination('restore_destination'),
+  freeStorage('free_storage'),
+  restoreRuntime('restore_runtime'),
+  checkPrerequisites('check_prerequisites'),
+  contactSupport('contact_support'),
+  noAction('no_action'),
+  unknown('unknown'),
+  ;
+
+  const SetupRecoveryAction(this.wireValue);
+
+  final String wireValue;
+
+  static SetupRecoveryAction fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum SetupStage {
+  draftPlan('draft_plan'),
+  awaitingApproval('awaiting_approval'),
+  approved('approved'),
+  preparing('preparing'),
+  checkingStorage('checking_storage'),
+  acquiring('acquiring'),
+  registering('registering'),
+  verifyingRuntime('verifying_runtime'),
+  verifyingModel('verifying_model'),
+  runningTestInference('running_test_inference'),
+  ready('ready'),
+  attentionRequired('attention_required'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const SetupStage(this.wireValue);
+
+  final String wireValue;
+
+  static SetupStage fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class SetupWarning {
+  const SetupWarning({
+    required this.code,
+    required this.message,
+  });
+
+  final SetupWarningCode code;
+  final String message;
+
+  factory SetupWarning.fromJson(Map<String, dynamic> json) {
+    return SetupWarning(
+      code: SetupWarningCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'SetupWarning.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum SetupWarningCode {
+  externalRuntimeModified('external_runtime_modified'),
+  providerManagedStorage('provider_managed_storage'),
+  integrityMetadataUnavailable('integrity_metadata_unavailable'),
+  cancellationMayRetainEffects('cancellation_may_retain_effects'),
+  destinationEvidenceIncomplete('destination_evidence_incomplete'),
+  unknown('unknown'),
+  ;
+
+  const SetupWarningCode(this.wireValue);
+
+  final String wireValue;
+
+  static SetupWarningCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
 class ShutdownRequest {
   const ShutdownRequest({
     required this.correlationId,
@@ -3101,6 +4653,7 @@ enum TransportCapability {
   runtimeConsent('runtime_consent'),
   runtimeLifecycle('runtime_lifecycle'),
   runtimeModelInventory('runtime_model_inventory'),
+  setupWorkflow('setup_workflow'),
   shutdown('shutdown'),
   unknown('unknown'),
   ;

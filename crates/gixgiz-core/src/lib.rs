@@ -17,6 +17,7 @@ mod operation;
 mod persistence;
 mod runtime;
 mod service;
+mod setup;
 
 pub use capability::CapabilityEngine;
 pub use error::CoreError;
@@ -27,3 +28,4 @@ pub use observability::{TracingInitError, init_tracing};
 pub use operation::{CancellationToken, OperationContext};
 pub use runtime::RuntimeService;
 pub use service::{CoreLifecycle, PlatformCore, ServiceHealthSource, compose_readiness};
+pub use setup::SetupService;

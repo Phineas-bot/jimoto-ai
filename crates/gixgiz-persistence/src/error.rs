@@ -93,6 +93,18 @@ pub enum PersistenceError {
         /// Stable field name that failed validation.
         field: &'static str,
     },
+    /// A requested typed repository record does not exist.
+    #[error("a persistence record was not found")]
+    RecordNotFound {
+        /// Stable repository-owned entity name.
+        entity: &'static str,
+    },
+    /// A repository write lost an optimistic state or revision race.
+    #[error("a persistence record changed before the requested write")]
+    RecordConflict {
+        /// Stable repository-owned entity name.
+        entity: &'static str,
+    },
     /// The in-process single connection lock was poisoned.
     #[error("the persistence connection is unavailable")]
     ConnectionUnavailable,
@@ -139,7 +151,9 @@ impl PersistenceError {
             | Self::Migration { .. }
             | Self::Backup { .. }
             | Self::Database { .. }
-            | Self::InvalidRecord { .. } => ServiceHealthStatus::Failed,
+            | Self::InvalidRecord { .. }
+            | Self::RecordNotFound { .. }
+            | Self::RecordConflict { .. } => ServiceHealthStatus::Failed,
         }
     }
 
@@ -163,9 +177,11 @@ impl PersistenceError {
             | Self::ConnectionUnavailable => {
                 "Persistence is unavailable in the current per-user data location."
             }
-            Self::PathEscapesRoot | Self::Database { .. } | Self::InvalidRecord { .. } => {
-                "Persistence failed to initialize safely."
-            }
+            Self::PathEscapesRoot
+            | Self::Database { .. }
+            | Self::InvalidRecord { .. }
+            | Self::RecordNotFound { .. }
+            | Self::RecordConflict { .. } => "Persistence failed to initialize safely.",
         }
     }
 
@@ -225,6 +241,20 @@ impl PersistenceError {
                 "The persistence record is invalid.",
                 RecoveryAction::NoAction,
                 "Correct the record and retry.",
+            ),
+            Self::RecordNotFound { .. } => (
+                ErrorCategory::InvalidInput,
+                "persistence.record_not_found",
+                "The requested local record was not found.",
+                RecoveryAction::NoAction,
+                "Refresh the current state before retrying.",
+            ),
+            Self::RecordConflict { .. } => (
+                ErrorCategory::Conflict,
+                "persistence.record_conflict",
+                "The local record changed before the request completed.",
+                RecoveryAction::Retry,
+                "Refresh the current state and retry the action.",
             ),
             Self::DataRootUnavailable
             | Self::PathIo { .. }

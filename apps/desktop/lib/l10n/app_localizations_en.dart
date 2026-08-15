@@ -836,4 +836,476 @@ class AppLocalizationsEn extends AppLocalizations {
   ) {
     return 'Runtime details: $provider, version $version, endpoint $endpoint, ownership $ownership, reuse permission $reuseConsent, management permission $managementConsent.';
   }
+
+  @override
+  String get setupTitle => 'Local model setup';
+
+  @override
+  String get setupPlanningTitle => 'Preparing setup plan';
+
+  @override
+  String get setupPlanningMessage =>
+      'GixGiz is validating the selected recommendation and its local effects.';
+
+  @override
+  String get setupUpdatingTitle => 'Updating setup status';
+
+  @override
+  String get setupUpdatingMessage =>
+      'GixGiz is loading the latest persisted setup state.';
+
+  @override
+  String get setupPlanReadyTitle => 'Review setup plan';
+
+  @override
+  String get setupPlanReadyMessage =>
+      'Review the model, storage, licence, resources, and provider effects before continuing.';
+
+  @override
+  String get setupAwaitingApprovalTitle => 'Approval required';
+
+  @override
+  String get setupAwaitingApprovalMessage =>
+      'No model data will be added until you approve this exact plan.';
+
+  @override
+  String get setupApprovedTitle => 'Setup approved';
+
+  @override
+  String get setupApprovedMessage => 'The approved plan is ready to start.';
+
+  @override
+  String get setupPreparingTitle => 'Preparing model setup';
+
+  @override
+  String get setupPreparingMessage =>
+      'GixGiz is rechecking the runtime and approved setup plan.';
+
+  @override
+  String get setupCheckingStorageTitle => 'Checking storage';
+
+  @override
+  String get setupCheckingStorageMessage =>
+      'GixGiz is checking destination availability and the required safety margin.';
+
+  @override
+  String get setupAcquiringTitle => 'Acquiring model';
+
+  @override
+  String get setupAcquiringMessage =>
+      'The local runtime is acquiring the approved model artifact.';
+
+  @override
+  String get setupCancellingTitle => 'Cancellation requested';
+
+  @override
+  String get setupCancellingMessage =>
+      'GixGiz is waiting for the local runtime to stop safely and report retained effects.';
+
+  @override
+  String get setupRegisteringTitle => 'Registering model';
+
+  @override
+  String get setupRegisteringMessage =>
+      'GixGiz is checking the model registration reported by the runtime.';
+
+  @override
+  String get setupVerifyingRuntimeTitle => 'Verifying runtime';
+
+  @override
+  String get setupVerifyingRuntimeMessage =>
+      'GixGiz is confirming that the local runtime is healthy.';
+
+  @override
+  String get setupVerifyingModelTitle => 'Verifying model';
+
+  @override
+  String get setupVerifyingModelMessage =>
+      'GixGiz is confirming model availability and registration.';
+
+  @override
+  String get setupInferenceTitle => 'Testing readiness';
+
+  @override
+  String get setupInferenceMessage =>
+      'GixGiz is running a fixed, private-content-free readiness check.';
+
+  @override
+  String get setupReadyTitle => 'Local model ready';
+
+  @override
+  String get setupReadyMessage =>
+      'Runtime health, model availability, registration, and bounded inference were verified.';
+
+  @override
+  String get setupAttentionTitle => 'Setup needs attention';
+
+  @override
+  String get setupAttentionMessage =>
+      'Review the recommended action before continuing.';
+
+  @override
+  String get setupFailedTitle => 'Model setup failed';
+
+  @override
+  String get setupFailedMessage =>
+      'The setup stopped safely. Review diagnostics and the recommended action.';
+
+  @override
+  String get setupCancelledTitle => 'Model setup cancelled';
+
+  @override
+  String get setupCancelledMessage =>
+      'The setup stopped after recording completed, retained, rolled-back, and uncertain effects.';
+
+  @override
+  String get setupUnknownTitle => 'Setup state needs review';
+
+  @override
+  String get setupUnknownMessage =>
+      'This GixGiz version does not recognize the reported setup state. No readiness claim was made.';
+
+  @override
+  String setupStatusSemanticLabel(
+    String status,
+    String message,
+    String model,
+    String stage,
+  ) {
+    return 'Model setup status: $status. $message Model: $model. Stage: $stage.';
+  }
+
+  @override
+  String get setupProgressSemanticLabel => 'Model setup progress';
+
+  @override
+  String setupProgressPercent(String percent) {
+    return '$percent% complete';
+  }
+
+  @override
+  String setupProgressBytes(String completed, String total) {
+    return '$completed of $total';
+  }
+
+  @override
+  String get setupModelLabel => 'Model';
+
+  @override
+  String get setupFamilyLabel => 'Family';
+
+  @override
+  String get setupProviderArtifactLabel => 'Provider artifact';
+
+  @override
+  String get setupRuntimeLabel => 'Local runtime';
+
+  @override
+  String get setupRuntimeVersionLabel => 'Runtime version';
+
+  @override
+  String get setupLicenceLabel => 'Licence';
+
+  @override
+  String get setupProvenanceLabel => 'Source';
+
+  @override
+  String get setupDestinationLabel => 'Destination';
+
+  @override
+  String get setupExpectedSizeLabel => 'Expected size';
+
+  @override
+  String get setupPlanComponentsLabel => 'Plan components';
+
+  @override
+  String get setupComponentRuntime => 'Compatible local runtime';
+
+  @override
+  String get setupComponentModel => 'Selected local model';
+
+  @override
+  String get setupComponentStorage => 'Approved storage destination';
+
+  @override
+  String get setupComponentVerification =>
+      'Runtime, model, registration, and inference verification';
+
+  @override
+  String get setupComponentUnknown => 'Unrecognized setup component';
+
+  @override
+  String setupComponentRequired(String component) {
+    return '$component (required)';
+  }
+
+  @override
+  String setupComponentOptional(String component) {
+    return '$component (optional)';
+  }
+
+  @override
+  String get setupRequiredEffectsLabel => 'This approval allows';
+
+  @override
+  String get setupReasonsLabel => 'Why this plan was selected';
+
+  @override
+  String get setupReasonRecommendationSelected =>
+      'This model comes from the deterministic recommendation shown above.';
+
+  @override
+  String get setupReasonExistingModelReusable =>
+      'The exact provider model is already available and may be reused.';
+
+  @override
+  String get setupReasonAcquisitionRequired =>
+      'The selected provider model must be added before verification.';
+
+  @override
+  String get setupReasonApprovalRequired =>
+      'The listed local effects require approval before setup starts.';
+
+  @override
+  String get setupReasonStorageVerified =>
+      'Storage was checked with the required safety margin.';
+
+  @override
+  String get setupReasonRuntimeVerified =>
+      'The compatible local runtime was verified.';
+
+  @override
+  String get setupReasonRegistrationVerified =>
+      'The exact provider model registration was verified.';
+
+  @override
+  String get setupReasonReadinessVerified =>
+      'The bounded readiness check was verified.';
+
+  @override
+  String get setupReasonUnknown =>
+      'The core reported an unrecognized setup reason.';
+
+  @override
+  String get setupWarningsLabel => 'Important considerations';
+
+  @override
+  String get setupWarningExternalRuntimeModified =>
+      'Setup changes an externally managed local runtime without transferring its ownership to GixGiz.';
+
+  @override
+  String get setupWarningProviderManagedStorage =>
+      'The local runtime owns and controls this model storage.';
+
+  @override
+  String get setupWarningIntegrityMetadataUnavailable =>
+      'No trusted independent checksum is available for this provider model.';
+
+  @override
+  String get setupWarningCancellationMayRetainEffects =>
+      'Cancellation may leave provider-owned partial or completed model data in place.';
+
+  @override
+  String get setupWarningDestinationEvidenceIncomplete =>
+      'Some storage destination evidence could not be verified.';
+
+  @override
+  String get setupWarningUnknown =>
+      'The core reported an unrecognized setup warning.';
+
+  @override
+  String get setupProviderManagedDestination =>
+      'Provider-managed local storage';
+
+  @override
+  String get setupApplicationDataDestination => 'GixGiz application storage';
+
+  @override
+  String get setupUserSelectedDestination => 'Approved user-selected storage';
+
+  @override
+  String get setupUnknownDestination => 'Unverified storage destination';
+
+  @override
+  String get setupReviewAction => 'Review setup';
+
+  @override
+  String get setupApproveAction => 'Approve plan';
+
+  @override
+  String get setupDenyAction => 'Decline plan';
+
+  @override
+  String get setupApprovalBackAction => 'Not now';
+
+  @override
+  String get setupStartAction => 'Start setup';
+
+  @override
+  String get setupCancelAction => 'Cancel setup';
+
+  @override
+  String get setupKeepRunningAction => 'Keep running';
+
+  @override
+  String get setupRetryAction => 'Retry setup';
+
+  @override
+  String get setupRefreshAction => 'Refresh status';
+
+  @override
+  String get setupApprovalPromptTitle => 'Approve this model setup?';
+
+  @override
+  String setupApprovalPromptMessage(
+    String model,
+    String runtime,
+    String size,
+    String destination,
+  ) {
+    return 'Approve adding $model to $runtime. This exact approval covers $size in $destination and only the listed effects.';
+  }
+
+  @override
+  String get setupCancelPromptTitle => 'Cancel model setup?';
+
+  @override
+  String get setupCancelPromptMessage =>
+      'Cancellation is cooperative. Provider-owned partial data may be retained and will be reported honestly.';
+
+  @override
+  String get setupCancelApprovedPromptMessage =>
+      'Cancel this approved setup before it starts. No provider work will begin.';
+
+  @override
+  String get setupCancelAttentionPromptMessage =>
+      'Cancel this setup after reviewing its attention state. Existing completed, retained, rolled-back, and uncertain effects will remain recorded.';
+
+  @override
+  String get setupEffectProviderAcquisition => 'Add provider-owned model data';
+
+  @override
+  String get setupEffectProviderRegistration => 'Register the approved model';
+
+  @override
+  String get setupEffectReadinessInference => 'Run a bounded readiness check';
+
+  @override
+  String get setupEffectMetadataPersistence => 'Store setup and model metadata';
+
+  @override
+  String get setupEffectUnknown => 'Unrecognized setup effect';
+
+  @override
+  String get setupEffectsTitle => 'Recorded effects';
+
+  @override
+  String get setupEffectCompleted => 'Completed';
+
+  @override
+  String get setupEffectRetained => 'Retained';
+
+  @override
+  String get setupEffectRolledBack => 'Rolled back';
+
+  @override
+  String get setupEffectUncertain => 'Uncertain';
+
+  @override
+  String get setupEffectDispositionUnknown => 'Unrecognized';
+
+  @override
+  String get setupAttentionRuntimeNotInstalled =>
+      'The required local runtime is not installed.';
+
+  @override
+  String get setupAttentionRuntimeConsentRequired =>
+      'Review and approve the local runtime preparation before continuing.';
+
+  @override
+  String get setupAttentionRuntimeUnavailable =>
+      'The local runtime is currently unavailable.';
+
+  @override
+  String get setupAttentionPrivilegedRuntime =>
+      'Runtime installation requires a separate privileged approval.';
+
+  @override
+  String get setupAttentionDestinationUnavailable =>
+      'The approved storage destination is unavailable.';
+
+  @override
+  String get setupAttentionInsufficientStorage =>
+      'The approved destination does not have enough free storage with the required safety margin.';
+
+  @override
+  String get setupAttentionAcquisitionInterrupted =>
+      'Model acquisition was interrupted before verification completed.';
+
+  @override
+  String get setupAttentionRegistrationUnverified =>
+      'The runtime could not verify model registration.';
+
+  @override
+  String get setupAttentionModelUnavailable =>
+      'The approved model is not available to the runtime.';
+
+  @override
+  String get setupAttentionIntegrityMismatch =>
+      'The acquired model did not pass integrity verification.';
+
+  @override
+  String get setupAttentionReadinessTimedOut =>
+      'The bounded readiness check timed out.';
+
+  @override
+  String get setupAttentionReadinessFailed =>
+      'The runtime or model readiness check did not succeed.';
+
+  @override
+  String get setupAttentionRecoveryRequired =>
+      'Persisted setup state requires recovery before work can continue.';
+
+  @override
+  String get setupAttentionUnknown =>
+      'Setup reported an unrecognized attention state. Review diagnostics before continuing.';
+
+  @override
+  String get setupRecoveryReviewApproval =>
+      'Review and approve the exact current plan.';
+
+  @override
+  String get setupRecoveryRetry =>
+      'Retry after GixGiz rechecks current conditions.';
+
+  @override
+  String get setupRecoveryRestoreDestination =>
+      'Reconnect or restore the approved destination.';
+
+  @override
+  String get setupRecoveryFreeStorage =>
+      'Free storage while preserving the required safety margin.';
+
+  @override
+  String get setupRecoveryRestoreRuntime =>
+      'Restore the compatible local runtime using its existing controls.';
+
+  @override
+  String get setupRecoveryCheckPrerequisites =>
+      'Review the local runtime and platform prerequisites.';
+
+  @override
+  String get setupRecoveryContactSupport =>
+      'Contact support with the diagnostic code.';
+
+  @override
+  String get setupRecoveryNoAction => 'No action is required.';
+
+  @override
+  String get setupRecoveryUnknown => 'Review diagnostics before continuing.';
+
+  @override
+  String setupRecommendedAction(String action) {
+    return 'Recommended action: $action';
+  }
 }

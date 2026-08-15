@@ -1,3 +1,5 @@
+use gixgiz_contracts::CandidateModelId;
+
 use crate::protocol::TagModel;
 
 const KNOWN_MODEL_TAGS: [(&str, &str); 6] = [
@@ -25,7 +27,7 @@ pub(crate) fn map_model(model: TagModel) -> MappedModel {
     };
     let canonical_id = KNOWN_MODEL_TAGS
         .iter()
-        .find(|(tag, _)| provider_id.eq_ignore_ascii_case(tag))
+        .find(|(tag, _)| provider_id == *tag)
         .map(|(_, id)| (*id).to_owned());
 
     MappedModel {
@@ -34,6 +36,13 @@ pub(crate) fn map_model(model: TagModel) -> MappedModel {
         size_bytes: model.size,
         is_remote: !model.remote_host.trim().is_empty() || !model.remote_model.trim().is_empty(),
     }
+}
+
+pub(crate) fn provider_tag_for_candidate(model_id: &CandidateModelId) -> Option<&'static str> {
+    KNOWN_MODEL_TAGS
+        .iter()
+        .find(|(_, canonical_id)| model_id.as_str() == *canonical_id)
+        .map(|(provider_tag, _)| *provider_tag)
 }
 
 #[cfg(test)]
@@ -75,5 +84,21 @@ mod tests {
         model.remote_host = "https://example.invalid".to_owned();
 
         assert!(map_model(model).is_remote);
+    }
+
+    #[test]
+    fn reverse_mapping_is_allowlisted_and_exact() {
+        assert_eq!(
+            provider_tag_for_candidate(&CandidateModelId::new("qwen2.5.0.5b-instruct")),
+            Some("qwen2.5:0.5b-instruct")
+        );
+        assert_eq!(
+            provider_tag_for_candidate(&CandidateModelId::new("private.unreviewed")),
+            None
+        );
+        assert_eq!(
+            map_model(tag_model("QWEN2.5:0.5B-INSTRUCT")).canonical_id,
+            None
+        );
     }
 }

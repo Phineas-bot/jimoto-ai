@@ -49,6 +49,14 @@ All routes require `Authorization: Bearer <per-launch-token>`, correlation and r
 | `POST /internal/v1/runtime/operations` | Start one authorized provider-neutral lifecycle operation. |
 | `GET /internal/v1/runtime/operations/{id}/events` | Stream ordered lifecycle events with an explicit terminal state. |
 | `POST /internal/v1/runtime/operations/{id}/cancel` | Propagate cancellation to the active lifecycle operation. |
+| `POST /internal/v1/setup/plan` | Persist a concrete setup plan for one selected recommendation. |
+| `POST /internal/v1/setup/jobs/recovery` | Recover the most recent relevant persisted setup job after restart. |
+| `POST /internal/v1/setup/jobs/{id}/approve` | Record an explicit decision for the exact persisted plan revision. |
+| `POST /internal/v1/setup/jobs` | Start one approved durable setup attempt. |
+| `POST /internal/v1/setup/jobs/{id}/status` | Return the authoritative persisted setup snapshot. |
+| `GET /internal/v1/setup/jobs/{id}/events?after_sequence={cursor}&limit={count}` | Stream a bounded page of persisted setup events after an exclusive cursor. |
+| `POST /internal/v1/setup/jobs/{id}/cancel` | Request cooperative cancellation of an active setup attempt. |
+| `POST /internal/v1/setup/jobs/{id}/retry` | Retry the exact current approved plan after preconditions are rechecked. |
 | `POST /internal/v1/shutdown` | Request bounded sidecar shutdown. |
 
 The deterministic operation is transport-foundation behavior only. It is not a product workflow and has no hardware, runtime, model, download, persistence, or chat semantics.
@@ -58,6 +66,10 @@ Hardware scans reuse the same authentication, handshake, correlation, bounded SS
 Capability recommendations use the same authentication, handshake, body limit, timeout, and identifier checks. The route is an in-memory bounded calculation: it consumes the supplied `MachineProfile`, does not start a scan, does not query Windows or SQLite, and exposes no raw catalogue rules. See [`capability-recommendations.md`](./capability-recommendations.md).
 
 Runtime routes reuse the same authentication, handshake, identifier, body, timeout, and safe-error controls. The handshake supplies the opaque identity of the runtime provider registered by the Rust composition root; Flutter echoes that identity and does not select or name a provider in application code. JSON response bodies have a total configured deadline and a 64 KiB limit, including error responses. Lifecycle SSE consumption separately enforces the configured inactivity timeout, a 512 KiB cumulative body limit, per-event limits, and ordered terminal events before decoding into UI state. The routes expose normalized state and user intentions rather than provider URLs, commands, payloads, executable paths, or raw errors. The host retains at most eight lifecycle operation records and permits only one active lifecycle operation. Core policy keeps discovery, reuse consent, ownership, and management consent separate; external reuse approval permits bounded read-only model inspection but does not authorize start, stop, restart, update, uninstall, or reconfiguration. See [`ollama-runtime.md`](./ollama-runtime.md).
+
+Setup routes are thin adapters over the Rust-owned persistent setup service. Planning records an awaiting-approval job before Flutter renders it. Approval names only the job and exact plan revision; Rust copies the stored model, provider artifact, licence, provenance, destination, expected size, and authorized effects into the durable approval record. Starting, cancelling, retrying, and recovering always return an authoritative snapshot. Provider acquisition can continue for its bounded core deadline even when the desktop detaches from the event stream.
+
+Setup SSE uses an exclusive persisted `after_sequence` cursor and a requested `limit` from 1 through 64. Events are strictly increasing per job across retries and process restarts. Each connection is capped at 64 events and 512 KiB, uses a 16-item backpressure channel, and closes after a terminal event or its bounded page; Flutter reconnects with the last accepted cursor while the job remains active. Closing a stream, navigating away, replacing the client, or exiting the desktop only detaches the subscription. None of those actions sends cancellation. Only the explicit confirmed cancel command requests cooperative cancellation. Progress bytes and percentages are informational; `Ready`, cancellation, attention, and failure presentation always comes from persisted job state and terminal results.
 
 ## Contract generation
 
@@ -85,6 +97,7 @@ The generator intentionally supports only the contract shapes used by this inter
 - Requests with browser `Origin` headers are rejected; no CORS headers or cookies are used.
 - JSON commands require `application/json`, accept at most 16 KiB, run through a five-second request deadline, and share a 16-request concurrency bound.
 - Responses and event lines are bounded by the Dart client. The foundation stream is finite, sequence-checked, correlation-checked, replayable during the process session, and must end with an explicit terminal state.
+- Setup event replay is authenticated, job-ID checked, cursor-ordered, and bounded independently for every connection. Event correlation IDs identify the command or attempt that caused the event and are not replaced by the later subscription request ID.
 - Runtime model inventories are authenticated, requested explicitly, capped by core policy, and never included in routine status or live-region summaries.
 - Boundary failures contain stable codes, safe messages, recovery guidance, correlation IDs, and request IDs. Raw headers, tokens, provider output, panics, and stack traces are not returned.
 - Structured Rust diagnostics write to stderr so stdout remains a one-record bootstrap channel. Request headers and bodies are not logged.

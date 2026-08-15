@@ -16,6 +16,8 @@ use gixgiz_persistence::{Persistence, RuntimePolicyRecord, RuntimePolicyReposito
 use gixgiz_runtime::{RuntimeError, RuntimeObservation, RuntimeOperationContext, RuntimeProvider};
 
 const MAX_MODEL_INVENTORY_ITEMS: u16 = 100;
+const POLICY_READ_CONTENTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+const POLICY_READ_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(2);
 
 trait RuntimePolicyStore: Send + Sync {
     fn get(
@@ -248,9 +250,23 @@ impl RuntimeService {
         context.check()?;
         let policy = self.policy.clone();
         let provider_id = provider_id.clone();
-        let result = tokio::task::spawn_blocking(move || policy.get(&provider_id))
-            .await
-            .map_err(|_| RuntimeError::PolicyUnavailable)?;
+        let result = tokio::task::spawn_blocking(move || {
+            let contention_deadline = std::time::Instant::now() + POLICY_READ_CONTENTION_TIMEOUT;
+            loop {
+                match policy.get(&provider_id) {
+                    Err(RuntimeError::PolicyUnavailable)
+                        if std::time::Instant::now() < contention_deadline =>
+                    {
+                        let remaining = contention_deadline
+                            .saturating_duration_since(std::time::Instant::now());
+                        std::thread::sleep(POLICY_READ_RETRY_DELAY.min(remaining));
+                    }
+                    result => return result,
+                }
+            }
+        })
+        .await
+        .map_err(|_| RuntimeError::PolicyUnavailable)?;
         context.check()?;
         result
     }
@@ -469,7 +485,13 @@ fn unix_timestamp_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
 
     use gixgiz_contracts::{
         CorrelationId, RequestId, RuntimeDisplayName, RuntimeModelInventory,
@@ -480,6 +502,38 @@ mod tests {
     use gixgiz_runtime::testing::{FakeRuntimeCall, FakeRuntimeProvider};
 
     use super::*;
+
+    struct TransientlyContendedPolicyStore {
+        remaining_failures: AtomicUsize,
+        record: RuntimePolicyRecord,
+    }
+
+    impl RuntimePolicyStore for TransientlyContendedPolicyStore {
+        fn get(
+            &self,
+            _provider_id: &RuntimeProviderId,
+        ) -> Result<Option<RuntimePolicyRecord>, RuntimeError> {
+            if self
+                .remaining_failures
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                    if remaining > 0 {
+                        Some(remaining - 1)
+                    } else {
+                        None
+                    }
+                })
+                .is_ok()
+            {
+                Err(RuntimeError::PolicyUnavailable)
+            } else {
+                Ok(Some(self.record.clone()))
+            }
+        }
+
+        fn upsert(&self, _policy: &RuntimePolicyRecord) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+    }
 
     fn context() -> RuntimeOperationContext {
         RuntimeOperationContext::new(
@@ -803,5 +857,36 @@ mod tests {
         assert_eq!(report.ownership, RuntimeOwnership::External);
         assert_eq!(report.reuse_consent, RuntimeConsentState::ReuseApproved);
         assert_eq!(report.management_consent, RuntimeConsentState::NotRequested);
+    }
+
+    #[tokio::test]
+    async fn policy_read_survives_sustained_bounded_connection_contention() {
+        let provider = provider(RuntimeState::Ready);
+        let policy = Arc::new(TransientlyContendedPolicyStore {
+            remaining_failures: AtomicUsize::new(150),
+            record: RuntimePolicyRecord::new(
+                provider.provider_id().clone(),
+                RuntimeOwnership::External,
+                RuntimeConsentState::ReuseApproved,
+                RuntimeConsentState::NotRequested,
+                1,
+            )
+            .expect("test policy is valid"),
+        });
+        let service = RuntimeService::new(provider.clone(), policy.clone());
+        let report = service
+            .status(
+                provider.provider_id(),
+                RuntimeOperationContext::new(
+                    CorrelationId::new(),
+                    RequestId::new(),
+                    Duration::from_secs(2),
+                ),
+            )
+            .await
+            .expect("policy becomes visible within the contention bound");
+
+        assert_eq!(policy.remaining_failures.load(Ordering::SeqCst), 0);
+        assert_eq!(report.reuse_consent, RuntimeConsentState::ReuseApproved);
     }
 }

@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/core/sidecar_connection.dart';
 
+import 'support/setup_fixture.dart';
+
 void main() {
   test('runtime status uses the authenticated loopback route', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -309,6 +311,66 @@ void main() {
     );
     await _shutdown(session);
   });
+
+  test(
+    'setup SSE sends a bounded exclusive cursor and accepts causal IDs',
+    () async {
+      const requestCorrelationId = '00000000-0000-4000-8000-000000000030';
+      const requestId = '00000000-0000-4000-8000-000000000031';
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final subscription = server.listen((request) async {
+        if (request.uri.path == '/internal/v1/shutdown') {
+          await _respondToShutdown(request);
+          return;
+        }
+        expect(request.method, 'GET');
+        expect(
+          request.uri.path,
+          '/internal/v1/setup/jobs/$setupJobIdFixture/events',
+        );
+        expect(request.uri.queryParameters['after_sequence'], '7');
+        expect(request.uri.queryParameters['limit'], '64');
+        expect(
+          request.headers.value('x-gixgiz-correlation-id'),
+          requestCorrelationId,
+        );
+        expect(request.headers.value('x-gixgiz-request-id'), requestId);
+        final event = setupEventFixture(
+          sequence: 8,
+          job: setupJobFixture(state: 'active', stage: 'acquiring'),
+        );
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType(
+          'text',
+          'event-stream',
+        );
+        request.response.write('data: ${jsonEncode(event.toJson())}\n\n');
+        await request.response.close();
+      });
+      addTearDown(() async {
+        await subscription.cancel();
+        await server.close(force: true);
+      });
+      final session = _session(server, _FakeProcess());
+
+      final events = await session
+          .setupJobEvents(
+            const SetupJobEventsRequest(
+              jobId: setupJobIdFixture,
+              afterSequence: 7,
+              limit: 64,
+              correlationId: requestCorrelationId,
+              requestId: requestId,
+            ),
+          )
+          .toList();
+
+      expect(events, hasLength(1));
+      expect(events.single.sequence, 8);
+      expect(events.single.correlationId, setupCorrelationIdFixture);
+      await _shutdown(session);
+    },
+  );
 
   test(
     'runtime event stream tolerates more than five seconds of silence',

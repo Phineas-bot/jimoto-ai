@@ -256,6 +256,166 @@ class SidecarCoreClient extends CoreClient {
     });
   }
 
+  @override
+  Future<SetupJobSnapshot> createSetupPlan(
+    RecommendationPlan recommendation, {
+    SetupDestinationCategory destination =
+        SetupDestinationCategory.providerManaged,
+  }) async {
+    return _setupRequest((session) async {
+      final response = await session.createSetupPlan(
+        SetupPlanRequest(
+          recommendation: recommendation,
+          providerId: _runtimeProviderId(),
+          destination: destination,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job);
+      return response.job;
+    });
+  }
+
+  @override
+  Future<SetupJobSnapshot?> recoverSetupJob() async {
+    return _setupRequest((session) async {
+      final response = await session.recoverSetupJob(
+        SetupJobRecoveryRequest(
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      final job = response.job;
+      if (job != null) {
+        _verifySetupJob(job);
+      }
+      return job;
+    });
+  }
+
+  @override
+  Future<SetupJobSnapshot> decideSetupApproval(
+    SetupJobSnapshot job,
+    SetupApprovalDecision decision,
+  ) async {
+    return _setupRequest((session) async {
+      _verifySetupJob(job);
+      final response = await session.decideSetupApproval(
+        SetupApprovalRequest(
+          jobId: job.jobId,
+          planRevision: job.plan.revision,
+          decision: decision,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job, expectedJobId: job.jobId);
+      return response.job;
+    });
+  }
+
+  @override
+  Future<SetupJobSnapshot> startSetupJob(SetupJobSnapshot job) async {
+    return _setupRequest((session) async {
+      _verifySetupJob(job);
+      final response = await session.startSetupJob(
+        SetupJobStartRequest(
+          jobId: job.jobId,
+          planRevision: job.plan.revision,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job, expectedJobId: job.jobId);
+      return response.job;
+    });
+  }
+
+  @override
+  Future<SetupJobSnapshot> setupJobStatus(SetupJobId jobId) async {
+    return _setupRequest((session) async {
+      final response = await session.setupJobStatus(
+        SetupJobStatusRequest(
+          jobId: jobId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job, expectedJobId: jobId);
+      return response.job;
+    });
+  }
+
+  @override
+  Stream<SetupJobEvent> observeSetupJob(
+    SetupJobId jobId, {
+    required int afterSequence,
+  }) async* {
+    try {
+      final session = await _connectedSession();
+      _requireCapability(TransportCapability.setupWorkflow);
+      await for (final event in session.setupJobEvents(
+        SetupJobEventsRequest(
+          jobId: jobId,
+          afterSequence: afterSequence,
+          limit: 64,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      )) {
+        _verifySetupJob(event.job, expectedJobId: jobId);
+        yield event;
+      }
+    } on SidecarFailure catch (failure) {
+      throw _coreFailure(failure);
+    }
+  }
+
+  @override
+  Future<SetupJobSnapshot> cancelSetupJob(SetupJobId jobId) async {
+    return _setupRequest((session) async {
+      final response = await session.cancelSetupJob(
+        SetupJobCancelRequest(
+          jobId: jobId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job, expectedJobId: jobId);
+      return response.job;
+    });
+  }
+
+  @override
+  Future<SetupJobSnapshot> retrySetupJob(SetupJobSnapshot job) async {
+    return _setupRequest((session) async {
+      _verifySetupJob(job);
+      final response = await session.retrySetupJob(
+        SetupJobRetryRequest(
+          jobId: job.jobId,
+          planRevision: job.plan.revision,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      _verifySetupJob(response.job, expectedJobId: job.jobId);
+      return response.job;
+    });
+  }
+
+  Future<T> _setupRequest<T>(
+    Future<T> Function(CoreSidecarSession session) request,
+  ) async {
+    try {
+      final session = await _connectedSession();
+      _requireCapability(TransportCapability.setupWorkflow);
+      return await request(session);
+    } on SidecarFailure catch (failure) {
+      throw _coreFailure(failure);
+    }
+  }
+
   Future<T> _runtimeRequest<T>(
     TransportCapability capability,
     Future<T> Function(CoreSidecarSession session) request,
@@ -286,6 +446,7 @@ class SidecarCoreClient extends CoreClient {
         code: failure.diagnosticCode,
         category: safeError.category,
         recoveryAction: safeError.recovery.action,
+        recoveryMessage: safeError.recovery.message,
       );
     }
     final timedOut = failure.diagnosticCode.endsWith('TIMEOUT');
@@ -323,6 +484,20 @@ class SidecarCoreClient extends CoreClient {
       throw const SidecarFailure(
         SidecarFailureKind.invalidResponse,
         'RUNTIME_PROVIDER_ID_MISMATCH',
+      );
+    }
+  }
+
+  void _verifySetupJob(SetupJobSnapshot job, {SetupJobId? expectedJobId}) {
+    if (job.schemaVersion != coreSchemaVersion ||
+        job.plan.schemaVersion != coreSchemaVersion ||
+        !isValidTransportUuid(job.jobId) ||
+        job.plan.jobId != job.jobId ||
+        (expectedJobId != null && job.jobId != expectedJobId) ||
+        job.plan.model.artifact.providerId != _runtimeProviderId()) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'SETUP_JOB_RESPONSE_INVALID',
       );
     }
   }
@@ -367,6 +542,7 @@ class SidecarCoreClient extends CoreClient {
             TransportCapability.runtimeConsent,
             TransportCapability.runtimeLifecycle,
             TransportCapability.runtimeModelInventory,
+            TransportCapability.setupWorkflow,
             TransportCapability.cancellation,
             TransportCapability.shutdown,
           ],
@@ -411,7 +587,8 @@ class SidecarCoreClient extends CoreClient {
           capability == TransportCapability.runtimeStatus ||
           capability == TransportCapability.runtimeConsent ||
           capability == TransportCapability.runtimeLifecycle ||
-          capability == TransportCapability.runtimeModelInventory,
+          capability == TransportCapability.runtimeModelInventory ||
+          capability == TransportCapability.setupWorkflow,
     );
   }
 

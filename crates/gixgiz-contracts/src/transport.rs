@@ -29,6 +29,8 @@ pub enum TransportCapability {
     RuntimeLifecycle,
     /// List a bounded normalized installed-model inventory.
     RuntimeModelInventory,
+    /// Plan, approve, observe, cancel, retry, and recover persistent model setup.
+    SetupWorkflow,
     /// Request bounded sidecar shutdown.
     Shutdown,
     /// A newer peer supplied a capability this build does not recognize.

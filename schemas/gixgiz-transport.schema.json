@@ -1307,6 +1307,297 @@
       ],
       "type": "object"
     },
+    "ModelAcquisitionPhase": {
+      "description": "Normalized provider acquisition phase.",
+      "oneOf": [
+        {
+          "const": "preparing",
+          "description": "Provider preparation or manifest resolution is active.",
+          "type": "string"
+        },
+        {
+          "const": "transferring",
+          "description": "Artifact bytes are being transferred.",
+          "type": "string"
+        },
+        {
+          "const": "verifying",
+          "description": "Provider-reported integrity work is active.",
+          "type": "string"
+        },
+        {
+          "const": "registering",
+          "description": "Provider registration or manifest commit is active.",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "description": "Provider acquisition reported success.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized phase.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelAcquisitionProgress": {
+      "description": "Bounded normalized progress with no provider-supplied text.",
+      "properties": {
+        "completed_bytes": {
+          "description": "Completed bytes when the provider supplied valid counters.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/ModelAcquisitionPhase",
+          "description": "Current normalized acquisition phase."
+        },
+        "progress_basis_points": {
+          "description": "Deterministic progress in hundredths of one percent, when calculable.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "total_bytes": {
+          "description": "Total bytes when the provider supplied valid counters.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "phase"
+      ],
+      "type": "object"
+    },
+    "ModelIntegrityState": {
+      "description": "Strength of available artifact-integrity evidence.",
+      "oneOf": [
+        {
+          "const": "unavailable",
+          "description": "No trusted expected identity is available for independent comparison.",
+          "type": "string"
+        },
+        {
+          "const": "provider_reported",
+          "description": "The provider reported internal verification without an independent expectation.",
+          "type": "string"
+        },
+        {
+          "const": "verified",
+          "description": "Expected and observed integrity evidence matched.",
+          "type": "string"
+        },
+        {
+          "const": "mismatch",
+          "description": "Expected and observed integrity evidence did not match.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelLifecycleState": {
+      "description": "Persistent lifecycle state for one canonical model mapping.",
+      "oneOf": [
+        {
+          "const": "planned",
+          "description": "The model is part of a concrete plan only.",
+          "type": "string"
+        },
+        {
+          "const": "acquiring",
+          "description": "Provider acquisition is active or incomplete.",
+          "type": "string"
+        },
+        {
+          "const": "acquired",
+          "description": "Acquisition completed but registration/readiness is not complete.",
+          "type": "string"
+        },
+        {
+          "const": "registering",
+          "description": "Provider registration is being observed.",
+          "type": "string"
+        },
+        {
+          "const": "verifying",
+          "description": "Runtime, availability, registration, or inference verification is active.",
+          "type": "string"
+        },
+        {
+          "const": "available",
+          "description": "Every required model-readiness gate passed.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "A recoverable condition requires attention.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "Model setup failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed before readiness.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelMetadata": {
+      "description": "Persistable provider-neutral model metadata.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ModelProviderArtifact",
+          "description": "Canonical/provider identity mapping."
+        },
+        "catalogue_version": {
+          "$ref": "#/$defs/CatalogueVersion",
+          "description": "Catalogue version used to select this model."
+        },
+        "destination": {
+          "$ref": "#/$defs/SetupDestinationCategory",
+          "description": "Safe destination ownership category."
+        },
+        "destination_display": {
+          "description": "Safe destination label with no private local path.",
+          "type": "string"
+        },
+        "display_name": {
+          "description": "Beginner-readable model name.",
+          "type": "string"
+        },
+        "expected_size_bytes": {
+          "description": "Conservative expected installed size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "family": {
+          "description": "Canonical model family.",
+          "type": "string"
+        },
+        "licence_spdx": {
+          "description": "SPDX licence recorded by the local catalogue.",
+          "type": "string"
+        },
+        "lifecycle_state": {
+          "$ref": "#/$defs/ModelLifecycleState",
+          "description": "Persistent model lifecycle state."
+        },
+        "measured_size_bytes": {
+          "description": "Provider-reported measured installed size when available.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "provenance": {
+          "description": "Bounded provenance summary or official source URL.",
+          "type": "string"
+        },
+        "rule_set_version": {
+          "$ref": "#/$defs/RuleSetVersion",
+          "description": "Rule-set version used to select this model."
+        },
+        "schema_version": {
+          "description": "Setup-workflow schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size_class": {
+          "$ref": "#/$defs/ModelSizeClass",
+          "description": "Coarse model size class."
+        },
+        "verification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelVerificationResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Latest bounded verification evidence when available."
+        },
+        "verification_state": {
+          "$ref": "#/$defs/ModelVerificationState",
+          "description": "Aggregate model verification state."
+        }
+      },
+      "required": [
+        "schema_version",
+        "artifact",
+        "display_name",
+        "family",
+        "size_class",
+        "licence_spdx",
+        "provenance",
+        "destination",
+        "destination_display",
+        "expected_size_bytes",
+        "catalogue_version",
+        "rule_set_version",
+        "lifecycle_state",
+        "verification_state"
+      ],
+      "type": "object"
+    },
+    "ModelProviderArtifact": {
+      "description": "Opaque provider artifact mapped from one canonical catalogue identity.",
+      "properties": {
+        "canonical_model_id": {
+          "$ref": "#/$defs/CandidateModelId",
+          "description": "Provider-neutral canonical catalogue identity."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Runtime provider that owns the mapping."
+        },
+        "provider_model_id": {
+          "$ref": "#/$defs/RuntimeProviderModelId",
+          "description": "Opaque provider identifier required for adapter operations."
+        },
+        "source_summary": {
+          "description": "Bounded safe source or mapping summary.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "canonical_model_id",
+        "provider_id",
+        "provider_model_id",
+        "source_summary"
+      ],
+      "type": "object"
+    },
     "ModelSizeClass": {
       "description": "Coarse model-size category used for deterministic planning and explanation.",
       "oneOf": [
@@ -1328,6 +1619,91 @@
         {
           "const": "unknown",
           "description": "A newer peer supplied an unrecognized size class.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelVerificationResult": {
+      "description": "Aggregate readiness evidence without prompt or generated content.",
+      "properties": {
+        "inference_verified": {
+          "description": "Whether a fixed bounded readiness inference produced a valid response.",
+          "type": "boolean"
+        },
+        "integrity": {
+          "$ref": "#/$defs/ModelIntegrityState",
+          "description": "Available integrity evidence classification."
+        },
+        "model_available": {
+          "description": "Whether the exact local provider artifact was available.",
+          "type": "boolean"
+        },
+        "registration_verified": {
+          "description": "Whether provider registration was verified.",
+          "type": "boolean"
+        },
+        "runtime_health_verified": {
+          "description": "Whether compatible runtime health was verified.",
+          "type": "boolean"
+        },
+        "verified_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds captured after the latest gate.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runtime_health_verified",
+        "model_available",
+        "registration_verified",
+        "inference_verified",
+        "integrity",
+        "verified_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "ModelVerificationState": {
+      "description": "Aggregate verification state for one model setup.",
+      "oneOf": [
+        {
+          "const": "not_started",
+          "description": "No verification gate has run.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_verified",
+          "description": "Runtime health passed and later gates remain.",
+          "type": "string"
+        },
+        {
+          "const": "availability_verified",
+          "description": "Model availability passed and later gates remain.",
+          "type": "string"
+        },
+        {
+          "const": "registration_verified",
+          "description": "Provider registration passed and inference remains.",
+          "type": "string"
+        },
+        {
+          "const": "verified",
+          "description": "Every required verification gate passed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "One verification gate failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Verification was cancelled.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
           "type": "string"
         }
       ]
@@ -1983,6 +2359,11 @@
           "type": "string"
         },
         {
+          "const": "requires_setup_approval",
+          "description": "The capability requires approval of one exact durable setup plan.",
+          "type": "string"
+        },
+        {
           "const": "unsupported",
           "description": "The provider or current ownership cannot safely perform the capability.",
           "type": "string"
@@ -2055,6 +2436,31 @@
         {
           "const": "model_inventory",
           "description": "List a bounded normalized installed-model inventory.",
+          "type": "string"
+        },
+        {
+          "const": "model_acquisition_preparation",
+          "description": "Resolve one canonical model to an approved provider artifact.",
+          "type": "string"
+        },
+        {
+          "const": "model_storage_preflight",
+          "description": "Check provider-managed storage before model acquisition.",
+          "type": "string"
+        },
+        {
+          "const": "model_acquisition",
+          "description": "Acquire one exact approved provider artifact with normalized progress.",
+          "type": "string"
+        },
+        {
+          "const": "model_registration",
+          "description": "Inspect exact local model availability and provider registration.",
+          "type": "string"
+        },
+        {
+          "const": "readiness_inference",
+          "description": "Run one fixed bounded readiness inference without returning generated content.",
           "type": "string"
         },
         {
@@ -3132,6 +3538,1497 @@
         }
       ]
     },
+    "SetupApprovalDecision": {
+      "description": "Explicit decision for one exact setup-plan revision.",
+      "oneOf": [
+        {
+          "const": "approve",
+          "description": "Approve only the exact persisted plan revision and its recorded effects.",
+          "type": "string"
+        },
+        {
+          "const": "deny",
+          "description": "Deny the current plan revision.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer client supplied an unrecognized decision.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupApprovalRecord": {
+      "description": "Durable approval record created by Rust after validating the exact plan revision.",
+      "properties": {
+        "approved_effects": {
+          "description": "Approved material effects.",
+          "items": {
+            "$ref": "#/$defs/SetupEffectKind"
+          },
+          "type": "array"
+        },
+        "canonical_model_id": {
+          "$ref": "#/$defs/CandidateModelId",
+          "description": "Approved canonical model."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Correlation identifier from the approval request."
+        },
+        "decided_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds assigned by Rust.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "decision": {
+          "$ref": "#/$defs/SetupApprovalDecision",
+          "description": "Explicit user decision."
+        },
+        "destination": {
+          "$ref": "#/$defs/SetupDestinationCategory",
+          "description": "Approved destination category."
+        },
+        "expected_size_bytes": {
+          "description": "Approved conservative size expectation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "external_runtime_effect": {
+          "description": "Whether this approval permits an effect on an externally managed runtime.",
+          "type": "boolean"
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Approved durable job."
+        },
+        "licence_spdx": {
+          "description": "SPDX licence copied from the persisted model plan.",
+          "type": "string"
+        },
+        "plan_revision": {
+          "description": "Approved plan revision.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provenance": {
+          "description": "Bounded source provenance copied from the persisted model plan.",
+          "type": "string"
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Approved runtime provider."
+        },
+        "provider_model_id": {
+          "$ref": "#/$defs/RuntimeProviderModelId",
+          "description": "Approved provider artifact."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier of the approval request."
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "decision",
+        "canonical_model_id",
+        "provider_id",
+        "provider_model_id",
+        "destination",
+        "expected_size_bytes",
+        "licence_spdx",
+        "provenance",
+        "approved_effects",
+        "external_runtime_effect",
+        "correlation_id",
+        "request_id",
+        "decided_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "SetupApprovalRequest": {
+      "description": "Authenticated exact setup approval request.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "decision": {
+          "$ref": "#/$defs/SetupApprovalDecision",
+          "description": "Explicit approval decision."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job being approved or denied."
+        },
+        "plan_revision": {
+          "description": "Exact plan revision displayed to the user.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "decision",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupApprovalResponse": {
+      "description": "Authoritative job and durable approval outcome.",
+      "properties": {
+        "approval": {
+          "$ref": "#/$defs/SetupApprovalRecord",
+          "description": "Durable decision record."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Authoritative durable job snapshot after the decision."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "approval",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupAttentionReason": {
+      "description": "Stable reason why a setup job needs attention.",
+      "oneOf": [
+        {
+          "const": "runtime_not_installed",
+          "description": "No compatible runtime is installed.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_consent_required",
+          "description": "Runtime reuse consent has not been recorded.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_unavailable",
+          "description": "The compatible runtime is stopped or unavailable.",
+          "type": "string"
+        },
+        {
+          "const": "privileged_runtime_installation_required",
+          "description": "Runtime installation would require a separately approved privileged workflow.",
+          "type": "string"
+        },
+        {
+          "const": "destination_unavailable",
+          "description": "The approved destination is missing or cannot be verified.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_storage",
+          "description": "The destination does not retain the required safety margin.",
+          "type": "string"
+        },
+        {
+          "const": "acquisition_interrupted",
+          "description": "Provider acquisition was interrupted with uncertain retained effects.",
+          "type": "string"
+        },
+        {
+          "const": "registration_unverified",
+          "description": "Provider registration could not be verified.",
+          "type": "string"
+        },
+        {
+          "const": "model_unavailable",
+          "description": "The selected model is not available through the provider.",
+          "type": "string"
+        },
+        {
+          "const": "integrity_mismatch",
+          "description": "Available integrity evidence did not match.",
+          "type": "string"
+        },
+        {
+          "const": "readiness_timed_out",
+          "description": "Readiness inference exceeded its fixed deadline.",
+          "type": "string"
+        },
+        {
+          "const": "readiness_failed",
+          "description": "Readiness inference failed without exposing generated content.",
+          "type": "string"
+        },
+        {
+          "const": "recovery_required",
+          "description": "An interrupted job requires an explicit retry decision.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized reason.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupCancellationReport": {
+      "description": "Structured cancellation result that does not conflate cancellation with failure.",
+      "properties": {
+        "effect_report": {
+          "$ref": "#/$defs/SetupEffectReport",
+          "description": "Completed, retained, rolled-back, and uncertain effects."
+        },
+        "observed_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the workflow observed cancellation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requested_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when cancellation was requested.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "requested_at_unix_ms",
+        "observed_at_unix_ms",
+        "effect_report"
+      ],
+      "type": "object"
+    },
+    "SetupDestinationCategory": {
+      "description": "Safe destination category shown without exposing a private local path.",
+      "oneOf": [
+        {
+          "const": "provider_managed",
+          "description": "Storage is owned and selected by the runtime provider.",
+          "type": "string"
+        },
+        {
+          "const": "application_data",
+          "description": "Storage is beneath the GixGiz per-user application root.",
+          "type": "string"
+        },
+        {
+          "const": "user_selected",
+          "description": "Storage is beneath an explicitly approved user-selected root.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Destination ownership or location cannot be established safely.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupEffect": {
+      "description": "One bounded material-effect record.",
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/SetupEffectDisposition",
+          "description": "Observed effect disposition."
+        },
+        "kind": {
+          "$ref": "#/$defs/SetupEffectKind",
+          "description": "Effect category."
+        },
+        "message": {
+          "description": "Safe bounded explanation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "disposition",
+        "message"
+      ],
+      "type": "object"
+    },
+    "SetupEffectDisposition": {
+      "description": "Outcome classification for one material effect.",
+      "oneOf": [
+        {
+          "const": "completed",
+          "description": "The effect completed and was verified.",
+          "type": "string"
+        },
+        {
+          "const": "retained",
+          "description": "The effect remains intentionally retained.",
+          "type": "string"
+        },
+        {
+          "const": "rolled_back",
+          "description": "The workflow safely reversed its owned effect.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "The provider effect cannot be established safely.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized disposition.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupEffectKind": {
+      "description": "Material setup effect category.",
+      "oneOf": [
+        {
+          "const": "provider_model_acquisition",
+          "description": "Add provider-owned model data.",
+          "type": "string"
+        },
+        {
+          "const": "provider_model_registration",
+          "description": "Register or observe the exact model through the provider.",
+          "type": "string"
+        },
+        {
+          "const": "readiness_inference",
+          "description": "Run one fixed bounded readiness inference.",
+          "type": "string"
+        },
+        {
+          "const": "metadata_persistence",
+          "description": "Persist GixGiz-owned job and model metadata.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized effect.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupEffectReport": {
+      "description": "Bounded summary of material effects.",
+      "properties": {
+        "effects": {
+          "description": "Ordered material-effect records.",
+          "items": {
+            "$ref": "#/$defs/SetupEffect"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "effects"
+      ],
+      "type": "object"
+    },
+    "SetupJobCancelRequest": {
+      "description": "Authenticated cooperative cancellation request for a setup job.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the attempt being cancelled."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Target durable job."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobCancelResponse": {
+      "description": "Cancellation acceptance and latest persistent state.",
+      "properties": {
+        "accepted": {
+          "description": "Whether cancellation was accepted for an active non-terminal attempt.",
+          "type": "boolean"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Current authoritative job snapshot."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "accepted",
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobEvent": {
+      "description": "Ordered persisted setup-job event suitable for bounded replay.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier of the request or bounded attempt that caused this event."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Authoritative persisted snapshot at this event."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job that owns this event."
+        },
+        "kind": {
+          "$ref": "#/$defs/SetupJobEventKind",
+          "description": "Stable event kind."
+        },
+        "schema_version": {
+          "description": "Setup-workflow schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "description": "Per-job monotonically increasing sequence number starting at one and continuing across\nretries and process restarts.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "terminal_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupJobTerminalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal outcome present only on the final event for an attempt."
+        },
+        "timestamp_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds assigned by Rust.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "correlation_id",
+        "sequence",
+        "kind",
+        "timestamp_unix_ms",
+        "job"
+      ],
+      "type": "object"
+    },
+    "SetupJobEventKind": {
+      "description": "Stable setup-job event classification.",
+      "oneOf": [
+        {
+          "const": "started",
+          "description": "A bounded setup attempt started.",
+          "type": "string"
+        },
+        {
+          "const": "progress",
+          "description": "Persisted setup progress changed.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "The attempt paused for attention.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Every readiness gate passed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The attempt failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized event kind.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupJobEventsRequest": {
+      "description": "Authenticated bounded replay request for persisted setup-job events.",
+      "properties": {
+        "after_sequence": {
+          "description": "Exclusive durable sequence cursor. Zero starts replay at the first event.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job whose events are requested."
+        },
+        "limit": {
+          "description": "Requested maximum event count. Rust applies its own lower hard upper bound.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "after_sequence",
+        "limit",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobEventsResponse": {
+      "description": "One bounded page of durable setup-job events.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "events": {
+          "description": "Events in strictly increasing durable sequence order.",
+          "items": {
+            "$ref": "#/$defs/SetupJobEvent"
+          },
+          "type": "array"
+        },
+        "has_more": {
+          "description": "Whether additional persisted events exist after this page.",
+          "type": "boolean"
+        },
+        "next_after_sequence": {
+          "description": "Cursor to send as `after_sequence` for the next page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "events",
+        "next_after_sequence",
+        "has_more",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobId": {
+      "description": "Opaque identifier for one durable setup job.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "SetupJobRecoveryRequest": {
+      "description": "Authenticated request to recover the most recent durable setup job.\n\nRecovery is intentionally not keyed by an attempt correlation identifier. The core selects\nthe latest persisted job that still matters to the current installation, including terminal\njobs whose outcome the user has not yet acknowledged.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobRecoveryResponse": {
+      "description": "Latest durable setup state available after desktop or core restart.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupJobSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Most recent relevant job, or `None` when setup has never been planned."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobRetryRequest": {
+      "description": "Authenticated request to retry the exact current approved plan.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by the new attempt and its events."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job to retry."
+        },
+        "plan_revision": {
+          "description": "Exact approved plan revision.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobRetryResponse": {
+      "description": "Accepted idempotent retry attempt.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Current authoritative job snapshot."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobSnapshot": {
+      "description": "Authoritative persistent setup-job snapshot.",
+      "properties": {
+        "attention_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupAttentionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current attention reason when action is required."
+        },
+        "cancellation_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupCancellationReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Structured report after cancellation."
+        },
+        "cancellation_requested": {
+          "description": "Whether cooperative cancellation is currently requested.",
+          "type": "boolean"
+        },
+        "created_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the job was created.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "effect_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupEffectReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Latest bounded material-effect report."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SafeErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Latest safe boundary error."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job identifier."
+        },
+        "latest_event_sequence": {
+          "description": "Latest durable event sequence included by this authoritative snapshot.\n\nClients resume event observation strictly after this cursor. This remains valid when\nolder coalesced progress events have been removed from bounded retention.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "plan": {
+          "$ref": "#/$defs/SetupPlan",
+          "description": "Exact current plan."
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelAcquisitionProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Latest persisted normalized acquisition progress."
+        },
+        "recovery_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetupRecoveryAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Recommended recovery action."
+        },
+        "retry_count": {
+          "description": "Number of explicit retry attempts.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_version": {
+          "description": "Setup-workflow schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "$ref": "#/$defs/SetupStage",
+          "description": "Exact current state-machine stage."
+        },
+        "state": {
+          "$ref": "#/$defs/SetupJobState",
+          "description": "High-level durable state."
+        },
+        "updated_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the snapshot last changed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "plan",
+        "state",
+        "stage",
+        "cancellation_requested",
+        "retry_count",
+        "latest_event_sequence",
+        "created_at_unix_ms",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "SetupJobStartRequest": {
+      "description": "Authenticated request to start one approved setup attempt.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by this attempt and its events."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Approved durable job."
+        },
+        "plan_revision": {
+          "description": "Exact approved plan revision.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobStartResponse": {
+      "description": "Accepted persistent setup attempt.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Authoritative durable job snapshot after acceptance."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobState": {
+      "description": "High-level durable setup-job state.",
+      "oneOf": [
+        {
+          "const": "draft_plan",
+          "description": "A plan is being assembled and has no approval.",
+          "type": "string"
+        },
+        {
+          "const": "awaiting_approval",
+          "description": "The exact persisted plan requires a user decision.",
+          "type": "string"
+        },
+        {
+          "const": "approved",
+          "description": "The exact current plan revision was approved.",
+          "type": "string"
+        },
+        {
+          "const": "active",
+          "description": "Bounded setup work is currently active.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "Work paused because a recoverable condition needs attention.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Runtime, model, registration, and inference verification all passed.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The current attempt failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupJobStatusRequest": {
+      "description": "Authenticated request for one durable setup-job snapshot.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Requested durable job."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobStatusResponse": {
+      "description": "Authoritative durable setup-job status.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Current persisted job snapshot."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupJobTerminalState": {
+      "description": "Terminal outcome for one bounded setup attempt or event stream.",
+      "oneOf": [
+        {
+          "const": "ready",
+          "description": "Every required readiness gate passed.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "The attempt paused with an actionable recovery path.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The attempt failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized terminal state.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupPlan": {
+      "description": "Concrete setup plan derived from one deterministic recommendation.",
+      "properties": {
+        "components": {
+          "description": "Concrete reviewable components.",
+          "items": {
+            "$ref": "#/$defs/SetupPlanComponent"
+          },
+          "type": "array"
+        },
+        "job_id": {
+          "$ref": "#/$defs/SetupJobId",
+          "description": "Durable job that owns this plan."
+        },
+        "model": {
+          "$ref": "#/$defs/ModelMetadata",
+          "description": "Selected model metadata before acquisition."
+        },
+        "reasons": {
+          "description": "Safe deterministic plan reasons.",
+          "items": {
+            "$ref": "#/$defs/SetupReason"
+          },
+          "type": "array"
+        },
+        "required_effects": {
+          "description": "Material effects that exact approval authorizes.",
+          "items": {
+            "$ref": "#/$defs/SetupEffectKind"
+          },
+          "type": "array"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourceEstimate",
+          "description": "Conservative resource expectations copied from the recommendation."
+        },
+        "revision": {
+          "description": "Monotonic plan revision used to bind approval.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtime_display_name": {
+          "description": "Beginner-readable runtime name.",
+          "type": "string"
+        },
+        "runtime_version": {
+          "description": "Verified provider version when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_version": {
+          "description": "Setup-workflow schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "description": "Safe plan warnings and limitations.",
+          "items": {
+            "$ref": "#/$defs/SetupWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "revision",
+        "model",
+        "runtime_display_name",
+        "resources",
+        "components",
+        "required_effects",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "SetupPlanComponent": {
+      "description": "One concrete, reviewable plan component.",
+      "properties": {
+        "detail": {
+          "description": "Bounded user-facing component detail.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SetupPlanComponentKind",
+          "description": "Component category."
+        },
+        "required": {
+          "description": "Whether setup cannot become ready without this component.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "Bounded user-facing component name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "detail",
+        "required"
+      ],
+      "type": "object"
+    },
+    "SetupPlanComponentKind": {
+      "description": "Category of a concrete plan component.",
+      "oneOf": [
+        {
+          "const": "runtime",
+          "description": "Runtime reuse and health requirements.",
+          "type": "string"
+        },
+        {
+          "const": "model",
+          "description": "Canonical model and provider artifact.",
+          "type": "string"
+        },
+        {
+          "const": "storage",
+          "description": "Provider-managed or GixGiz-managed storage destination.",
+          "type": "string"
+        },
+        {
+          "const": "verification",
+          "description": "Readiness verification work.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized kind.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupPlanRequest": {
+      "description": "Authenticated request for a concrete setup plan.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "destination": {
+          "$ref": "#/$defs/SetupDestinationCategory",
+          "description": "Requested safe destination category."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Registered runtime provider selected for the recommendation."
+        },
+        "recommendation": {
+          "$ref": "#/$defs/RecommendationPlan",
+          "description": "Deterministic recommendation selected for setup and revalidated by Rust."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "recommendation",
+        "provider_id",
+        "destination",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupPlanResponse": {
+      "description": "Concrete plan plus its durable awaiting-approval job.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/SetupJobSnapshot",
+          "description": "Authoritative durable job snapshot."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SetupReason": {
+      "description": "Safe bounded setup reason.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/SetupReasonCode",
+          "description": "Stable reason category."
+        },
+        "message": {
+          "description": "Provider-neutral explanation safe for display.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "SetupReasonCode": {
+      "description": "Stable plan or transition reason category.",
+      "oneOf": [
+        {
+          "const": "recommendation_selected",
+          "description": "The model came from the deterministic capability recommendation.",
+          "type": "string"
+        },
+        {
+          "const": "existing_model_reusable",
+          "description": "An existing compatible provider artifact may be reused.",
+          "type": "string"
+        },
+        {
+          "const": "acquisition_required",
+          "description": "Acquisition is required for the selected provider artifact.",
+          "type": "string"
+        },
+        {
+          "const": "approval_required",
+          "description": "Exact approval is required before provider mutation.",
+          "type": "string"
+        },
+        {
+          "const": "storage_verified",
+          "description": "Storage preflight passed with the required safety margin.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_verified",
+          "description": "Runtime health was verified.",
+          "type": "string"
+        },
+        {
+          "const": "registration_verified",
+          "description": "Provider registration was verified.",
+          "type": "string"
+        },
+        {
+          "const": "readiness_verified",
+          "description": "Bounded readiness inference was verified.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized reason.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupRecoveryAction": {
+      "description": "Safe recovery action offered for a setup state.",
+      "oneOf": [
+        {
+          "const": "review_approval",
+          "description": "Review and approve the exact current plan revision.",
+          "type": "string"
+        },
+        {
+          "const": "retry",
+          "description": "Retry the same approved job after rechecking preconditions.",
+          "type": "string"
+        },
+        {
+          "const": "restore_destination",
+          "description": "Restore or reconnect the approved destination.",
+          "type": "string"
+        },
+        {
+          "const": "free_storage",
+          "description": "Free storage while preserving the required safety margin.",
+          "type": "string"
+        },
+        {
+          "const": "restore_runtime",
+          "description": "Restore the compatible external runtime outside GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "check_prerequisites",
+          "description": "Review runtime and platform prerequisites.",
+          "type": "string"
+        },
+        {
+          "const": "contact_support",
+          "description": "Escalate with bounded sanitized diagnostics.",
+          "type": "string"
+        },
+        {
+          "const": "no_action",
+          "description": "No action is required.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized action.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupStage": {
+      "description": "Exact stage owned by the persistent setup state machine.",
+      "oneOf": [
+        {
+          "const": "draft_plan",
+          "description": "A concrete plan is being prepared.",
+          "type": "string"
+        },
+        {
+          "const": "awaiting_approval",
+          "description": "No provider mutation is permitted until approval is recorded.",
+          "type": "string"
+        },
+        {
+          "const": "approved",
+          "description": "Approval is recorded and execution has not started.",
+          "type": "string"
+        },
+        {
+          "const": "preparing",
+          "description": "The provider and durable job are being prepared.",
+          "type": "string"
+        },
+        {
+          "const": "checking_storage",
+          "description": "Destination availability and capacity are being checked.",
+          "type": "string"
+        },
+        {
+          "const": "acquiring",
+          "description": "The approved provider artifact is being acquired.",
+          "type": "string"
+        },
+        {
+          "const": "registering",
+          "description": "Provider registration is being completed or observed.",
+          "type": "string"
+        },
+        {
+          "const": "verifying_runtime",
+          "description": "Runtime health is being reverified.",
+          "type": "string"
+        },
+        {
+          "const": "verifying_model",
+          "description": "Model availability and registration are being verified.",
+          "type": "string"
+        },
+        {
+          "const": "running_test_inference",
+          "description": "A fixed bounded non-private test inference is running.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Every readiness gate passed.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "A recoverable condition requires user attention.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The current attempt failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation was observed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized stage.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetupWarning": {
+      "description": "Safe bounded setup-plan warning.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/SetupWarningCode",
+          "description": "Stable warning category."
+        },
+        "message": {
+          "description": "Provider-neutral explanation safe for display.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "SetupWarningCode": {
+      "description": "Stable plan warning category.",
+      "oneOf": [
+        {
+          "const": "external_runtime_modified",
+          "description": "The selected runtime remains externally managed.",
+          "type": "string"
+        },
+        {
+          "const": "provider_managed_storage",
+          "description": "Storage remains owned and controlled by the provider.",
+          "type": "string"
+        },
+        {
+          "const": "integrity_metadata_unavailable",
+          "description": "No trusted expected checksum is available for independent comparison.",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_may_retain_effects",
+          "description": "Cancellation may retain provider-owned partial data.",
+          "type": "string"
+        },
+        {
+          "const": "destination_evidence_incomplete",
+          "description": "Some destination evidence remains explicitly uncertain.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized warning.",
+          "type": "string"
+        }
+      ]
+    },
     "ShutdownRequest": {
       "description": "Authenticated request for bounded sidecar shutdown.",
       "properties": {
@@ -3563,6 +5460,11 @@
           "type": "string"
         },
         {
+          "const": "setup_workflow",
+          "description": "Plan, approve, observe, cancel, retry, and recover persistent model setup.",
+          "type": "string"
+        },
+        {
           "const": "shutdown",
           "description": "Request bounded sidecar shutdown.",
           "type": "string"
@@ -3778,6 +5680,57 @@
     "safe_error_payload": {
       "$ref": "#/$defs/SafeErrorPayload"
     },
+    "setup_approval_request": {
+      "$ref": "#/$defs/SetupApprovalRequest"
+    },
+    "setup_approval_response": {
+      "$ref": "#/$defs/SetupApprovalResponse"
+    },
+    "setup_job_cancel_request": {
+      "$ref": "#/$defs/SetupJobCancelRequest"
+    },
+    "setup_job_cancel_response": {
+      "$ref": "#/$defs/SetupJobCancelResponse"
+    },
+    "setup_job_event": {
+      "$ref": "#/$defs/SetupJobEvent"
+    },
+    "setup_job_events_request": {
+      "$ref": "#/$defs/SetupJobEventsRequest"
+    },
+    "setup_job_events_response": {
+      "$ref": "#/$defs/SetupJobEventsResponse"
+    },
+    "setup_job_recovery_request": {
+      "$ref": "#/$defs/SetupJobRecoveryRequest"
+    },
+    "setup_job_recovery_response": {
+      "$ref": "#/$defs/SetupJobRecoveryResponse"
+    },
+    "setup_job_retry_request": {
+      "$ref": "#/$defs/SetupJobRetryRequest"
+    },
+    "setup_job_retry_response": {
+      "$ref": "#/$defs/SetupJobRetryResponse"
+    },
+    "setup_job_start_request": {
+      "$ref": "#/$defs/SetupJobStartRequest"
+    },
+    "setup_job_start_response": {
+      "$ref": "#/$defs/SetupJobStartResponse"
+    },
+    "setup_job_status_request": {
+      "$ref": "#/$defs/SetupJobStatusRequest"
+    },
+    "setup_job_status_response": {
+      "$ref": "#/$defs/SetupJobStatusResponse"
+    },
+    "setup_plan_request": {
+      "$ref": "#/$defs/SetupPlanRequest"
+    },
+    "setup_plan_response": {
+      "$ref": "#/$defs/SetupPlanResponse"
+    },
     "shutdown_request": {
       "$ref": "#/$defs/ShutdownRequest"
     },
@@ -3815,6 +5768,23 @@
     "runtime_operation_start_request",
     "runtime_operation_start_response",
     "runtime_operation_event",
+    "setup_plan_request",
+    "setup_plan_response",
+    "setup_approval_request",
+    "setup_approval_response",
+    "setup_job_start_request",
+    "setup_job_start_response",
+    "setup_job_status_request",
+    "setup_job_status_response",
+    "setup_job_recovery_request",
+    "setup_job_recovery_response",
+    "setup_job_cancel_request",
+    "setup_job_cancel_response",
+    "setup_job_retry_request",
+    "setup_job_retry_response",
+    "setup_job_event",
+    "setup_job_events_request",
+    "setup_job_events_response",
     "test_operation_start_request",
     "test_operation_start_response",
     "test_operation_event",

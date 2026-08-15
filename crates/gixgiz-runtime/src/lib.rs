@@ -10,6 +10,7 @@
 
 mod context;
 mod error;
+mod model_setup;
 mod provider;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -17,6 +18,12 @@ pub mod testing;
 
 pub use context::{RuntimeCancellationToken, RuntimeOperationContext};
 pub use error::RuntimeError;
+pub use model_setup::{
+    MODEL_PROGRESS_CHANNEL_CAPACITY, ModelProgressSender, RuntimeCancellationSemantics,
+    RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus,
+    RuntimeModelInspection, RuntimeModelSetupProvider, RuntimeReadinessInferenceResult,
+    RuntimeStorageAvailability, RuntimeStoragePreflight,
+};
 pub use provider::{
     RuntimeDetector, RuntimeFuture, RuntimeLifecycle, RuntimeModelInventoryProvider,
     RuntimeObservation, RuntimeProvider,

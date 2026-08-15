@@ -47,6 +47,24 @@ pub enum CoreError {
     /// The supplied recommendation preference enum is unknown to this rule set.
     #[error("the recommendation preferences are not supported")]
     InvalidRecommendationPreferences,
+    /// Setup-critical recommendation or provider mapping fields failed revalidation.
+    #[error("the setup plan is invalid")]
+    InvalidSetupPlan,
+    /// Durable setup persistence is unavailable.
+    #[error("durable setup persistence is unavailable")]
+    SetupPersistenceUnavailable,
+    /// The requested setup job does not exist.
+    #[error("the setup job was not found")]
+    SetupJobNotFound,
+    /// The setup job changed or is not valid for the requested transition.
+    #[error("the setup job state conflicts with the request")]
+    SetupStateConflict,
+    /// The exact current setup plan has not been approved.
+    #[error("the setup plan requires exact approval")]
+    SetupApprovalRequired,
+    /// The selected runtime provider cannot supply safe setup evidence.
+    #[error("the setup runtime provider is unavailable")]
+    SetupProviderUnavailable,
 }
 
 impl CoreError {
@@ -144,6 +162,63 @@ impl CoreError {
                 RecoveryGuidance {
                     action: RecoveryAction::Retry,
                     message: "Choose a supported workload and priority, then retry.".to_owned(),
+                },
+            ),
+            Self::InvalidSetupPlan => (
+                ErrorCategory::InvalidInput,
+                "setup.plan_invalid",
+                "The selected setup plan is no longer valid.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Refresh the capability recommendation and review a new plan."
+                        .to_owned(),
+                },
+            ),
+            Self::SetupPersistenceUnavailable => (
+                ErrorCategory::Unavailable,
+                "setup.persistence_unavailable",
+                "Durable setup state is unavailable.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Restart,
+                    message: "Restart GixGiz, then retry setup.".to_owned(),
+                },
+            ),
+            Self::SetupJobNotFound => (
+                ErrorCategory::InvalidInput,
+                "setup.job_not_found",
+                "The requested setup job was not found.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Refresh setup status before retrying.".to_owned(),
+                },
+            ),
+            Self::SetupStateConflict => (
+                ErrorCategory::Conflict,
+                "setup.state_conflict",
+                "Setup changed before the request completed.",
+                RecoveryGuidance {
+                    action: RecoveryAction::Retry,
+                    message: "Refresh the current setup state, then retry.".to_owned(),
+                },
+            ),
+            Self::SetupApprovalRequired => (
+                ErrorCategory::PermissionDenied,
+                "setup.approval_required",
+                "The exact current setup plan requires approval.",
+                RecoveryGuidance {
+                    action: RecoveryAction::NoAction,
+                    message: "Review the current plan and its effects before continuing."
+                        .to_owned(),
+                },
+            ),
+            Self::SetupProviderUnavailable => (
+                ErrorCategory::Unavailable,
+                "setup.provider_unavailable",
+                "The local runtime provider cannot prepare this setup safely.",
+                RecoveryGuidance {
+                    action: RecoveryAction::CheckPrerequisites,
+                    message: "Check the local runtime status, then refresh the setup plan."
+                        .to_owned(),
                 },
             ),
         };

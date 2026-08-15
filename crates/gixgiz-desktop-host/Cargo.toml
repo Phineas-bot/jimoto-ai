@@ -12,7 +12,7 @@ name = "gixgiz-core"
 path = "src/main.rs"
 
 [dependencies]
-axum.workspace = true
+axum = { workspace = true, features = ["query"] }
 gixgiz-contracts = { path = "../gixgiz-contracts" }
 gixgiz-core = { path = "../gixgiz-core" }
 gixgiz-runtime = { path = "../gixgiz-runtime" }

@@ -186,6 +186,16 @@ pub enum RuntimeCapabilityKind {
     Restart,
     /// List a bounded normalized installed-model inventory.
     ModelInventory,
+    /// Resolve one canonical model to an approved provider artifact.
+    ModelAcquisitionPreparation,
+    /// Check provider-managed storage before model acquisition.
+    ModelStoragePreflight,
+    /// Acquire one exact approved provider artifact with normalized progress.
+    ModelAcquisition,
+    /// Inspect exact local model availability and provider registration.
+    ModelRegistration,
+    /// Run one fixed bounded readiness inference without returning generated content.
+    ReadinessInference,
     /// A newer peer supplied an unrecognized capability.
     #[serde(other)]
     Unknown,
@@ -202,6 +212,8 @@ pub enum RuntimeCapabilityAvailability {
     RequiresReuseConsent,
     /// The capability requires explicit management ownership and consent.
     RequiresManagementConsent,
+    /// The capability requires approval of one exact durable setup plan.
+    RequiresSetupApproval,
     /// The provider or current ownership cannot safely perform the capability.
     Unsupported,
     /// Availability is unknown or was supplied by a newer peer.
@@ -323,6 +335,22 @@ pub enum RuntimeErrorCode {
     OperationBusy,
     /// A managed provider process failed.
     ProcessFailed,
+    /// The canonical model has no safe provider mapping.
+    ModelNotMapped,
+    /// Provider model acquisition failed safely.
+    ModelAcquisitionFailed,
+    /// The exact provider model is unavailable.
+    ModelUnavailable,
+    /// Provider registration could not be verified.
+    ModelRegistrationFailed,
+    /// Available artifact-integrity evidence did not match.
+    ModelIntegrityFailed,
+    /// The selected model destination is unavailable.
+    ModelStorageUnavailable,
+    /// The selected destination lacks the required storage margin.
+    ModelStorageExhausted,
+    /// The fixed bounded readiness inference failed.
+    ReadinessInferenceFailed,
     /// Provider output exceeded a fixed bound.
     OutputLimit,
     /// Explicit cancellation was observed.
