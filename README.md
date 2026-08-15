@@ -21,7 +21,7 @@ The v0.1 success condition is that a supported non-technical Windows user can mo
 
 ## Status
 
-Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, deterministic local capability planning, and consent-aware local runtime inspection.
+Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, deterministic local capability planning, consent-aware local runtime inspection, and a durable approved model-setup workflow.
 
 ## Repository map
 
@@ -118,11 +118,11 @@ gixgiz-desktop-host -> gixgiz-runtime-ollama -> gixgiz-runtime -> gixgiz-contrac
                                       -> gixgiz-persistence -> gixgiz-contracts
 ```
 
-- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, machine-profile, capability-plan, runtime, handshake, event, cancellation, error, recovery, and request-correlation contracts.
-- `gixgiz-persistence` exclusively owns the SQLite connection, data-root layout, migrations, backups, health checks, and typed repository SQL.
-- `gixgiz-runtime` owns provider-neutral runtime traits, normalized adapter failures, cancellation/deadline conventions, and deterministic fake providers.
-- `gixgiz-runtime-ollama` owns Ollama executable discovery, loopback API details, version and model payloads, owned-child lifecycle control, and provider error normalization.
-- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, runtime ownership/consent authorization, hardware-scan orchestration, Windows evidence normalization, capability filtering/scoring, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
+- `gixgiz-contracts` owns serializable, provider-neutral identity, readiness, health, machine-profile, capability-plan, runtime, setup-job, handshake, event, cancellation, error, recovery, and request-correlation contracts.
+- `gixgiz-persistence` exclusively owns the SQLite connection, data-root layout, migrations, backups, health checks, setup/model records, and typed repository SQL.
+- `gixgiz-runtime` owns provider-neutral runtime and model-setup traits, normalized adapter failures, cancellation/deadline conventions, and deterministic fake providers.
+- `gixgiz-runtime-ollama` owns Ollama executable discovery, loopback API details, version and model payloads, owned-child lifecycle control, allowlisted model acquisition, fixed readiness verification, and provider error normalization.
+- `gixgiz-core` owns platform lifecycle, deterministic readiness policy, persistence composition, runtime ownership/consent authorization, durable setup orchestration, hardware-scan orchestration, Windows evidence normalization, capability filtering/scoring, safe error mapping, diagnostics initialization, cancellation, and timeout conventions.
 - `gixgiz-desktop-host` builds `gixgiz-core.exe`, composes the concrete v0.1 adapter, reads a per-launch secret from the inherited stdin pipe, initializes core services on blocking workers, and exposes only authenticated provider-neutral HTTP/SSE routes on a dynamic `127.0.0.1` port. It exposes safe persistence health, runtime status, typed hardware evidence, and capability reports but no provider proxy, paths, SQL, or database access.
 
 Run the Rust checks from the repository root:
@@ -146,7 +146,7 @@ Transport architecture, bootstrap, routes, security controls, and development ch
 
 The v0.1 composition root registers one Ollama adapter behind provider-neutral core contracts. Detection verifies an approved loopback endpoint, executable evidence when present, provider health, and semantic version evidence without adopting an external installation. Read-only reuse requires an explicit persisted reuse decision; management ownership and consent remain separate, and external start, stop, restart, update, uninstall, or reconfiguration are not authorized by reuse approval.
 
-The adapter uses bounded direct HTTP and structured process execution without a shell. It can report normalized status and list a bounded model inventory; it does not install Ollama, pull or delete models, or run chat/inference. Architecture, version policy, endpoint rules, ownership behavior, troubleshooting, and the opt-in read-only smoke test are documented in [`docs/guides/ollama-runtime.md`](./docs/guides/ollama-runtime.md).
+The adapter uses bounded direct HTTP and structured process execution without a shell. It reports normalized status and inventory, and Task 10 permits only allowlisted model acquisition plus a fixed bounded readiness inference behind an exact setup approval. It does not install, update, reconfigure, or uninstall Ollama; delete models; expose arbitrary generation; or run chat. Architecture, version policy, endpoint rules, ownership behavior, troubleshooting, and opt-in smoke tests are documented in [`docs/guides/ollama-runtime.md`](./docs/guides/ollama-runtime.md).
 
 ## Windows hardware evidence
 
@@ -160,13 +160,19 @@ After a scan, Flutter can ask Rust for a deterministic plan using beginner-facin
 
 The local static catalogue and rule set are versioned in every report and plan. The operation performs no download, installation, runtime call, benchmark, LLM decision, database write, or machine-data upload. Catalogue metadata, estimate assumptions, terminology, persistence deferral, and limitations are documented in [`docs/guides/capability-recommendations.md`](./docs/guides/capability-recommendations.md).
 
+## Persistent model setup
+
+An accepted recommendation can be converted into a concrete, persisted setup plan that shows the canonical model, provider artifact, licence, provenance, provider-managed destination, expected size, resource estimates, warnings, and exact material effects before approval. Approval is bound to one immutable plan revision and does not transfer ownership of an external runtime or authorize runtime installation, update, deletion, or general inference.
+
+Rust and SQLite own every setup transition. The provider acquisition stream is normalized and bounded, cancellation records completed, retained, rolled-back, and uncertain effects, and interrupted jobs recover as explicit attention instead of silently resuming a provider mutation. A model becomes `Available` and setup becomes `Ready` only after runtime health, exact model availability, provider registration, and a fixed bounded readiness inference all succeed. See [`docs/guides/model-setup-workflow.md`](./docs/guides/model-setup-workflow.md).
+
 ## SQLite persistence
 
 The Windows data root is `%LOCALAPPDATA%\GixGiz`; the database is stored at `data\gixgiz.db` beneath that root. The Rust core is the sole database owner. Flutter, transport clients, providers, Packs, and integrations never open or query SQLite directly.
 
 Database startup enables foreign keys, WAL, and a five-second busy timeout before applying ordered transactional migrations. `PRAGMA user_version` and the immutable `schema_migrations` ledger track compatibility. Newer schemas fail closed without downgrade. Irreversible migrations require a verified online backup under `backups\` before execution.
 
-The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, categorical audit events, and provider-neutral runtime ownership/consent policy. It does not store detection evidence, executable paths, provider payloads, secrets, transport tokens, prompts, conversations, logs, model binaries, downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
+The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, categorical audit events, provider-neutral runtime ownership/consent policy, setup approvals/events/effects, and canonical/provider model metadata. It does not store detection evidence, executable or model-storage paths, provider payloads, secrets, transport tokens, prompts, generated output, conversations, logs, model binaries, partial downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
 
 ## Initial development workflow
 

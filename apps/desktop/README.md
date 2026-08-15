@@ -1,6 +1,6 @@
 # GixGiz Desktop
 
-The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness, hardware evidence, capability reports, and local-runtime status. It contains no hardware collection, recommendation rules, installer, persistence, runtime implementation, model-management, or provider logic.
+The GixGiz Windows desktop shell renders presentation state and user intentions. It launches the bundled Rust core through `CoreClient`, completes an authenticated typed handshake, and renders authoritative core version/readiness, hardware evidence, capability reports, local-runtime status, and durable local-model setup state. It contains no hardware collection, recommendation rules, installer, persistence, runtime implementation, model-management, or provider logic.
 
 ## Toolchain
 
@@ -60,3 +60,5 @@ The first command regenerates the Rust-owned JSON Schema and Dart bindings; the 
 The Foundation screen can request an authenticated capability report after a completed or partial hardware scan. Flutter sends only the typed `MachineProfile` and user preferences, then renders the Rust-owned recommended, fallback, larger, or no-plan result. Catalogue policy and user-facing terminology are documented in [`../../docs/guides/capability-recommendations.md`](../../docs/guides/capability-recommendations.md).
 
 Runtime status, ownership, consent, lifecycle availability, and installed-model inventory also come from the Rust-owned `CoreClient` boundary. Flutter may present those values and send typed refresh, consent, lifecycle, cancellation, or inventory intentions. It never calls a provider endpoint, executes a provider command, infers compatibility, changes ownership, installs software, or downloads or deletes models.
+
+The Foundation screen can turn a selected recommendation into a persisted setup plan, show its exact model, licence, provenance, destination, conservative size, warnings, and material effects, then send an explicit approval for that plan revision. Setup progress is consumed from cursor-based bounded events and recovered from Rust after desktop or core restart. Navigating away or closing the desktop detaches the event subscription without cancelling the durable job; only the confirmed Cancel action sends a cancellation intention. The UI never infers readiness from downloaded bytes: Ready is rendered only from the verified persisted setup state.

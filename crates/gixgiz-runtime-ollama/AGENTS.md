@@ -14,6 +14,8 @@
 - Bound process duration/output and HTTP duration/body size. Keep raw provider bodies and local
   model inventories out of logs and boundary errors.
 - Keep deterministic tests independent from a live installation. Real-provider smoke tests must
-  be ignored, explicitly environment-gated, loopback-only, and read-only.
+  be ignored, explicitly environment-gated, and loopback-only. Any mutating setup smoke requires
+  a separate explicit acquisition gate and must retain rather than delete provider-owned data.
 - Do not add `unsafe` Rust, Windows registry/service control, installation, update, uninstall,
- model pull/delete, or inference behavior.
+  model deletion, arbitrary model pull, or general inference/chat behavior. Task 10 may pull only
+  an allowlisted approved artifact and run only its fixed bounded readiness inference.

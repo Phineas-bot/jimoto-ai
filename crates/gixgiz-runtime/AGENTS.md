@@ -9,7 +9,8 @@ workspace policies.
 - Runtime operations must accept bounded deadlines and cooperative
   cancellation. Cancellation is distinct from failure.
 - Ownership and reuse/management consent are independent of detection.
-- Do not add transport, persistence SQL, Flutter, installation, downloads, or
-  inference behavior here.
+- Do not add transport, persistence SQL, Flutter, runtime installation, or
+  provider-specific model behavior here. Task 10 may define provider-neutral
+  model-acquisition and fixed readiness-verification traits.
 - Fake-provider utilities must remain deterministic and perform no system or
   network access.
