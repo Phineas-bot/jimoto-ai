@@ -16,7 +16,9 @@ mod server;
 
 use std::time::Duration;
 
-use gixgiz_contracts::{BootstrapReady, InstanceId};
+use gixgiz_contracts::{
+    BootstrapReady, CorrelationId, InstanceId, RequestId, SetupJobRecoveryRequest,
+};
 use gixgiz_core::{CoreError, HardwareProvider, HardwareScanner, OperationContext, PlatformCore};
 use gixgiz_runtime_ollama::OllamaRuntimeProvider;
 use tokio::io::{AsyncWriteExt, BufReader};
@@ -36,18 +38,29 @@ pub async fn run_sidecar() -> Result<(), HostError> {
     let context = OperationContext::generated();
     let runtime_provider =
         std::sync::Arc::new(OllamaRuntimeProvider::for_current_user().map_err(HostError::Runtime)?);
-    let (mut core, status, runtime_service) = tokio::task::spawn_blocking(move || {
-        let mut core = PlatformCore::with_default_persistence();
-        let runtime_service = core.runtime_service(runtime_provider);
-        let status = core.start(&context)?;
-        Ok::<_, gixgiz_core::CoreError>((core, status, runtime_service))
-    })
-    .await
-    .map_err(HostError::CoreWorker)?
-    .map_err(HostError::Core)?;
+    let (mut core, status, runtime_service, setup_service) =
+        tokio::task::spawn_blocking(move || {
+            let mut core = PlatformCore::with_default_persistence();
+            let runtime_service = core.runtime_service(runtime_provider.clone());
+            let setup_service = core.setup_service(runtime_provider);
+            let status = core.start(&context)?;
+            Ok::<_, gixgiz_core::CoreError>((core, status, runtime_service, setup_service))
+        })
+        .await
+        .map_err(HostError::CoreWorker)?
+        .map_err(HostError::Core)?;
     let hardware_scanner = HardwareScanner::windows().unwrap_or_else(|error| {
         HardwareScanner::new(std::sync::Arc::new(UnavailableHardwareProvider(error)))
     });
+    if let Some(service) = setup_service.as_ref() {
+        service
+            .recover_job(SetupJobRecoveryRequest {
+                correlation_id: CorrelationId::new(),
+                request_id: RequestId::new(),
+            })
+            .await
+            .map_err(HostError::Core)?;
+    }
 
     let serve_result = async {
         let host = SidecarHost::bind(
@@ -56,6 +69,7 @@ pub async fn run_sidecar() -> Result<(), HostError> {
             status,
             hardware_scanner,
             runtime_service,
+            setup_service,
         )
         .await?;
         let ready = BootstrapReady::new(

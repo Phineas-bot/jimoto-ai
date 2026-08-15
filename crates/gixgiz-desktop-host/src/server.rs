@@ -3,10 +3,13 @@ use std::{convert::Infallible, net::SocketAddr, str::FromStr, sync::Arc, time::D
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, Extension, Path, State, rejection::JsonRejection},
+    extract::{
+        DefaultBodyLimit, Extension, Path, Query, State,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header},
     middleware::{self, Next},
-    response::{IntoResponse, Response, Sse, sse::Event},
+    response::{IntoResponse, Response, Sse, sse::Event, sse::KeepAlive},
     routing::{get, post},
 };
 use gixgiz_contracts::{
@@ -17,11 +20,18 @@ use gixgiz_contracts::{
     RuntimeConsentRequest, RuntimeConsentResponse, RuntimeModelInventoryRequest,
     RuntimeModelInventoryResponse, RuntimeOperationEvent, RuntimeOperationStartRequest,
     RuntimeOperationStartResponse, RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload,
-    ShutdownRequest, ShutdownResponse, TestOperationStartRequest, TestOperationStartResponse,
-    TransportCapability,
+    SetupApprovalRequest, SetupApprovalResponse, SetupJobCancelRequest, SetupJobCancelResponse,
+    SetupJobEvent, SetupJobEventsRequest, SetupJobId, SetupJobRecoveryRequest,
+    SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse, SetupJobStartRequest,
+    SetupJobStartResponse, SetupJobState, SetupJobStatusRequest, SetupJobStatusResponse,
+    SetupPlanRequest, SetupPlanResponse, ShutdownRequest, ShutdownResponse,
+    TestOperationStartRequest, TestOperationStartResponse, TransportCapability,
 };
-use gixgiz_core::{CapabilityEngine, CoreError, HardwareScanner, OperationContext, RuntimeService};
+use gixgiz_core::{
+    CapabilityEngine, CoreError, HardwareScanner, OperationContext, RuntimeService, SetupService,
+};
 use gixgiz_runtime::{RuntimeError, RuntimeOperationContext};
+use serde::Deserialize;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -37,6 +47,10 @@ const MAX_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_CONCURRENT_REQUESTS: usize = 16;
 const MAX_CONCURRENT_EVENT_STREAMS: usize = 16;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const SETUP_EVENT_LIMIT: u32 = 64;
+const SETUP_EVENT_CHANNEL_CAPACITY: usize = 16;
+const SETUP_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const SETUP_EVENT_KEEP_ALIVE: Duration = Duration::from_secs(15);
 const CORRELATION_HEADER: &str = "x-gixgiz-correlation-id";
 const REQUEST_HEADER: &str = "x-gixgiz-request-id";
 
@@ -50,6 +64,7 @@ struct AppState {
     hardware_scans: HardwareScanRegistry,
     capability_engine: CapabilityEngine,
     runtime: RuntimeService,
+    setup: Option<SetupService>,
     runtime_operations: RuntimeOperationRegistry,
     request_slots: Arc<Semaphore>,
     event_stream_slots: Arc<Semaphore>,
@@ -90,6 +105,7 @@ impl SidecarHost {
         status: PlatformStatus,
         hardware_scanner: HardwareScanner,
         runtime: RuntimeService,
+        setup: Option<SetupService>,
     ) -> Result<Self, HostError> {
         let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
@@ -115,6 +131,7 @@ impl SidecarHost {
             capability_engine: CapabilityEngine::v0_1(),
             runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
             runtime,
+            setup,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: shutdown.clone(),
@@ -196,6 +213,29 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/internal/v1/runtime/operations/{operation_id}/cancel",
             post(cancel_runtime_operation),
+        )
+        .route("/internal/v1/setup/plan", post(create_setup_plan))
+        .route("/internal/v1/setup/jobs", post(start_setup_job))
+        .route("/internal/v1/setup/jobs/recovery", post(recover_setup_job))
+        .route(
+            "/internal/v1/setup/jobs/{job_id}/approve",
+            post(decide_setup_approval),
+        )
+        .route(
+            "/internal/v1/setup/jobs/{job_id}/status",
+            post(setup_job_status),
+        )
+        .route(
+            "/internal/v1/setup/jobs/{job_id}/events",
+            get(setup_job_events),
+        )
+        .route(
+            "/internal/v1/setup/jobs/{job_id}/cancel",
+            post(cancel_setup_job),
+        )
+        .route(
+            "/internal/v1/setup/jobs/{job_id}/retry",
+            post(retry_setup_job),
         )
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
@@ -339,7 +379,7 @@ async fn handshake(
     Ok(Json(CoreHello {
         application: state.status.application.clone(),
         selected_protocol,
-        supported_capabilities: supported_capabilities(),
+        supported_capabilities: supported_capabilities(state.setup.is_some()),
         runtime_provider_id: Some(state.runtime.provider_id()),
         readiness: state.status.readiness.clone(),
         instance_id: state.instance_id,
@@ -686,6 +726,231 @@ async fn cancel_runtime_operation(
     }))
 }
 
+async fn create_setup_plan(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<SetupPlanRequest>, JsonRejection>,
+) -> Result<Json<SetupPlanResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .create_plan(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+async fn recover_setup_job(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<SetupJobRecoveryRequest>, JsonRejection>,
+) -> Result<Json<SetupJobRecoveryResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .recover_job(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+async fn decide_setup_approval(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(job_id): Path<String>,
+    payload: Result<Json<SetupApprovalRequest>, JsonRejection>,
+) -> Result<Json<SetupApprovalResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    ensure_setup_job_path(&job_id, request.job_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .decide_approval(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+async fn start_setup_job(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<SetupJobStartRequest>, JsonRejection>,
+) -> Result<Json<SetupJobStartResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .start_job(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+async fn setup_job_status(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(job_id): Path<String>,
+    payload: Result<Json<SetupJobStatusRequest>, JsonRejection>,
+) -> Result<Json<SetupJobStatusResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    ensure_setup_job_path(&job_id, request.job_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .status(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+#[derive(Clone, Copy, Deserialize)]
+struct SetupEventsQuery {
+    #[serde(default)]
+    after_sequence: u64,
+    #[serde(default = "default_setup_event_limit")]
+    limit: u32,
+}
+
+const fn default_setup_event_limit() -> u32 {
+    SETUP_EVENT_LIMIT
+}
+
+async fn setup_job_events(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(job_id): Path<String>,
+    query: Result<Query<SetupEventsQuery>, QueryRejection>,
+) -> Result<Response, ApiFailure> {
+    let job_id = parse_setup_job_id(&job_id, ids)?;
+    let query = query.map_err(|_| invalid_setup_events_query(ids))?.0;
+    if query.limit == 0 || query.limit > SETUP_EVENT_LIMIT || query.after_sequence > i64::MAX as u64
+    {
+        return Err(invalid_setup_events_query(ids));
+    }
+    let stream_permit = acquire_event_stream(&state, ids)?;
+    let service = setup_service(&state, ids)?.clone();
+    let first_page = service
+        .events_after(SetupJobEventsRequest {
+            job_id,
+            after_sequence: query.after_sequence,
+            limit: query.limit,
+            correlation_id: ids.correlation_id,
+            request_id: ids.request_id,
+        })
+        .await
+        .map_err(|error| setup_failure(error, ids))?;
+    validate_setup_event_page(&first_page.events, job_id, query.after_sequence, ids)?;
+    let (sender, receiver) = mpsc::channel(SETUP_EVENT_CHANNEL_CAPACITY);
+
+    tokio::spawn(async move {
+        let _stream_permit = stream_permit;
+        let mut cursor = query.after_sequence;
+        let mut sent = 0_u32;
+        let mut next_page = Some(first_page);
+        loop {
+            if sender.is_closed() {
+                return;
+            }
+            let remaining = query.limit.saturating_sub(sent);
+            if remaining == 0 {
+                return;
+            }
+            let page = match next_page.take() {
+                Some(page) => page,
+                None => match service
+                    .events_after(SetupJobEventsRequest {
+                        job_id,
+                        after_sequence: cursor,
+                        limit: remaining,
+                        correlation_id: ids.correlation_id,
+                        request_id: ids.request_id,
+                    })
+                    .await
+                {
+                    Ok(page) => page,
+                    Err(_) => return,
+                },
+            };
+            let page_was_empty = page.events.is_empty();
+            for event in page.events {
+                if event.job_id != job_id
+                    || event.job.job_id != job_id
+                    || !is_next_setup_sequence(cursor, event.sequence)
+                {
+                    return;
+                }
+                cursor = event.sequence;
+                sent = sent.saturating_add(1);
+                let terminal = event.terminal_state.is_some();
+                if send_setup_event(&sender, event).await.is_err()
+                    || terminal
+                    || sent >= query.limit
+                {
+                    return;
+                }
+            }
+            if page_was_empty {
+                let status = service
+                    .status(SetupJobStatusRequest {
+                        job_id,
+                        correlation_id: ids.correlation_id,
+                        request_id: ids.request_id,
+                    })
+                    .await;
+                match status {
+                    Ok(response) if setup_state_is_terminal(response.job.state) => return,
+                    Ok(_) => tokio::time::sleep(SETUP_EVENT_POLL_INTERVAL).await,
+                    Err(_) => return,
+                }
+            }
+        }
+    });
+
+    Ok(Sse::new(ReceiverStream::new(receiver))
+        .keep_alive(
+            KeepAlive::new()
+                .interval(SETUP_EVENT_KEEP_ALIVE)
+                .text("keep-alive"),
+        )
+        .into_response())
+}
+
+async fn cancel_setup_job(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(job_id): Path<String>,
+    payload: Result<Json<SetupJobCancelRequest>, JsonRejection>,
+) -> Result<Json<SetupJobCancelResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    ensure_setup_job_path(&job_id, request.job_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .cancel_job(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
+async fn retry_setup_job(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(job_id): Path<String>,
+    payload: Result<Json<SetupJobRetryRequest>, JsonRejection>,
+) -> Result<Json<SetupJobRetryResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    ensure_setup_job_path(&job_id, request.job_id, ids)?;
+    let service = setup_service(&state, ids)?;
+    service
+        .retry_job(request)
+        .await
+        .map(Json)
+        .map_err(|error| setup_failure(error, ids))
+}
+
 async fn shutdown(
     State(state): State<AppState>,
     Extension(ids): Extension<BoundaryIds>,
@@ -746,6 +1011,21 @@ async fn send_runtime_event(
         .map_err(|_| ())
 }
 
+async fn send_setup_event(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    event: SetupJobEvent,
+) -> Result<(), ()> {
+    let sequence = event.sequence.to_string();
+    let data = serde_json::to_string(&event).map_err(|_| ())?;
+    sender
+        .send(Ok(Event::default()
+            .event("setup_job")
+            .id(sequence)
+            .data(data)))
+        .await
+        .map_err(|_| ())
+}
+
 fn parse_json<T>(
     payload: Result<Json<T>, JsonRejection>,
     ids: BoundaryIds,
@@ -794,8 +1074,8 @@ fn negotiate_protocol(client_min: u32, client_max: u32) -> Option<u32> {
     }
 }
 
-fn supported_capabilities() -> Vec<TransportCapability> {
-    vec![
+fn supported_capabilities(setup_available: bool) -> Vec<TransportCapability> {
+    let mut capabilities = vec![
         TransportCapability::Health,
         TransportCapability::TestOperationEvents,
         TransportCapability::HardwareScan,
@@ -806,7 +1086,11 @@ fn supported_capabilities() -> Vec<TransportCapability> {
         TransportCapability::RuntimeModelInventory,
         TransportCapability::Cancellation,
         TransportCapability::Shutdown,
-    ]
+    ];
+    if setup_available {
+        capabilities.push(TransportCapability::SetupWorkflow);
+    }
+    capabilities
 }
 
 fn ids_from_headers(headers: &HeaderMap) -> BoundaryIds {
@@ -878,6 +1162,106 @@ fn invalid_operation_id(ids: BoundaryIds) -> ApiFailure {
     )
 }
 
+fn parse_setup_job_id(value: &str, ids: BoundaryIds) -> Result<SetupJobId, ApiFailure> {
+    SetupJobId::from_str(value).map_err(|_| {
+        ApiFailure::new(
+            StatusCode::BAD_REQUEST,
+            ErrorCategory::InvalidInput,
+            "setup.job_id_invalid",
+            "The model setup job identifier was invalid.",
+            RecoveryAction::NoAction,
+            "Return to the model setup screen and refresh its persisted state.",
+            ids,
+        )
+    })
+}
+
+fn ensure_setup_job_path(
+    value: &str,
+    expected: SetupJobId,
+    ids: BoundaryIds,
+) -> Result<(), ApiFailure> {
+    if parse_setup_job_id(value, ids)? == expected {
+        return Ok(());
+    }
+    Err(ApiFailure::new(
+        StatusCode::BAD_REQUEST,
+        ErrorCategory::InvalidInput,
+        "setup.job_id_mismatch",
+        "The model setup job identifier did not match the request body.",
+        RecoveryAction::Retry,
+        "Refresh the persisted setup state before retrying.",
+        ids,
+    ))
+}
+
+fn invalid_setup_events_query(ids: BoundaryIds) -> ApiFailure {
+    ApiFailure::new(
+        StatusCode::BAD_REQUEST,
+        ErrorCategory::InvalidInput,
+        "setup.events_query_invalid",
+        "The model setup event cursor or limit was invalid.",
+        RecoveryAction::Retry,
+        "Retry with a non-negative cursor and an event limit from 1 through 64.",
+        ids,
+    )
+}
+
+fn validate_setup_event_page(
+    events: &[SetupJobEvent],
+    job_id: SetupJobId,
+    after_sequence: u64,
+    ids: BoundaryIds,
+) -> Result<(), ApiFailure> {
+    let mut cursor = after_sequence;
+    for event in events {
+        if event.job_id != job_id
+            || event.job.job_id != job_id
+            || !is_next_setup_sequence(cursor, event.sequence)
+        {
+            return Err(ApiFailure::new(
+                StatusCode::CONFLICT,
+                ErrorCategory::Conflict,
+                "setup.event_cursor_stale",
+                "The persisted setup event cursor is no longer current.",
+                RecoveryAction::Retry,
+                "Refresh the authoritative setup status before reconnecting to events.",
+                ids,
+            ));
+        }
+        cursor = event.sequence;
+    }
+    Ok(())
+}
+
+fn is_next_setup_sequence(previous: u64, current: u64) -> bool {
+    previous.checked_add(1) == Some(current)
+}
+
+fn setup_service(state: &AppState, ids: BoundaryIds) -> Result<&SetupService, ApiFailure> {
+    state.setup.as_ref().ok_or_else(|| {
+        ApiFailure::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCategory::Unavailable,
+            "setup.service_unavailable",
+            "Persistent model setup is unavailable.",
+            RecoveryAction::Restart,
+            "Restart GixGiz, then refresh the model setup state.",
+            ids,
+        )
+    })
+}
+
+const fn setup_state_is_terminal(state: SetupJobState) -> bool {
+    matches!(
+        state,
+        SetupJobState::AttentionRequired
+            | SetupJobState::Ready
+            | SetupJobState::Failed
+            | SetupJobState::Cancelled
+    )
+}
+
 fn operation_failure(error: OperationError, ids: BoundaryIds) -> ApiFailure {
     match error {
         OperationError::NotFound => ApiFailure::new(
@@ -925,6 +1309,30 @@ fn capability_failure(error: CoreError, ids: BoundaryIds) -> ApiFailure {
     let status = match payload.category {
         ErrorCategory::InvalidInput => StatusCode::BAD_REQUEST,
         ErrorCategory::IncompatibleVersion => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiFailure {
+        status,
+        payload: Box::new(payload),
+    }
+}
+
+fn setup_failure(error: CoreError, ids: BoundaryIds) -> ApiFailure {
+    let context = OperationContext::new(ids.correlation_id, ids.request_id);
+    let payload = error.to_safe_payload(&context);
+    let status = match payload.category {
+        ErrorCategory::InvalidInput => StatusCode::BAD_REQUEST,
+        ErrorCategory::PermissionDenied => StatusCode::FORBIDDEN,
+        ErrorCategory::NotSupported => StatusCode::NOT_IMPLEMENTED,
+        ErrorCategory::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        ErrorCategory::Conflict | ErrorCategory::IncompatibleVersion => StatusCode::CONFLICT,
+        ErrorCategory::ResourceExhausted => StatusCode::TOO_MANY_REQUESTS,
+        ErrorCategory::Cancelled => StatusCode::CONFLICT,
+        ErrorCategory::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+        ErrorCategory::IntegrityFailure | ErrorCategory::Degraded | ErrorCategory::Internal => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+        ErrorCategory::Unknown => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     };
     ApiFailure {
@@ -1022,27 +1430,39 @@ impl IntoResponse for ApiFailure {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::{
+        future,
+        path::Path as FilePath,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use axum::http::Request;
     use gixgiz_contracts::{
-        AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CpuEvidence,
-        EvidenceConfidence, EvidenceMetadata, EvidenceSource, GpuCollectionEvidence,
-        MachineArchitecture, MachineProfile, MachineProfileCompleteness, OperatingSystemEvidence,
-        PhysicalMemoryEvidence, PreferencePriority, RuntimeCapabilityAvailability,
-        RuntimeCapabilityDescriptor, RuntimeCapabilityKind, RuntimeDisplayName,
-        RuntimeEndpointSafety, RuntimeModelInventory, RuntimeProviderId, RuntimeState,
-        ServiceHealthStatus, ServiceRequirement, StorageEvidence, StorageLocation,
-        StorageMediaEvidence, StorageMediaKind, StringEvidence, U32Evidence, U64Evidence,
-        UserPreferenceProfile, WorkloadTier,
+        AccelerationEvidence, AccelerationKind, ArchitectureEvidence, CandidateModelId,
+        CpuEvidence, EvidenceConfidence, EvidenceMetadata, EvidenceSource, GpuCollectionEvidence,
+        MachineArchitecture, MachineProfile, MachineProfileCompleteness, ModelAcquisitionPhase,
+        ModelAcquisitionProgress, ModelIntegrityState, ModelProviderArtifact,
+        OperatingSystemEvidence, PhysicalMemoryEvidence, PreferencePriority,
+        ProviderRegistrationResult, ProviderRegistrationState, RuntimeCapabilityAvailability,
+        RuntimeCapabilityDescriptor, RuntimeCapabilityKind, RuntimeConsentDecision,
+        RuntimeConsentState, RuntimeDisplayName, RuntimeEndpointSafety, RuntimeModelInventory,
+        RuntimeOwnership, RuntimeProviderId, RuntimeProviderModelId, RuntimeState,
+        ServiceHealthStatus, ServiceRequirement, SetupApprovalDecision, SetupDestinationCategory,
+        SetupJobEventKind, SetupJobRecoveryResponse, SetupJobRetryResponse, SetupJobSnapshot,
+        SetupJobStartResponse, SetupJobStatusResponse, SetupPlanResponse, SetupStage,
+        StorageEvidence, StorageLocation, StorageMediaEvidence, StorageMediaKind, StringEvidence,
+        U32Evidence, U64Evidence, UserPreferenceProfile, WorkloadTier,
     };
     use gixgiz_core::{
         CollectedHardwareEvidence, CoreError, HardwareProvider, OperationContext, PlatformCore,
     };
     use gixgiz_runtime::{
-        RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle,
-        RuntimeModelInventoryProvider, RuntimeObservation, RuntimeOperationContext,
-        RuntimeProvider, testing::FakeRuntimeProvider,
+        ModelProgressSender, RuntimeCancellationSemantics, RuntimeDetector, RuntimeError,
+        RuntimeFuture, RuntimeLifecycle, RuntimeModelAcquisitionPlan,
+        RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus, RuntimeModelInspection,
+        RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
+        RuntimeOperationContext, RuntimeProvider, RuntimeReadinessInferenceResult,
+        RuntimeStorageAvailability, RuntimeStoragePreflight, testing::FakeRuntimeProvider,
     };
     use http_body_util::BodyExt;
     use serde_json::Value;
@@ -1058,6 +1478,238 @@ mod tests {
         provider_id: RuntimeProviderId,
         detect_calls: AtomicUsize,
         first_detect_started: Arc<tokio::sync::Notify>,
+    }
+
+    struct SetupRuntimeProvider {
+        provider_id: RuntimeProviderId,
+        artifact: ModelProviderArtifact,
+        acquisition_calls: AtomicUsize,
+        detect_calls: AtomicUsize,
+        detect_failures: AtomicUsize,
+        first_acquisition_started: tokio::sync::Notify,
+    }
+
+    impl SetupRuntimeProvider {
+        fn new() -> Self {
+            let provider_id = RuntimeProviderId::new("gixgiz.runtime.setup-test.v1");
+            Self {
+                artifact: ModelProviderArtifact {
+                    canonical_model_id: CandidateModelId::new("qwen2.5.1.5b-instruct"),
+                    provider_id: provider_id.clone(),
+                    provider_model_id: RuntimeProviderModelId::new("fixture:1.5b"),
+                    source_summary: "Repository-owned test mapping".to_owned(),
+                },
+                provider_id,
+                acquisition_calls: AtomicUsize::new(0),
+                detect_calls: AtomicUsize::new(0),
+                detect_failures: AtomicUsize::new(0),
+                first_acquisition_started: tokio::sync::Notify::new(),
+            }
+        }
+
+        fn observation(&self) -> RuntimeObservation {
+            RuntimeObservation {
+                provider_id: self.provider_id.clone(),
+                display_name: RuntimeDisplayName::new("Setup test runtime"),
+                state: RuntimeState::Ready,
+                endpoint_safety: RuntimeEndpointSafety::LoopbackVerified,
+                version: None,
+                capabilities: vec![RuntimeCapabilityDescriptor {
+                    kind: RuntimeCapabilityKind::ModelInventory,
+                    availability: RuntimeCapabilityAvailability::Available,
+                    reason: None,
+                }],
+                reasons: Vec::new(),
+                warnings: Vec::new(),
+            }
+        }
+    }
+
+    impl RuntimeDetector for SetupRuntimeProvider {
+        fn detect(
+            &self,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeObservation> {
+            Box::pin(async move {
+                self.detect_calls.fetch_add(1, Ordering::AcqRel);
+                if let Err(error) = context.check() {
+                    self.detect_failures.fetch_add(1, Ordering::AcqRel);
+                    return Err(error);
+                }
+                Ok(self.observation())
+            })
+        }
+    }
+
+    impl RuntimeLifecycle for SetupRuntimeProvider {
+        fn execute(
+            &self,
+            _kind: gixgiz_contracts::RuntimeOperationKind,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeObservation> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(self.observation())
+            })
+        }
+    }
+
+    impl RuntimeModelInventoryProvider for SetupRuntimeProvider {
+        fn list_models(
+            &self,
+            _limit: u16,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelInventory> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(RuntimeModelInventory {
+                    schema_version: gixgiz_contracts::RUNTIME_REPORT_SCHEMA_VERSION,
+                    provider_id: self.provider_id.clone(),
+                    models: Vec::new(),
+                    truncated: false,
+                    collected_at_unix_ms: 1,
+                })
+            })
+        }
+    }
+
+    impl RuntimeModelSetupProvider for SetupRuntimeProvider {
+        fn prepare_model_acquisition(
+            &self,
+            model_id: CandidateModelId,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelAcquisitionPlan> {
+            Box::pin(async move {
+                context.check()?;
+                if model_id != self.artifact.canonical_model_id {
+                    return Err(RuntimeError::ModelNotMapped);
+                }
+                Ok(RuntimeModelAcquisitionPlan {
+                    artifact: self.artifact.clone(),
+                    destination: SetupDestinationCategory::ProviderManaged,
+                    destination_display: "Provider-managed test storage".to_owned(),
+                    cancellation: RuntimeCancellationSemantics::ConnectionAbortMayRetainEffects,
+                })
+            })
+        }
+
+        fn preflight_model_storage(
+            &self,
+            _plan: RuntimeModelAcquisitionPlan,
+            required_bytes: u64,
+            safety_margin_bytes: u64,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeStoragePreflight> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(RuntimeStoragePreflight {
+                    destination: SetupDestinationCategory::ProviderManaged,
+                    destination_display: "Provider-managed test storage".to_owned(),
+                    availability: RuntimeStorageAvailability::Available,
+                    required_bytes,
+                    safety_margin_bytes,
+                    available_bytes: Some(required_bytes + safety_margin_bytes + 1),
+                    checked_at_unix_ms: 10,
+                })
+            })
+        }
+
+        fn acquire_model(
+            &self,
+            _plan: RuntimeModelAcquisitionPlan,
+            progress: ModelProgressSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelAcquisitionResult> {
+            Box::pin(async move {
+                if self.acquisition_calls.fetch_add(1, Ordering::AcqRel) == 0 {
+                    self.first_acquisition_started.notify_one();
+                    return context
+                        .run(future::pending::<
+                            Result<RuntimeModelAcquisitionResult, RuntimeError>,
+                        >())
+                        .await;
+                }
+                context.check()?;
+                for update in [
+                    ModelAcquisitionProgress {
+                        phase: ModelAcquisitionPhase::Transferring,
+                        completed_bytes: Some(512 * 1024 * 1024),
+                        total_bytes: Some(2 * 1024 * 1024 * 1024),
+                        progress_basis_points: Some(2_500),
+                    },
+                    ModelAcquisitionProgress {
+                        phase: ModelAcquisitionPhase::Transferring,
+                        completed_bytes: Some(1024 * 1024 * 1024),
+                        total_bytes: Some(2 * 1024 * 1024 * 1024),
+                        progress_basis_points: Some(5_000),
+                    },
+                    ModelAcquisitionProgress {
+                        phase: ModelAcquisitionPhase::Completed,
+                        completed_bytes: Some(2 * 1024 * 1024 * 1024),
+                        total_bytes: Some(2 * 1024 * 1024 * 1024),
+                        progress_basis_points: Some(10_000),
+                    },
+                ] {
+                    let _ = progress.try_send(update);
+                }
+                Ok(RuntimeModelAcquisitionResult {
+                    artifact: self.artifact.clone(),
+                    status: RuntimeModelAcquisitionStatus::Acquired,
+                    measured_size_bytes: Some(2 * 1024 * 1024 * 1024),
+                    integrity: ModelIntegrityState::ProviderReported,
+                    completed_at_unix_ms: 20,
+                })
+            })
+        }
+
+        fn inspect_model(
+            &self,
+            artifact: ModelProviderArtifact,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelInspection> {
+            Box::pin(async move {
+                context.check()?;
+                let acquired = self.acquisition_calls.load(Ordering::Acquire) >= 2;
+                Ok(RuntimeModelInspection {
+                    artifact,
+                    available: acquired,
+                    registration: ProviderRegistrationResult {
+                        state: if acquired {
+                            ProviderRegistrationState::Registered
+                        } else {
+                            ProviderRegistrationState::NotRegistered
+                        },
+                        measured_size_bytes: acquired.then_some(2 * 1024 * 1024 * 1024),
+                        verified_at_unix_ms: 30,
+                    },
+                    integrity: if acquired {
+                        ModelIntegrityState::ProviderReported
+                    } else {
+                        ModelIntegrityState::Unavailable
+                    },
+                })
+            })
+        }
+
+        fn run_readiness_inference(
+            &self,
+            _artifact: ModelProviderArtifact,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeReadinessInferenceResult> {
+            Box::pin(async move {
+                context.check()?;
+                Ok(RuntimeReadinessInferenceResult {
+                    ready: true,
+                    completed_at_unix_ms: 40,
+                })
+            })
+        }
+    }
+
+    impl RuntimeProvider for SetupRuntimeProvider {
+        fn provider_id(&self) -> &RuntimeProviderId {
+            &self.provider_id
+        }
     }
 
     impl CancellableRuntimeProvider {
@@ -1135,6 +1787,51 @@ mod tests {
         }
     }
 
+    impl RuntimeModelSetupProvider for CancellableRuntimeProvider {
+        fn prepare_model_acquisition(
+            &self,
+            _model_id: CandidateModelId,
+            _context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelAcquisitionPlan> {
+            Box::pin(async { Err(RuntimeError::Unsupported) })
+        }
+
+        fn preflight_model_storage(
+            &self,
+            _plan: RuntimeModelAcquisitionPlan,
+            _required_bytes: u64,
+            _safety_margin_bytes: u64,
+            _context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeStoragePreflight> {
+            Box::pin(async { Err(RuntimeError::Unsupported) })
+        }
+
+        fn acquire_model(
+            &self,
+            _plan: RuntimeModelAcquisitionPlan,
+            _progress: ModelProgressSender,
+            _context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelAcquisitionResult> {
+            Box::pin(async { Err(RuntimeError::Unsupported) })
+        }
+
+        fn inspect_model(
+            &self,
+            _artifact: ModelProviderArtifact,
+            _context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeModelInspection> {
+            Box::pin(async { Err(RuntimeError::Unsupported) })
+        }
+
+        fn run_readiness_inference(
+            &self,
+            _artifact: ModelProviderArtifact,
+            _context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeReadinessInferenceResult> {
+            Box::pin(async { Err(RuntimeError::Unsupported) })
+        }
+    }
+
     impl RuntimeProvider for CancellableRuntimeProvider {
         fn provider_id(&self) -> &RuntimeProviderId {
             &self.provider_id
@@ -1204,6 +1901,7 @@ mod tests {
             capability_engine: CapabilityEngine::v0_1(),
             runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
             runtime,
+            setup: None,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: ShutdownHandle {
@@ -1223,6 +1921,19 @@ mod tests {
             .start(&context)
             .expect("core starts with fake-free status");
         state_with_status(status)
+    }
+
+    fn test_setup_state(root: &FilePath, provider: Arc<dyn RuntimeProvider>) -> AppState {
+        let context = OperationContext::generated();
+        let mut core = PlatformCore::with_persistence_root(root);
+        let runtime = core.runtime_service(provider.clone());
+        let setup = core
+            .setup_service(provider)
+            .expect("temporary persistence composes setup");
+        let status = core.start(&context).expect("core starts with persistence");
+        let mut state = state_with_status_and_runtime(status, runtime);
+        state.setup = Some(setup);
+        state
     }
 
     fn hello(protocol_min: u32, protocol_max: u32) -> ClientHello {
@@ -1382,6 +2093,39 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    async fn wait_for_setup_state(
+        router: &Router,
+        job_id: SetupJobId,
+        expected: SetupJobState,
+    ) -> SetupJobSnapshot {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let request = SetupJobStatusRequest {
+                    job_id,
+                    correlation_id: CorrelationId::new(),
+                    request_id: RequestId::new(),
+                };
+                let response = router
+                    .clone()
+                    .oneshot(json_request(
+                        &format!("/internal/v1/setup/jobs/{job_id}/status"),
+                        Some(TOKEN),
+                        &request,
+                    ))
+                    .await
+                    .expect("setup status request responds");
+                assert_eq!(response.status(), StatusCode::OK);
+                let response: SetupJobStatusResponse = response_json(response).await;
+                if response.job.state == expected {
+                    return response.job;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("setup reaches expected durable state")
+    }
+
     #[tokio::test]
     async fn authenticated_handshake_returns_real_core_information() {
         let state = test_state();
@@ -1412,6 +2156,454 @@ mod tests {
             core.runtime_provider_id,
             Some(RuntimeProviderId::new("gixgiz.runtime.test.v1"))
         );
+        assert!(
+            !core
+                .supported_capabilities
+                .contains(&TransportCapability::SetupWorkflow)
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_setup_routes_cancel_retry_recover_and_replay_durable_state() {
+        let temporary = tempfile::tempdir().expect("temporary directory is available");
+        let provider = Arc::new(SetupRuntimeProvider::new());
+        let provider_service: Arc<dyn RuntimeProvider> = provider.clone();
+        let router = build_router(test_setup_state(temporary.path(), provider_service));
+        let handshake = hello(PROTOCOL_VERSION, PROTOCOL_VERSION);
+        let handshake_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/handshake",
+                Some(TOKEN),
+                &handshake,
+            ))
+            .await
+            .expect("setup handshake responds");
+        assert_eq!(handshake_response.status(), StatusCode::OK);
+        let hello: CoreHello = response_json(handshake_response).await;
+        assert!(
+            hello
+                .supported_capabilities
+                .contains(&TransportCapability::SetupWorkflow)
+        );
+
+        let consent_request = RuntimeConsentRequest {
+            provider_id: provider.provider_id.clone(),
+            decision: RuntimeConsentDecision::ApproveReuse,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let consent_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/consent",
+                Some(TOKEN),
+                &consent_request,
+            ))
+            .await
+            .expect("runtime consent responds");
+        assert_eq!(consent_response.status(), StatusCode::OK);
+        let consent: RuntimeConsentResponse = response_json(consent_response).await;
+        assert_eq!(
+            consent.report.reuse_consent,
+            RuntimeConsentState::ReuseApproved
+        );
+
+        let recommendation_request = recommendation_request();
+        let recommendation_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/recommendations",
+                Some(TOKEN),
+                &recommendation_request,
+            ))
+            .await
+            .expect("recommendation responds");
+        assert_eq!(recommendation_response.status(), StatusCode::OK);
+        let recommendation: RecommendationResponse = response_json(recommendation_response).await;
+        let selected = recommendation
+            .report
+            .recommended_plan
+            .expect("fixture has a recommended model");
+        assert_eq!(
+            selected.model.catalogue_id,
+            provider.artifact.canonical_model_id
+        );
+
+        let plan_request = SetupPlanRequest {
+            recommendation: selected,
+            provider_id: provider.provider_id.clone(),
+            destination: SetupDestinationCategory::ProviderManaged,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let plan_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/setup/plan",
+                Some(TOKEN),
+                &plan_request,
+            ))
+            .await
+            .expect("setup plan responds");
+        assert_eq!(plan_response.status(), StatusCode::OK);
+        let planned: SetupPlanResponse = response_json(plan_response).await;
+        assert_eq!(planned.job.state, SetupJobState::AwaitingApproval);
+        let job_id = planned.job.job_id;
+        let plan_revision = planned.job.plan.revision;
+
+        let approval_request = SetupApprovalRequest {
+            job_id,
+            plan_revision,
+            decision: SetupApprovalDecision::Approve,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let approval_response = router
+            .clone()
+            .oneshot(json_request(
+                &format!("/internal/v1/setup/jobs/{job_id}/approve"),
+                Some(TOKEN),
+                &approval_request,
+            ))
+            .await
+            .expect("setup approval responds");
+        assert_eq!(approval_response.status(), StatusCode::OK);
+        let approved: SetupApprovalResponse = response_json(approval_response).await;
+        assert_eq!(approved.job.state, SetupJobState::Approved);
+        assert_eq!(approved.approval.decision, SetupApprovalDecision::Approve);
+        assert!(approved.approval.external_runtime_effect);
+
+        let runtime_status_request = RuntimeStatusRequest {
+            provider_id: provider.provider_id.clone(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let runtime_status_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/runtime/status",
+                Some(TOKEN),
+                &runtime_status_request,
+            ))
+            .await
+            .expect("runtime status responds before setup start");
+        assert_eq!(runtime_status_response.status(), StatusCode::OK);
+        let runtime_status: RuntimeStatusResponse = response_json(runtime_status_response).await;
+        assert_eq!(runtime_status.report.provider_id, provider.provider_id);
+        assert_eq!(
+            runtime_status.report.display_name.as_str(),
+            "Setup test runtime"
+        );
+        assert_eq!(runtime_status.report.state, RuntimeState::Ready);
+        assert_eq!(runtime_status.report.ownership, RuntimeOwnership::External);
+        assert_eq!(
+            runtime_status.report.reuse_consent,
+            RuntimeConsentState::ReuseApproved
+        );
+        assert_eq!(runtime_status.report.version, None);
+
+        let start_request = SetupJobStartRequest {
+            job_id,
+            plan_revision,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let start_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/setup/jobs",
+                Some(TOKEN),
+                &start_request,
+            ))
+            .await
+            .expect("setup start responds");
+        assert_eq!(start_response.status(), StatusCode::OK);
+        let started: SetupJobStartResponse = response_json(start_response).await;
+        assert_eq!(started.job.job_id, job_id);
+
+        if tokio::time::timeout(
+            Duration::from_secs(2),
+            provider.first_acquisition_started.notified(),
+        )
+        .await
+        .is_err()
+        {
+            let status_request = SetupJobStatusRequest {
+                job_id,
+                correlation_id: CorrelationId::new(),
+                request_id: RequestId::new(),
+            };
+            let status_response = router
+                .clone()
+                .oneshot(json_request(
+                    &format!("/internal/v1/setup/jobs/{job_id}/status"),
+                    Some(TOKEN),
+                    &status_request,
+                ))
+                .await
+                .expect("diagnostic setup status responds");
+            let status: SetupJobStatusResponse = response_json(status_response).await;
+            panic!(
+                "first fake acquisition did not start after {} detects ({} context failures): {:?}",
+                provider.detect_calls.load(Ordering::Acquire),
+                provider.detect_failures.load(Ordering::Acquire),
+                status.job
+            );
+        }
+        let cancel_request = SetupJobCancelRequest {
+            job_id,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let cancel_response = router
+            .clone()
+            .oneshot(json_request(
+                &format!("/internal/v1/setup/jobs/{job_id}/cancel"),
+                Some(TOKEN),
+                &cancel_request,
+            ))
+            .await
+            .expect("setup cancel responds");
+        assert_eq!(cancel_response.status(), StatusCode::OK);
+        let cancelled: SetupJobCancelResponse = response_json(cancel_response).await;
+        assert!(cancelled.accepted);
+        let cancelled_snapshot =
+            wait_for_setup_state(&router, job_id, SetupJobState::Cancelled).await;
+
+        let retry_request = SetupJobRetryRequest {
+            job_id,
+            plan_revision,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let retry_response = router
+            .clone()
+            .oneshot(json_request(
+                &format!("/internal/v1/setup/jobs/{job_id}/retry"),
+                Some(TOKEN),
+                &retry_request,
+            ))
+            .await
+            .expect("setup retry responds");
+        assert_eq!(retry_response.status(), StatusCode::OK);
+        let retried: SetupJobRetryResponse = response_json(retry_response).await;
+        assert_eq!(retried.job.job_id, job_id);
+        let ready = wait_for_setup_state(&router, job_id, SetupJobState::Ready).await;
+        assert_eq!(ready.retry_count, 1);
+
+        let recovery_request = SetupJobRecoveryRequest {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let recovery_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/setup/jobs/recovery",
+                Some(TOKEN),
+                &recovery_request,
+            ))
+            .await
+            .expect("setup recovery responds");
+        assert_eq!(recovery_response.status(), StatusCode::OK);
+        let recovered: SetupJobRecoveryResponse = response_json(recovery_response).await;
+        assert_eq!(
+            recovered.job.map(|job| job.state),
+            Some(SetupJobState::Ready)
+        );
+
+        let event_correlation = CorrelationId::new();
+        let event_request_id = RequestId::new();
+        let event_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/setup/jobs/{job_id}/events?after_sequence={}&limit=64",
+                cancelled_snapshot.latest_event_sequence
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, event_correlation.to_string())
+            .header(REQUEST_HEADER, event_request_id.to_string())
+            .body(Body::empty())
+            .expect("setup event request builds");
+        let event_response = router
+            .oneshot(event_request)
+            .await
+            .expect("setup event request responds");
+        assert_eq!(event_response.status(), StatusCode::OK);
+        let event_body = tokio::time::timeout(Duration::from_secs(2), async {
+            event_response
+                .into_body()
+                .collect()
+                .await
+                .expect("setup event body reads")
+                .to_bytes()
+        })
+        .await
+        .expect("terminal setup event stream closes");
+        let event_text = String::from_utf8(event_body.to_vec()).expect("SSE is UTF-8");
+        assert!(event_text.contains("event: setup_job"));
+        assert!(event_text.contains(&format!(
+            "id: {}",
+            cancelled_snapshot.latest_event_sequence + 1
+        )));
+        assert!(event_text.contains("\"state\":\"ready\""));
+        let replayed: Vec<SetupJobEvent> = event_text
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .map(|data| serde_json::from_str(data).expect("setup SSE event decodes"))
+            .collect();
+        let progress_basis_points: Vec<u16> = replayed
+            .iter()
+            .filter(|event| {
+                event.kind == SetupJobEventKind::Progress
+                    && event.job.stage == SetupStage::Acquiring
+            })
+            .filter_map(|event| {
+                event
+                    .job
+                    .progress
+                    .as_ref()
+                    .and_then(|progress| progress.progress_basis_points)
+            })
+            .collect();
+        assert_eq!(progress_basis_points, vec![2_500, 5_000, 10_000]);
+    }
+
+    #[test]
+    fn setup_event_sequence_rejects_gaps_duplicates_and_overflow() {
+        assert!(is_next_setup_sequence(0, 1));
+        assert!(is_next_setup_sequence(41, 42));
+        assert!(!is_next_setup_sequence(41, 41));
+        assert!(!is_next_setup_sequence(41, 43));
+        assert!(!is_next_setup_sequence(u64::MAX, 0));
+    }
+
+    #[tokio::test]
+    async fn setup_events_reject_invalid_cursor_bounds_before_service_access() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let job_id = SetupJobId::new();
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/setup/jobs/{job_id}/events?after_sequence=0&limit=65"
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::empty())
+            .expect("setup event request builds");
+
+        let response = router
+            .clone()
+            .oneshot(request)
+            .await
+            .expect("setup event request responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error = error_payload(response).await;
+        assert_eq!(error.code, "setup.events_query_invalid");
+        assert_eq!(error.correlation_id, ids.correlation_id);
+        assert_eq!(error.request_id, ids.request_id);
+
+        let cursor_ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let cursor_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/setup/jobs/{job_id}/events?after_sequence={}&limit=1",
+                i64::MAX as u64 + 1
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, cursor_ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, cursor_ids.request_id.to_string())
+            .body(Body::empty())
+            .expect("setup cursor request builds");
+        let cursor_response = router
+            .oneshot(cursor_request)
+            .await
+            .expect("setup cursor request responds");
+        assert_eq!(cursor_response.status(), StatusCode::BAD_REQUEST);
+        let cursor_error = error_payload(cursor_response).await;
+        assert_eq!(cursor_error.code, "setup.events_query_invalid");
+        assert_eq!(cursor_error.correlation_id, cursor_ids.correlation_id);
+        assert_eq!(cursor_error.request_id, cursor_ids.request_id);
+    }
+
+    #[tokio::test]
+    async fn setup_routes_require_headers_and_fail_safely_without_durable_service() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let job_id = SetupJobId::new();
+        let correlation_id = CorrelationId::new();
+        let missing_header_request = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/setup/jobs/{job_id}/events?after_sequence=0&limit=1"
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, correlation_id.to_string())
+            .body(Body::empty())
+            .expect("setup event request builds");
+        let missing_header_response = router
+            .clone()
+            .oneshot(missing_header_request)
+            .await
+            .expect("setup event request responds");
+        assert_eq!(missing_header_response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_payload(missing_header_response).await.code,
+            "transport.identifiers_required"
+        );
+
+        let recovery_request = SetupJobRecoveryRequest {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let recovery_response = router
+            .oneshot(json_request(
+                "/internal/v1/setup/jobs/recovery",
+                Some(TOKEN),
+                &recovery_request,
+            ))
+            .await
+            .expect("setup recovery responds");
+        assert_eq!(recovery_response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let error = error_payload(recovery_response).await;
+        assert_eq!(error.code, "setup.service_unavailable");
+        assert_eq!(error.category, ErrorCategory::Unavailable);
+        assert_eq!(error.correlation_id, recovery_request.correlation_id);
+        assert_eq!(error.request_id, recovery_request.request_id);
+    }
+
+    #[tokio::test]
+    async fn setup_path_and_body_job_identifiers_must_match() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let path_job_id = SetupJobId::new();
+        let request = SetupJobStatusRequest {
+            job_id: SetupJobId::new(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+
+        let response = router
+            .oneshot(json_request(
+                &format!("/internal/v1/setup/jobs/{path_job_id}/status"),
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("setup status request responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(error_payload(response).await.code, "setup.job_id_mismatch");
     }
 
     #[tokio::test]
@@ -1591,6 +2783,7 @@ mod tests {
             state.status,
             test_hardware_scanner(),
             test_runtime_service(),
+            None,
         )
         .await
         .expect("loopback listener binds");
@@ -2176,6 +3369,7 @@ mod tests {
             state.status,
             test_hardware_scanner(),
             test_runtime_service(),
+            None,
         )
         .await
         .expect("loopback listener binds");
