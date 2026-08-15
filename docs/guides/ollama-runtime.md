@@ -33,7 +33,17 @@ fallback. Semver parses provider evidence without inventing string ordering.
 Task 10 also uses `fs4` 1.1.0 with default features disabled for one
 cross-platform, non-mutating available-space query. The standard library has no
 equivalent filesystem-capacity API. The query runs on a blocking worker and
-does not enable async runtimes, file locking, native DLLs, or provider SDKs.
+does not enable async runtimes, file locking, native DLLs, or provider SDKs; on
+Windows it resolves through `windows-sys` bindings to inbox operating-system
+APIs rather than a vendored native library.
+
+Three alternatives were rejected. `sysinfo` enumerates processes, networks, and
+components far beyond one capacity query, and that surface overlaps the
+separately bounded evidence policy the hardware scanner already owns. A direct
+`GetDiskFreeSpaceExW` call would introduce foreign-function code into a crate
+that declares `#![forbid(unsafe_code)]`, which AGENTS.md permits only behind an
+accepted ADR and a dedicated security review. The `fs2` predecessor is
+unmaintained, so its maintained `fs4` fork was preferred.
 
 These crates are mature Rust ecosystem components, support Windows MSVC, and
 use permissive MIT or MIT/Apache-2.0 licensing. They add Rust code only: no new

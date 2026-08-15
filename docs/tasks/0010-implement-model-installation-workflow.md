@@ -54,15 +54,15 @@ The user reviews a concrete installation plan, approves required changes, sees d
 
 ## Acceptance criteria
 
-- [ ] AC-1: Plan review shows components, licence, destination, expected size and resource expectations before approval.
-- [ ] AC-2: Disk space and destination availability are checked before and during acquisition.
-- [ ] AC-3: Progress, cancellation, retry and restart recovery are persisted and displayed.
-- [ ] AC-4: Partial or staged artifacts are never reported as available.
-- [ ] AC-5: Existing compatible runtime/model assets are offered for reuse without unnecessary duplication.
-- [ ] AC-6: Verification includes provider registration and a real bounded inference.
-- [ ] AC-7: Cancellation reports completed, retained, rolled-back and uncertain effects.
-- [ ] AC-8: Corrupt or mismatched artifacts are quarantined/rejected with actionable recovery.
-- [ ] AC-9: Flutter covers preparing, downloading, verifying, ready, attention, failed and cancelled states accessibly.
+- [X] AC-1: Plan review shows components, licence, destination, expected size and resource expectations before approval.
+- [X] AC-2: Disk space and destination availability are checked before and during acquisition.
+- [X] AC-3: Progress, cancellation, retry and restart recovery are persisted and displayed.
+- [X] AC-4: Partial or staged artifacts are never reported as available.
+- [X] AC-5: Existing compatible runtime/model assets are offered for reuse without unnecessary duplication.
+- [X] AC-6: Verification includes provider registration and a real bounded inference.
+- [X] AC-7: Cancellation reports completed, retained, rolled-back and uncertain effects.
+- [ ] AC-8: Corrupt or mismatched artifacts are quarantined/rejected with actionable recovery. **PARTIAL** — a provider-reported integrity mismatch is rejected before readiness inference and surfaces actionable recovery, but the local catalogue carries no independently trusted expected digest, so GixGiz cannot assert independent cryptographic identity or quarantine provider-owned files in this task. See [`model-setup-workflow.md`](../guides/model-setup-workflow.md).
+- [X] AC-9: Flutter covers preparing, downloading, verifying, ready, attention, failed and cancelled states accessibly.
 
 ## Required tests
 
