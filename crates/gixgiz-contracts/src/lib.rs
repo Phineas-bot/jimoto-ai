@@ -13,6 +13,7 @@ mod identity;
 mod ids;
 mod readiness;
 mod runtime;
+mod setup;
 mod transport;
 
 pub use capability::{
@@ -54,6 +55,21 @@ pub use runtime::{
     RuntimeOwnership, RuntimeProviderId, RuntimeProviderModelId, RuntimeProviderModelMapping,
     RuntimeReason, RuntimeReasonCode, RuntimeState, RuntimeStatusRequest, RuntimeStatusResponse,
     RuntimeVersionCompatibility, RuntimeVersionInfo, RuntimeWarning, RuntimeWarningCode,
+};
+pub use setup::{
+    ModelAcquisitionPhase, ModelAcquisitionProgress, ModelIntegrityState, ModelLifecycleState,
+    ModelMetadata, ModelProviderArtifact, ModelVerificationResult, ModelVerificationState,
+    ProviderRegistrationResult, ProviderRegistrationState, SETUP_WORKFLOW_SCHEMA_VERSION,
+    SetupApprovalDecision, SetupApprovalRecord, SetupApprovalRequest, SetupApprovalResponse,
+    SetupAttentionReason, SetupCancellationReport, SetupDestinationCategory, SetupEffect,
+    SetupEffectDisposition, SetupEffectKind, SetupEffectReport, SetupJobCancelRequest,
+    SetupJobCancelResponse, SetupJobEvent, SetupJobEventKind, SetupJobEventsRequest,
+    SetupJobEventsResponse, SetupJobId, SetupJobRecoveryRequest, SetupJobRecoveryResponse,
+    SetupJobRetryRequest, SetupJobRetryResponse, SetupJobSnapshot, SetupJobStartRequest,
+    SetupJobStartResponse, SetupJobState, SetupJobStatusRequest, SetupJobStatusResponse,
+    SetupJobTerminalState, SetupPlan, SetupPlanComponent, SetupPlanComponentKind, SetupPlanRequest,
+    SetupPlanResponse, SetupReason, SetupReasonCode, SetupRecoveryAction, SetupStage, SetupWarning,
+    SetupWarningCode,
 };
 pub use transport::{
     BootstrapReady, BootstrapRequest, CancelOperationRequest, CancelOperationResponse, ClientHello,
