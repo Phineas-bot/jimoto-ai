@@ -114,7 +114,7 @@ impl OllamaModelHttpClient for HyperLoopbackModelHttpClient {
     }
 }
 
-async fn send_post(
+pub(crate) async fn send_post(
     endpoint: &ValidatedEndpoint,
     route: &'static str,
     body: Vec<u8>,
@@ -150,7 +150,7 @@ async fn send_post(
     Ok((response, guard))
 }
 
-fn validate_response(
+pub(crate) fn validate_response(
     response: &Response<Incoming>,
     max_body_bytes: usize,
 ) -> Result<(), OllamaAdapterError> {
@@ -401,7 +401,7 @@ async fn read_bounded_body(
     Ok(bytes)
 }
 
-struct AbortOnDrop(JoinHandle<()>);
+pub(crate) struct AbortOnDrop(pub(crate) JoinHandle<()>);
 
 impl Drop for AbortOnDrop {
     fn drop(&mut self) {
