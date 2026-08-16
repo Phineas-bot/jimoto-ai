@@ -54,15 +54,15 @@ The user can create a local conversation, send a message, receive tokens increme
 
 ## Acceptance criteria
 
-- [ ] AC-1: A user can create, persist, reopen and delete a local conversation.
-- [ ] AC-2: Assistant output streams incrementally in order.
-- [ ] AC-3: Stop generation cancels the provider operation and produces a distinct cancelled state.
-- [ ] AC-4: Flutter never accesses Ollama or SQLite directly.
-- [ ] AC-5: Runtime/model identity and Local/Offline status are visible without technical overload.
-- [ ] AC-6: Provider loss, incompatible runtime, unavailable model and timeout map to stable actionable errors.
-- [ ] AC-7: Private message content is absent from default logs and telemetry.
-- [ ] AC-8: UI supports keyboard use, visible focus, scalable text and semantic streaming/status labels.
-- [ ] AC-9: Integration tests cover streaming, cancellation, persistence, restart and runtime loss.
+- [X] AC-1: A user can create, persist, reopen and delete a local conversation.
+- [X] AC-2: Assistant output streams incrementally in order.
+- [X] AC-3: Stop generation cancels the provider operation and produces a distinct cancelled state.
+- [X] AC-4: Flutter never accesses Ollama or SQLite directly.
+- [X] AC-5: Runtime/model identity and Local/Offline status are visible without technical overload.
+- [X] AC-6: Provider loss, incompatible runtime, unavailable model and timeout map to stable actionable errors.
+- [ ] AC-7: Private message content is absent from default logs and telemetry. **PARTIAL** - no log statement carries message content, but no automated redaction test asserts it.
+- [X] AC-8: UI supports keyboard use, visible focus, scalable text and semantic streaming/status labels.
+- [X] AC-9: Integration tests cover streaming, cancellation, persistence, restart and runtime loss.
 
 ## Required tests
 
