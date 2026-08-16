@@ -1295,6 +1295,121 @@ class AppLocalizationsEn extends AppLocalizations {
       'Review the local runtime and platform prerequisites.';
 
   @override
+  String get chatNavigationLabel => 'Chat';
+
+  @override
+  String get chatTitle => 'Chat';
+
+  @override
+  String get chatDescription =>
+      'Talk with the local model that GixGiz prepared on this PC.';
+
+  @override
+  String get chatRunningLocally => 'Running locally on this PC';
+
+  @override
+  String chatRunningLocallyWithModel(String model) {
+    return 'Running locally on this PC with $model';
+  }
+
+  @override
+  String chatLocalitySemanticLabel(String detail) {
+    return 'Chat location: $detail';
+  }
+
+  @override
+  String get chatNewConversationAction => 'New conversation';
+
+  @override
+  String get chatConversationsLoading => 'Loading your conversations';
+
+  @override
+  String get chatConversationsEmpty => 'No conversations yet. Start a new one.';
+
+  @override
+  String get chatConversationsFailed =>
+      'GixGiz could not load your conversations.';
+
+  @override
+  String get chatConversationLoading => 'Opening conversation';
+
+  @override
+  String get chatNoConversationSelected =>
+      'Choose a conversation or start a new one.';
+
+  @override
+  String chatMessageCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages',
+      one: '1 message',
+      zero: 'No messages',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatRoleUser => 'You';
+
+  @override
+  String get chatRoleAssistant => 'Assistant';
+
+  @override
+  String get chatComposerLabel => 'Message';
+
+  @override
+  String get chatComposerHint => 'Ask the local model something';
+
+  @override
+  String get chatSendAction => 'Send';
+
+  @override
+  String get chatStopAction => 'Stop';
+
+  @override
+  String get chatRetryAction => 'Try again';
+
+  @override
+  String get chatRenameAction => 'Rename conversation';
+
+  @override
+  String get chatRenameLabel => 'Conversation name';
+
+  @override
+  String get chatDeleteAction => 'Delete conversation';
+
+  @override
+  String get chatDeleteConfirmation =>
+      'This removes the conversation and its messages from GixGiz. It does not remove the local runtime or the model.';
+
+  @override
+  String get chatCancelAction => 'Cancel';
+
+  @override
+  String get chatConfirmAction => 'Save';
+
+  @override
+  String get chatReplyStreaming => 'Replying...';
+
+  @override
+  String get chatReplyStreamingSemanticLabel => 'The assistant is replying';
+
+  @override
+  String get chatReplyStopped => 'You stopped this reply, so it is incomplete.';
+
+  @override
+  String get chatReplyIncomplete =>
+      'This reply did not finish, so it is incomplete.';
+
+  @override
+  String get chatAttentionMessage =>
+      'GixGiz needs attention before this conversation can continue.';
+
+  @override
+  String get chatFailedMessage => 'GixGiz could not complete that chat action.';
+
+  @override
   String get setupRecoveryContactSupport =>
       'Contact support with the diagnostic code.';
 

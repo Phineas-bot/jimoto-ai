@@ -905,6 +905,45 @@ class _FakeSession implements CoreSidecarSession {
     );
   }
 
+    @override
+  Future<CreateConversationResponse> createConversation(
+    CreateConversationRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<ListConversationsResponse> listConversations(
+    ListConversationsRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<GetConversationResponse> getConversation(
+    GetConversationRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<RenameConversationResponse> renameConversation(
+    RenameConversationRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<DeleteConversationResponse> deleteConversation(
+    DeleteConversationRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<SendMessageResponse> sendChatMessage(SendMessageRequest request) =>
+      throw UnimplementedError();
+
+  @override
+  Stream<ChatGenerationEvent> chatGenerationEvents(
+    ChatGenerationEventsRequest request,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<CancelGenerationResponse> cancelChatGeneration(
+    CancelGenerationRequest request,
+  ) => throw UnimplementedError();
+
   @override
   Future<void> shutdown(ShutdownRequest request) async {
     shutdownCount += 1;

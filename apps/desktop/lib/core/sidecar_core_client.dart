@@ -503,6 +503,152 @@ class SidecarCoreClient extends CoreClient {
   }
 
   @override
+  Future<ConversationSnapshot> createConversation({String? title}) async {
+    return _chatRequest((session) async {
+      final response = await session.createConversation(
+        CreateConversationRequest(
+          title: title,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.conversation;
+    });
+  }
+
+  @override
+  Future<ListConversationsResponse> listConversations({int limit = 50}) async {
+    return _chatRequest((session) async {
+      return session.listConversations(
+        ListConversationsRequest(
+          limit: limit,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<ConversationSnapshot> getConversation(
+    ConversationId conversationId,
+  ) async {
+    return _chatRequest((session) async {
+      final response = await session.getConversation(
+        GetConversationRequest(
+          conversationId: conversationId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.conversation;
+    });
+  }
+
+  @override
+  Future<ConversationSnapshot> renameConversation(
+    ConversationId conversationId,
+    String title,
+  ) async {
+    return _chatRequest((session) async {
+      final response = await session.renameConversation(
+        RenameConversationRequest(
+          conversationId: conversationId,
+          title: title,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.conversation;
+    });
+  }
+
+  @override
+  Future<DeleteConversationResponse> deleteConversation(
+    ConversationId conversationId,
+  ) async {
+    return _chatRequest((session) async {
+      return session.deleteConversation(
+        DeleteConversationRequest(
+          conversationId: conversationId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<SendMessageResponse> sendChatMessage(
+    ConversationId conversationId,
+    String content,
+  ) async {
+    return _chatRequest((session) async {
+      return session.sendChatMessage(
+        SendMessageRequest(
+          conversationId: conversationId,
+          content: content,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+    });
+  }
+
+  @override
+  Stream<ChatGenerationEvent> observeGeneration(
+    GenerationId generationId, {
+    int afterSequence = 0,
+  }) async* {
+    final session = await _connectedSession();
+    _requireCapability(TransportCapability.localChat);
+    yield* session
+        .chatGenerationEvents(
+          ChatGenerationEventsRequest(
+            generationId: generationId,
+            afterSequence: afterSequence,
+            limit: 64,
+            correlationId: newCorrelationId(),
+            requestId: newRequestId(),
+          ),
+        )
+        .handleError(_rethrowAsClientFailure);
+  }
+
+  @override
+  Future<bool> cancelGeneration(GenerationId generationId) async {
+    return _chatRequest((session) async {
+      final response = await session.cancelChatGeneration(
+        CancelGenerationRequest(
+          generationId: generationId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.accepted;
+    });
+  }
+
+  Future<T> _chatRequest<T>(
+    Future<T> Function(CoreSidecarSession session) request,
+  ) async {
+    try {
+      final session = await _connectedSession();
+      _requireCapability(TransportCapability.localChat);
+      return await request(session);
+    } on SidecarFailure catch (failure) {
+      throw _coreFailure(failure);
+    }
+  }
+
+  Never _rethrowAsClientFailure(Object error, StackTrace stackTrace) {
+    if (error is SidecarFailure) {
+      throw _coreFailure(error);
+    }
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+
+  @override
   Future<void> shutdown() async {
     final session = _session;
     _session = null;

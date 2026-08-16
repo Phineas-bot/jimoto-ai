@@ -52,6 +52,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Foundation, Chat, then About: one tab per rail destination.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);

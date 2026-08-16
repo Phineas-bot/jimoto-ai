@@ -118,4 +118,21 @@ abstract final class AppKeys {
   static const runtimeDiagnostics = ValueKey<String>(
     'foundation.runtime.diagnostics',
   );
+  static const chatNavigation = ValueKey<String>('navigation.chat');
+  static const chatLocalityBadge = ValueKey<String>('chat.locality');
+  static const chatNewConversationButton = ValueKey<String>('chat.new');
+  static const chatConversationList = ValueKey<String>('chat.conversations');
+  static const chatConversationsEmpty = ValueKey<String>('chat.conversations_empty');
+  static const chatNoConversationSelected = ValueKey<String>('chat.unselected');
+  static const chatMessageList = ValueKey<String>('chat.messages');
+  static const chatStreamingMessage = ValueKey<String>('chat.streaming');
+  static const chatComposer = ValueKey<String>('chat.composer');
+  static const chatSendButton = ValueKey<String>('chat.send');
+  static const chatStopButton = ValueKey<String>('chat.stop');
+  static const chatRenameButton = ValueKey<String>('chat.rename');
+  static const chatDeleteButton = ValueKey<String>('chat.delete');
+  static const chatDeleteConfirmButton = ValueKey<String>('chat.delete_confirm');
+  static const chatRetryButton = ValueKey<String>('chat.retry');
+  static const chatAttention = ValueKey<String>('chat.attention');
+  static const chatFailed = ValueKey<String>('chat.failed');
 }

@@ -4,6 +4,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:gixgiz_desktop/app/app_identity.dart';
 import 'package:gixgiz_desktop/app/app_routes.dart';
+import 'package:gixgiz_desktop/features/chat/chat_page.dart';
 import 'package:gixgiz_desktop/app/app_theme.dart';
 import 'package:gixgiz_desktop/core/core_client.dart';
 import 'package:gixgiz_desktop/features/about/about_screen.dart';
@@ -57,8 +58,12 @@ class _GixGizAppState extends State<GixGizApp> {
           selectedIndex: 0,
           child: FoundationPage(coreClient: widget.coreClient),
         ),
-        AppRoutes.about: (context) => const AppShell(
+        AppRoutes.chat: (context) => AppShell(
           selectedIndex: 1,
+          child: ChatPage(coreClient: widget.coreClient),
+        ),
+        AppRoutes.about: (context) => const AppShell(
+          selectedIndex: 2,
           child: AboutScreen(
             applicationId: AppIdentity.applicationId,
             releaseName: AppIdentity.releaseName,

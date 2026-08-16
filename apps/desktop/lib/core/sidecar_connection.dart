@@ -118,6 +118,36 @@ abstract interface class CoreSidecarSession {
 
   Future<SetupJobRetryResponse> retrySetupJob(SetupJobRetryRequest request);
 
+  Future<CreateConversationResponse> createConversation(
+    CreateConversationRequest request,
+  );
+
+  Future<ListConversationsResponse> listConversations(
+    ListConversationsRequest request,
+  );
+
+  Future<GetConversationResponse> getConversation(
+    GetConversationRequest request,
+  );
+
+  Future<RenameConversationResponse> renameConversation(
+    RenameConversationRequest request,
+  );
+
+  Future<DeleteConversationResponse> deleteConversation(
+    DeleteConversationRequest request,
+  );
+
+  Future<SendMessageResponse> sendChatMessage(SendMessageRequest request);
+
+  Stream<ChatGenerationEvent> chatGenerationEvents(
+    ChatGenerationEventsRequest request,
+  );
+
+  Future<CancelGenerationResponse> cancelChatGeneration(
+    CancelGenerationRequest request,
+  );
+
   Future<void> shutdown(ShutdownRequest request);
 }
 
@@ -1220,6 +1250,301 @@ class IoCoreSidecarSession implements CoreSidecarSession {
         'CORE_RESPONSE_INVALID',
       );
     }
+  }
+
+  @override
+  Future<CreateConversationResponse> createConversation(
+    CreateConversationRequest request,
+  ) async {
+    final response = CreateConversationResponse.fromJson(
+      await _post(
+        '/internal/v1/chat/conversations',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<ListConversationsResponse> listConversations(
+    ListConversationsRequest request,
+  ) async {
+    final response = ListConversationsResponse.fromJson(
+      await _post(
+        '/internal/v1/chat/conversations/list',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<GetConversationResponse> getConversation(
+    GetConversationRequest request,
+  ) async {
+    final response = GetConversationResponse.fromJson(
+      await _post(
+        _chatConversationPath(request.conversationId, null),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<RenameConversationResponse> renameConversation(
+    RenameConversationRequest request,
+  ) async {
+    final response = RenameConversationResponse.fromJson(
+      await _post(
+        _chatConversationPath(request.conversationId, 'rename'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<DeleteConversationResponse> deleteConversation(
+    DeleteConversationRequest request,
+  ) async {
+    final response = DeleteConversationResponse.fromJson(
+      await _post(
+        _chatConversationPath(request.conversationId, 'delete'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<SendMessageResponse> sendChatMessage(SendMessageRequest request) async {
+    final response = SendMessageResponse.fromJson(
+      await _post(
+        _chatConversationPath(request.conversationId, 'messages'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Future<CancelGenerationResponse> cancelChatGeneration(
+    CancelGenerationRequest request,
+  ) async {
+    final response = CancelGenerationResponse.fromJson(
+      await _post(
+        _chatGenerationPath(request.generationId, 'cancel'),
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
+  Stream<ChatGenerationEvent> chatGenerationEvents(
+    ChatGenerationEventsRequest request,
+  ) async* {
+    if (request.afterSequence < 0 ||
+        request.limit < 1 ||
+        request.limit > _maxEvents ||
+        !isValidTransportUuid(request.generationId)) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'CHAT_EVENT_REQUEST_INVALID',
+      );
+    }
+
+    HttpClientResponse response;
+    try {
+      final endpoint = _endpoint.resolve(
+        _chatGenerationPath(request.generationId, 'events'),
+      );
+      final eventRequest = await _client
+          .getUrl(
+            endpoint.replace(
+              queryParameters: {
+                'after_sequence': request.afterSequence.toString(),
+              },
+            ),
+          )
+          .timeout(requestTimeout);
+      _applyHeaders(
+        eventRequest.headers,
+        request.correlationId,
+        request.requestId,
+      );
+      response = await eventRequest.close().timeout(requestTimeout);
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'CHAT_CONNECTION_TIMEOUT',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'CHAT_CONNECTION_LOST',
+      );
+    } on HttpException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'CHAT_CONNECTION_LOST',
+      );
+    }
+
+    if (response.statusCode != HttpStatus.ok) {
+      throw await _failureFromResponse(
+        response,
+        request.correlationId,
+        request.requestId,
+      );
+    }
+
+    var expectedSequence = request.afterSequence + 1;
+    try {
+      var streamedBytes = 0;
+      final bounded = response
+          .timeout(setupEventInactivityTimeout)
+          .transform(
+            StreamTransformer<List<int>, List<int>>.fromHandlers(
+              handleData: (chunk, sink) {
+                streamedBytes += chunk.length;
+                if (streamedBytes > _maxEventStreamBytes) {
+                  sink.addError(
+                    const SidecarFailure(
+                      SidecarFailureKind.invalidResponse,
+                      'CHAT_STREAM_LIMIT',
+                    ),
+                  );
+                  return;
+                }
+                sink.add(chunk);
+              },
+            ),
+          );
+      await for (final line
+          in bounded.transform(utf8.decoder).transform(const LineSplitter())) {
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+        final data = line.substring(5).trimLeft();
+        if (data.length > _maxResponseBytes) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'CHAT_STREAM_LIMIT',
+          );
+        }
+        final event = ChatGenerationEvent.fromJson(
+          _decodeObject(data, 'chat generation event'),
+        );
+        if (event.generationId != request.generationId ||
+            event.sequence != expectedSequence) {
+          throw const SidecarFailure(
+            SidecarFailureKind.invalidResponse,
+            'CHAT_SEQUENCE_INVALID',
+          );
+        }
+        expectedSequence += 1;
+        yield event;
+        if (event.terminalState != null) {
+          return;
+        }
+      }
+    } on SidecarFailure {
+      rethrow;
+    } on TimeoutException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'CHAT_STREAM_TIMEOUT',
+      );
+    } on FormatException {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'CHAT_EVENT_INVALID',
+      );
+    } on SocketException {
+      throw const SidecarFailure(
+        SidecarFailureKind.connectionLost,
+        'CHAT_CONNECTION_LOST',
+      );
+    }
+  }
+
+  String _chatConversationPath(ConversationId conversationId, String? action) {
+    if (!isValidTransportUuid(conversationId)) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'CHAT_CONVERSATION_ID_INVALID',
+      );
+    }
+    final suffix = action == null ? '' : '/$action';
+    return '/internal/v1/chat/conversations/$conversationId$suffix';
+  }
+
+  String _chatGenerationPath(GenerationId generationId, String action) {
+    if (!isValidTransportUuid(generationId)) {
+      throw const SidecarFailure(
+        SidecarFailureKind.invalidResponse,
+        'CHAT_GENERATION_ID_INVALID',
+      );
+    }
+    return '/internal/v1/chat/generations/$generationId/$action';
   }
 
   String _setupJobPath(SetupJobId jobId, String action) {
