@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 
 mod capability;
+mod chat;
 mod error;
 mod hardware;
 mod observability;
@@ -20,6 +21,7 @@ mod service;
 mod setup;
 
 pub use capability::CapabilityEngine;
+pub use chat::{ChatEventSubscription, ChatService};
 pub use error::CoreError;
 pub use hardware::{
     CollectedHardwareEvidence, HardwareProvider, HardwareScanner, WindowsHardwareProvider,

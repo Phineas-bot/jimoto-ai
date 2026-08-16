@@ -65,6 +65,9 @@ pub enum CoreError {
     /// The selected runtime provider cannot supply safe setup evidence.
     #[error("the setup runtime provider is unavailable")]
     SetupProviderUnavailable,
+    /// Local chat could not proceed for a stable contract-defined reason.
+    #[error("local chat could not proceed")]
+    Chat(gixgiz_contracts::ChatFailureCode),
 }
 
 impl CoreError {
@@ -211,6 +214,7 @@ impl CoreError {
                         .to_owned(),
                 },
             ),
+            Self::Chat(code) => return chat_payload(*code, context),
             Self::SetupProviderUnavailable => (
                 ErrorCategory::Unavailable,
                 "setup.provider_unavailable",
@@ -232,4 +236,139 @@ impl CoreError {
             context.request_id(),
         )
     }
+}
+
+/// Maps the stable chat taxonomy onto a safe boundary payload.
+fn chat_payload(
+    code: gixgiz_contracts::ChatFailureCode,
+    context: &OperationContext,
+) -> SafeErrorPayload {
+    use gixgiz_contracts::ChatFailureCode as Code;
+
+    let (category, stable, message, action, guidance) = match code {
+        Code::RuntimeUnavailable => (
+            ErrorCategory::Unavailable,
+            "chat.runtime_unavailable",
+            "The local runtime is not available for chat right now.",
+            RecoveryAction::CheckPrerequisites,
+            "Check the local runtime status, then try again.",
+        ),
+        Code::RuntimeIncompatible => (
+            ErrorCategory::IncompatibleVersion,
+            "chat.runtime_incompatible",
+            "The installed local runtime is not compatible with chat.",
+            RecoveryAction::CheckPrerequisites,
+            "Review the runtime requirements before chatting.",
+        ),
+        Code::RuntimeConsentRequired => (
+            ErrorCategory::PermissionDenied,
+            "chat.runtime_consent_required",
+            "GixGiz needs your permission to use the existing local runtime.",
+            RecoveryAction::CheckPrerequisites,
+            "Approve reuse of the local runtime, then try again.",
+        ),
+        Code::ModelUnavailable => (
+            ErrorCategory::Unavailable,
+            "chat.model_unavailable",
+            "The model for this conversation is no longer available.",
+            RecoveryAction::CheckPrerequisites,
+            "Run model setup again, then start a new message.",
+        ),
+        Code::ModelChanged => (
+            ErrorCategory::Conflict,
+            "chat.model_changed",
+            "The model for this conversation changed since it was verified.",
+            RecoveryAction::CheckPrerequisites,
+            "Run model setup again to verify the model.",
+        ),
+        Code::GenerationTimedOut => (
+            ErrorCategory::TimedOut,
+            "chat.generation_timed_out",
+            "The local model took too long to reply.",
+            RecoveryAction::Retry,
+            "Send the message again.",
+        ),
+        Code::ProviderDisconnected => (
+            ErrorCategory::Degraded,
+            "chat.provider_disconnected",
+            "The local model stopped replying before it finished.",
+            RecoveryAction::Retry,
+            "Check the local runtime, then send the message again.",
+        ),
+        Code::MalformedProviderStream => (
+            ErrorCategory::Degraded,
+            "chat.malformed_provider_stream",
+            "GixGiz could not read the local model's reply safely.",
+            RecoveryAction::Retry,
+            "Send the message again.",
+        ),
+        Code::MessageTooLarge => (
+            ErrorCategory::InvalidInput,
+            "chat.message_too_large",
+            "That message is too long to send.",
+            RecoveryAction::NoAction,
+            "Shorten the message and send it again.",
+        ),
+        Code::ContextTooLarge => (
+            ErrorCategory::ResourceExhausted,
+            "chat.context_too_large",
+            "This conversation is too long to continue safely.",
+            RecoveryAction::NoAction,
+            "Start a new conversation to continue.",
+        ),
+        Code::ConversationNotFound => (
+            ErrorCategory::Unavailable,
+            "chat.conversation_not_found",
+            "That conversation is no longer available.",
+            RecoveryAction::NoAction,
+            "Choose another conversation or start a new one.",
+        ),
+        Code::GenerationNotFound => (
+            ErrorCategory::Unavailable,
+            "chat.generation_not_found",
+            "That reply is no longer being generated.",
+            RecoveryAction::NoAction,
+            "Reload the conversation to see its current state.",
+        ),
+        Code::GenerationAlreadyActive => (
+            ErrorCategory::Conflict,
+            "chat.generation_already_active",
+            "This conversation is already waiting for a reply.",
+            RecoveryAction::Retry,
+            "Wait for the current reply or stop it, then try again.",
+        ),
+        Code::PersistenceUnavailable => (
+            ErrorCategory::Internal,
+            "chat.persistence_unavailable",
+            "GixGiz could not read or save this conversation.",
+            RecoveryAction::Restart,
+            "Restart GixGiz and try again.",
+        ),
+        Code::Cancelled => (
+            ErrorCategory::Cancelled,
+            "chat.cancelled",
+            "The reply was stopped.",
+            RecoveryAction::NoAction,
+            "No further action is required.",
+        ),
+        _ => (
+            ErrorCategory::Internal,
+            "chat.unavailable",
+            "GixGiz could not complete that chat action.",
+            RecoveryAction::Retry,
+            "Try again.",
+        ),
+    };
+
+    SafeErrorPayload::new(
+        category,
+        stable,
+        message,
+        RecoveryGuidance {
+            action,
+            message: guidance.to_owned(),
+        },
+        context.correlation_id(),
+        context.request_id(),
+    )
 }

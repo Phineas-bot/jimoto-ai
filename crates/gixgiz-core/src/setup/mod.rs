@@ -2793,7 +2793,8 @@ mod tests {
     };
     use gixgiz_persistence::{DataRoot, PersistedSetupStage};
     use gixgiz_runtime::{
-        ModelProgressSender, RuntimeDetector, RuntimeFuture, RuntimeLifecycle,
+        ChatDeltaSender, ModelProgressSender, RuntimeChatProvider, RuntimeChatRequest,
+        RuntimeDetector, RuntimeFuture, RuntimeGenerationResult, RuntimeLifecycle,
         RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus, RuntimeModelInspection,
         RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
         RuntimeReadinessInferenceResult, RuntimeStoragePreflight,
@@ -3658,6 +3659,21 @@ mod tests {
         }
     }
 
+    impl RuntimeChatProvider for SequencedStorageProvider {
+        fn generate(
+            &self,
+            _request: RuntimeChatRequest,
+            _deltas: ChatDeltaSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+            // This double covers setup behavior only; chat is exercised elsewhere.
+            Box::pin(async move {
+                context.check()?;
+                Err(RuntimeError::Unsupported)
+            })
+        }
+    }
+
     impl RuntimeProvider for SequencedStorageProvider {
         fn provider_id(&self) -> &RuntimeProviderId {
             self.inner.provider_id()
@@ -3764,6 +3780,21 @@ mod tests {
             context: RuntimeOperationContext,
         ) -> RuntimeFuture<'_, RuntimeReadinessInferenceResult> {
             self.inner.run_readiness_inference(artifact, context)
+        }
+    }
+
+    impl RuntimeChatProvider for PendingAcquisitionProvider {
+        fn generate(
+            &self,
+            _request: RuntimeChatRequest,
+            _deltas: ChatDeltaSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+            // This double covers setup behavior only; chat is exercised elsewhere.
+            Box::pin(async move {
+                context.check()?;
+                Err(RuntimeError::Unsupported)
+            })
         }
     }
 
@@ -3888,6 +3919,21 @@ mod tests {
                 cancellation.cancelled().await;
                 stopped.store(true, Ordering::SeqCst);
                 Err(RuntimeError::Cancelled)
+            })
+        }
+    }
+
+    impl RuntimeChatProvider for PendingReadinessProvider {
+        fn generate(
+            &self,
+            _request: RuntimeChatRequest,
+            _deltas: ChatDeltaSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+            // This double covers setup behavior only; chat is exercised elsewhere.
+            Box::pin(async move {
+                context.check()?;
+                Err(RuntimeError::Unsupported)
             })
         }
     }
