@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod chat;
 mod context;
 mod error;
 mod model_setup;
@@ -16,6 +17,10 @@ mod provider;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 
+pub use chat::{
+    CHAT_DELTA_CHANNEL_CAPACITY, ChatDeltaSender, RuntimeChatMessage, RuntimeChatProvider,
+    RuntimeChatRequest, RuntimeChatRole, RuntimeGenerationDelta, RuntimeGenerationResult,
+};
 pub use context::{RuntimeCancellationToken, RuntimeOperationContext};
 pub use error::RuntimeError;
 pub use model_setup::{
