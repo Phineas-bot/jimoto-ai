@@ -137,7 +137,7 @@ fn schema_one_database_upgrades_without_losing_existing_data() {
         .expect("migration ledger rows query")
         .collect::<Result<_, _>>()
         .expect("migration ledger rows decode");
-    assert_eq!(versions, vec![1, 2, 3]);
+    assert_eq!(versions, vec![1, 2, 3, 4]);
     assert_eq!(
         fs::read_dir(persistence.data_root().backups_dir())
             .expect("backup directory reads")

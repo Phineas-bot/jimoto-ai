@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod chat;
 mod data_root;
 mod database;
 mod error;
@@ -16,6 +17,11 @@ mod migrations;
 mod repositories;
 mod setup;
 
+pub use chat::{
+    ChatRepository, INTERRUPTED_FAILURE_CODE, PersistedChatMessage, PersistedChatMessageStatus,
+    PersistedChatRole, PersistedConversation, PersistedConversationInput,
+    PersistedGenerationOutcome,
+};
 pub use data_root::DataRoot;
 pub use database::{DatabaseConfiguration, Persistence, PersistenceHealth, PersistenceOptions};
 pub use error::PersistenceError;
