@@ -38,6 +38,8 @@ pub(crate) enum OllamaAdapterError {
     StorageUnavailable,
     #[error("the fixed provider readiness inference failed")]
     ReadinessFailed,
+    #[error("provider chat generation did not reach a validated terminal completion")]
+    GenerationFailed,
     #[error("the requested lifecycle operation is unsupported for this installation")]
     LifecycleUnsupported,
     #[error("the requested lifecycle operation conflicts with current owned-process state")]

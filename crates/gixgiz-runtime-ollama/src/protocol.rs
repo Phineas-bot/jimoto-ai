@@ -255,9 +255,222 @@ fn validate_sha256_digest(value: &str) -> Result<(), OllamaAdapterError> {
     Ok(())
 }
 
+const MAX_CHAT_CONTENT_BYTES: usize = 64 * 1024;
+
+#[derive(Serialize)]
+struct ChatRequest<'a> {
+    model: &'a str,
+    messages: &'a [ChatRequestMessage<'a>],
+    stream: bool,
+    think: bool,
+    options: ChatOptions,
+}
+
+/// One bounded context message rendered for the provider chat route.
+#[derive(Debug, Serialize)]
+pub(crate) struct ChatRequestMessage<'a> {
+    pub(crate) role: &'a str,
+    pub(crate) content: &'a str,
+}
+
+#[derive(Clone, Copy, Serialize)]
+struct ChatOptions {
+    num_ctx: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChatResponse {
+    #[serde(default)]
+    message: Option<ChatResponseMessage>,
+    #[serde(default)]
+    done: bool,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChatResponseMessage {
+    #[serde(default)]
+    content: Option<String>,
+}
+
+/// Normalized provider chat event with every provider-only field discarded.
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum ChatEvent {
+    /// Assistant text increment.
+    Delta(String),
+    /// Validated terminal completion carrying any trailing text.
+    Done(Option<String>),
+    /// A chunk that carries no assistant text above the adapter.
+    Ignored,
+}
+
+pub(crate) fn encode_chat_request(
+    model: &str,
+    messages: &[ChatRequestMessage<'_>],
+    num_ctx: u32,
+) -> Result<Vec<u8>, OllamaAdapterError> {
+    serde_json::to_vec(&ChatRequest {
+        model,
+        messages,
+        stream: true,
+        think: false,
+        options: ChatOptions { num_ctx },
+    })
+    .map_err(|_| OllamaAdapterError::Internal)
+}
+
+/// Decodes one streamed chat chunk into a provider-neutral event.
+///
+/// Task 11 consumes assistant `message.content` only. Thinking, tool-call, and
+/// image fields are deliberately ignored and never cross the adapter boundary.
+pub(crate) fn decode_chat_event(line: &[u8]) -> Result<ChatEvent, OllamaAdapterError> {
+    let response: ChatResponse =
+        serde_json::from_slice(line).map_err(|_| OllamaAdapterError::InvalidResponse)?;
+    if let Some(error) = response.error.as_deref() {
+        validate_provider_field(error, MAX_PROVIDER_FIELD_BYTES)?;
+        if !error.trim().is_empty() {
+            return Err(OllamaAdapterError::GenerationFailed);
+        }
+    }
+    let content = response
+        .message
+        .and_then(|message| message.content)
+        .unwrap_or_default();
+    validate_chat_content(&content)?;
+
+    if response.done {
+        return Ok(ChatEvent::Done((!content.is_empty()).then_some(content)));
+    }
+    if content.is_empty() {
+        return Ok(ChatEvent::Ignored);
+    }
+    Ok(ChatEvent::Delta(content))
+}
+
+/// Validates bounded assistant text while allowing ordinary line structure.
+fn validate_chat_content(value: &str) -> Result<(), OllamaAdapterError> {
+    if value.len() > MAX_CHAT_CONTENT_BYTES {
+        return Err(OllamaAdapterError::ResponseTooLarge);
+    }
+    if value
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return Err(OllamaAdapterError::InvalidResponse);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_request_is_streamed_and_disables_provider_thinking() {
+        let messages = [
+            ChatRequestMessage {
+                role: "user",
+                content: "hello",
+            },
+            ChatRequestMessage {
+                role: "assistant",
+                content: "hi",
+            },
+        ];
+
+        let encoded = encode_chat_request("qwen2.5:0.5b-instruct", &messages, 4096)
+            .expect("chat request encodes");
+        let text = String::from_utf8(encoded).expect("request is utf-8");
+
+        assert!(text.contains("\"stream\":true"));
+        assert!(text.contains("\"think\":false"));
+        assert!(text.contains("\"num_ctx\":4096"));
+        assert!(text.contains("\"role\":\"user\""));
+        assert!(text.contains("\"role\":\"assistant\""));
+        assert!(!text.contains("\"prompt\""));
+    }
+
+    #[test]
+    fn chat_deltas_and_terminal_completion_are_normalized() {
+        let delta = decode_chat_event(
+            b"{\"message\":{\"role\":\"assistant\",\"content\":\"Hel\"},\"done\":false}",
+        )
+        .expect("delta decodes");
+        let trailing = decode_chat_event(
+            b"{\"message\":{\"role\":\"assistant\",\"content\":\"lo\"},\"done\":true}",
+        )
+        .expect("terminal decodes");
+        let empty_terminal = decode_chat_event(b"{\"message\":{\"content\":\"\"},\"done\":true}")
+            .expect("empty terminal decodes");
+
+        assert_eq!(delta, ChatEvent::Delta("Hel".to_owned()));
+        assert_eq!(trailing, ChatEvent::Done(Some("lo".to_owned())));
+        assert_eq!(empty_terminal, ChatEvent::Done(None));
+    }
+
+    #[test]
+    fn thinking_tool_and_image_fields_never_cross_the_adapter() {
+        let event = decode_chat_event(
+            b"{\"message\":{\"role\":\"assistant\",\"content\":\"answer\",\
+              \"thinking\":\"secret reasoning\",\
+              \"tool_calls\":[{\"function\":{\"name\":\"rm\"}}],\
+              \"images\":[\"data\"]},\"done\":false}",
+        )
+        .expect("additive provider fields are ignored");
+
+        assert_eq!(event, ChatEvent::Delta("answer".to_owned()));
+    }
+
+    #[test]
+    fn empty_non_terminal_chunks_carry_no_assistant_text() {
+        let keepalive = decode_chat_event(b"{\"message\":{\"content\":\"\"},\"done\":false}")
+            .expect("keepalive decodes");
+        let absent = decode_chat_event(b"{\"done\":false}").expect("absent message decodes");
+
+        assert_eq!(keepalive, ChatEvent::Ignored);
+        assert_eq!(absent, ChatEvent::Ignored);
+    }
+
+    #[test]
+    fn provider_error_and_malformed_chunks_fail_closed_without_leaking_text() {
+        let reported = decode_chat_event(b"{\"error\":\"model runner crashed\"}");
+        let malformed = decode_chat_event(b"not json");
+        let control =
+            decode_chat_event(b"{\"message\":{\"content\":\"bad\\u0000text\"},\"done\":false}");
+
+        assert_eq!(reported, Err(OllamaAdapterError::GenerationFailed));
+        assert_eq!(malformed, Err(OllamaAdapterError::InvalidResponse));
+        assert_eq!(control, Err(OllamaAdapterError::InvalidResponse));
+        // The provider message text never appears in the typed failure.
+        assert!(!format!("{:?}", reported).contains("crashed"));
+    }
+
+    #[test]
+    fn newlines_and_tabs_remain_valid_assistant_text() {
+        let event = decode_chat_event(
+            b"{\"message\":{\"content\":\"line one\\nline two\\tindented\"},\"done\":false}",
+        )
+        .expect("multi-line content decodes");
+
+        assert_eq!(
+            event,
+            ChatEvent::Delta("line one\nline two\tindented".to_owned())
+        );
+    }
+
+    #[test]
+    fn oversized_assistant_chunks_are_rejected() {
+        let payload = format!(
+            "{{\"message\":{{\"content\":\"{}\"}},\"done\":false}}",
+            "x".repeat(64 * 1024 + 1)
+        );
+
+        assert_eq!(
+            decode_chat_event(payload.as_bytes()),
+            Err(OllamaAdapterError::ResponseTooLarge)
+        );
+    }
 
     #[test]
     fn additive_unknown_fields_are_accepted() {

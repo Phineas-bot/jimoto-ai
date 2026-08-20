@@ -351,6 +351,8 @@ pub enum RuntimeErrorCode {
     ModelStorageExhausted,
     /// The fixed bounded readiness inference failed.
     ReadinessInferenceFailed,
+    /// Provider chat generation ended without a validated terminal completion.
+    GenerationFailed,
     /// Provider output exceeded a fixed bound.
     OutputLimit,
     /// Explicit cancellation was observed.

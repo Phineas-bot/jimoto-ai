@@ -2255,6 +2255,198 @@ abstract class AppLocalizations {
   /// **'Review the local runtime and platform prerequisites.'**
   String get setupRecoveryCheckPrerequisites;
 
+  /// No description provided for @chatNavigationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get chatNavigationLabel;
+
+  /// No description provided for @chatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get chatTitle;
+
+  /// No description provided for @chatDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Talk with the local model that GixGiz prepared on this PC.'**
+  String get chatDescription;
+
+  /// No description provided for @chatRunningLocally.
+  ///
+  /// In en, this message translates to:
+  /// **'Running locally on this PC'**
+  String get chatRunningLocally;
+
+  /// No description provided for @chatRunningLocallyWithModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Running locally on this PC with {model}'**
+  String chatRunningLocallyWithModel(String model);
+
+  /// No description provided for @chatLocalitySemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat location: {detail}'**
+  String chatLocalitySemanticLabel(String detail);
+
+  /// No description provided for @chatNewConversationAction.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get chatNewConversationAction;
+
+  /// No description provided for @chatConversationsLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your conversations'**
+  String get chatConversationsLoading;
+
+  /// No description provided for @chatConversationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet. Start a new one.'**
+  String get chatConversationsEmpty;
+
+  /// No description provided for @chatConversationsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not load your conversations.'**
+  String get chatConversationsFailed;
+
+  /// No description provided for @chatConversationLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening conversation'**
+  String get chatConversationLoading;
+
+  /// No description provided for @chatNoConversationSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a conversation or start a new one.'**
+  String get chatNoConversationSelected;
+
+  /// No description provided for @chatMessageCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No messages} =1{1 message} other{{count} messages}}'**
+  String chatMessageCount(int count);
+
+  /// No description provided for @chatRoleUser.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get chatRoleUser;
+
+  /// No description provided for @chatRoleAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get chatRoleAssistant;
+
+  /// No description provided for @chatComposerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get chatComposerLabel;
+
+  /// No description provided for @chatComposerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the local model something'**
+  String get chatComposerHint;
+
+  /// No description provided for @chatSendAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSendAction;
+
+  /// No description provided for @chatStopAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get chatStopAction;
+
+  /// No description provided for @chatRetryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get chatRetryAction;
+
+  /// No description provided for @chatRenameAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename conversation'**
+  String get chatRenameAction;
+
+  /// No description provided for @chatRenameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation name'**
+  String get chatRenameLabel;
+
+  /// No description provided for @chatDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete conversation'**
+  String get chatDeleteAction;
+
+  /// No description provided for @chatDeleteConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the conversation and its messages from GixGiz. It does not remove the local runtime or the model.'**
+  String get chatDeleteConfirmation;
+
+  /// No description provided for @chatCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatCancelAction;
+
+  /// No description provided for @chatConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get chatConfirmAction;
+
+  /// No description provided for @chatReplyStreaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Replying...'**
+  String get chatReplyStreaming;
+
+  /// No description provided for @chatReplyStreamingSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant is replying'**
+  String get chatReplyStreamingSemanticLabel;
+
+  /// No description provided for @chatReplyStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'You stopped this reply, so it is incomplete.'**
+  String get chatReplyStopped;
+
+  /// No description provided for @chatReplyIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'This reply did not finish, so it is incomplete.'**
+  String get chatReplyIncomplete;
+
+  /// No description provided for @chatAttentionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz needs attention before this conversation can continue.'**
+  String get chatAttentionMessage;
+
+  /// No description provided for @chatFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz could not complete that chat action.'**
+  String get chatFailedMessage;
+
   /// No description provided for @setupRecoveryContactSupport.
   ///
   /// In en, this message translates to:

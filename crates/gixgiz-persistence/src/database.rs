@@ -8,7 +8,7 @@ use std::{
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::{
-    AuditEventRepository, DataRoot, JobMetadataRepository, PersistenceError,
+    AuditEventRepository, ChatRepository, DataRoot, JobMetadataRepository, PersistenceError,
     PlatformMetadataRepository, RuntimePolicyRepository, SettingsRepository, SetupJobRepository,
     migrations,
 };
@@ -192,6 +192,12 @@ impl Persistence {
     #[must_use]
     pub fn setup_jobs(&self) -> SetupJobRepository {
         SetupJobRepository::new(self.clone())
+    }
+
+    /// Returns the durable local conversation and message repository.
+    #[must_use]
+    pub fn chat(&self) -> ChatRepository {
+        ChatRepository::new(self.clone())
     }
 
     /// Returns the append-only, redaction-safe audit repository.

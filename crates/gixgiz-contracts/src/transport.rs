@@ -31,6 +31,8 @@ pub enum TransportCapability {
     RuntimeModelInventory,
     /// Plan, approve, observe, cancel, retry, and recover persistent model setup.
     SetupWorkflow,
+    /// Create conversations and stream bounded local assistant generations.
+    LocalChat,
     /// Request bounded sidecar shutdown.
     Shutdown,
     /// A newer peer supplied a capability this build does not recognize.

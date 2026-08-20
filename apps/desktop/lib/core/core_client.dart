@@ -232,6 +232,65 @@ abstract class CoreClient {
     );
   }
 
+  Future<ConversationSnapshot> createConversation({String? title}) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<ListConversationsResponse> listConversations({int limit = 50}) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<ConversationSnapshot> getConversation(ConversationId conversationId) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<ConversationSnapshot> renameConversation(
+    ConversationId conversationId,
+    String title,
+  ) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<DeleteConversationResponse> deleteConversation(
+    ConversationId conversationId,
+  ) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<SendMessageResponse> sendChatMessage(
+    ConversationId conversationId,
+    String content,
+  ) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Stream<ChatGenerationEvent> observeGeneration(
+    GenerationId generationId, {
+    int afterSequence = 0,
+  }) {
+    return Stream.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
+  Future<bool> cancelGeneration(GenerationId generationId) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
   Future<void> shutdown() async {}
 }
 

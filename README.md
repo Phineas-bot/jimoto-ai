@@ -21,7 +21,7 @@ The v0.1 success condition is that a supported non-technical Windows user can mo
 
 ## Status
 
-Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, deterministic local capability planning, consent-aware local runtime inspection, and a durable approved model-setup workflow.
+Flutter Windows desktop shell connected to the supervised Rust platform core through a typed, authenticated, loopback-only boundary, with Rust-owned SQLite persistence, a non-elevated Windows hardware-evidence scan, deterministic local capability planning, consent-aware local runtime inspection, a durable approved model-setup workflow, and a local streaming chat workspace.
 
 ## Repository map
 
@@ -166,13 +166,19 @@ An accepted recommendation can be converted into a concrete, persisted setup pla
 
 Rust and SQLite own every setup transition. The provider acquisition stream is normalized and bounded, cancellation records completed, retained, rolled-back, and uncertain effects, and interrupted jobs recover as explicit attention instead of silently resuming a provider mutation. A model becomes `Available` and setup becomes `Ready` only after runtime health, exact model availability, provider registration, and a fixed bounded readiness inference all succeed. See [`docs/guides/model-setup-workflow.md`](./docs/guides/model-setup-workflow.md).
 
+## Local streaming chat
+
+After a verified setup, the chat workspace creates local conversations, streams assistant replies incrementally, and stops generation on request. Rust and SQLite own every conversation and message; Flutter renders persisted state and never calls a provider, opens the database, or infers completion.
+
+Replies reach `Ready` only from persisted core state. Stopping a reply produces a distinct cancelled state whose retained text is presented as incomplete, and a reply interrupted by an earlier exit can never recover as completed. Conversation deletion removes GixGiz-owned records only; it never removes the runtime, the model, provider-owned files, or other conversations. Messages stay on the device, and default logs exclude prompts, replies, and context. See [`docs/guides/local-chat.md`](./docs/guides/local-chat.md).
+
 ## SQLite persistence
 
 The Windows data root is `%LOCALAPPDATA%\GixGiz`; the database is stored at `data\gixgiz.db` beneath that root. The Rust core is the sole database owner. Flutter, transport clients, providers, Packs, and integrations never open or query SQLite directly.
 
 Database startup enables foreign keys, WAL, and a five-second busy timeout before applying ordered transactional migrations. `PRAGMA user_version` and the immutable `schema_migrations` ledger track compatibility. Newer schemas fail closed without downgrade. Irreversible migrations require a verified online backup under `backups\` before execution.
 
-The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, categorical audit events, provider-neutral runtime ownership/consent policy, setup approvals/events/effects, and canonical/provider model metadata. It does not store detection evidence, executable or model-storage paths, provider payloads, secrets, transport tokens, prompts, generated output, conversations, logs, model binaries, partial downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
+The foundation stores bounded text metadata for application state, non-secret settings, durable-job state, categorical audit events, provider-neutral runtime ownership/consent policy, setup approvals/events/effects, canonical/provider model metadata, and local conversations and messages. It does not store detection evidence, executable or model-storage paths, provider payloads, secrets, transport tokens, prompts, generated output, conversations, logs, model binaries, partial downloads, installer files, or large blobs. Development and migration policy are documented in [`docs/guides/sqlite-persistence.md`](./docs/guides/sqlite-persistence.md).
 
 ## Initial development workflow
 

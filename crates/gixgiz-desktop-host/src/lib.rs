@@ -38,13 +38,20 @@ pub async fn run_sidecar() -> Result<(), HostError> {
     let context = OperationContext::generated();
     let runtime_provider =
         std::sync::Arc::new(OllamaRuntimeProvider::for_current_user().map_err(HostError::Runtime)?);
-    let (mut core, status, runtime_service, setup_service) =
+    let (mut core, status, runtime_service, setup_service, chat_service) =
         tokio::task::spawn_blocking(move || {
             let mut core = PlatformCore::with_default_persistence();
             let runtime_service = core.runtime_service(runtime_provider.clone());
-            let setup_service = core.setup_service(runtime_provider);
+            let setup_service = core.setup_service(runtime_provider.clone());
+            let chat_service = core.chat_service(runtime_provider);
             let status = core.start(&context)?;
-            Ok::<_, gixgiz_core::CoreError>((core, status, runtime_service, setup_service))
+            Ok::<_, gixgiz_core::CoreError>((
+                core,
+                status,
+                runtime_service,
+                setup_service,
+                chat_service,
+            ))
         })
         .await
         .map_err(HostError::CoreWorker)?
@@ -62,6 +69,14 @@ pub async fn run_sidecar() -> Result<(), HostError> {
             .map_err(HostError::Core)?;
     }
 
+    if let Some(service) = chat_service.as_ref() {
+        // A reply interrupted by an earlier exit can never resume as completed.
+        service
+            .recover_interrupted()
+            .await
+            .map_err(HostError::Core)?;
+    }
+
     let serve_result = async {
         let host = SidecarHost::bind(
             bootstrap.token.clone(),
@@ -70,6 +85,7 @@ pub async fn run_sidecar() -> Result<(), HostError> {
             hardware_scanner,
             runtime_service,
             setup_service,
+            chat_service,
         )
         .await?;
         let ready = BootstrapReady::new(

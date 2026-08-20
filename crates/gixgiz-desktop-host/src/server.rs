@@ -13,22 +13,28 @@ use axum::{
     routing::{get, post},
 };
 use gixgiz_contracts::{
-    CancelOperationRequest, CancelOperationResponse, ClientHello, CoreHello, CorrelationId,
-    ErrorCategory, HardwareScanEvent, HardwareScanStartRequest, HardwareScanStartResponse,
-    HealthRequest, HealthResponse, InstanceId, OperationId, PROTOCOL_VERSION, PlatformStatus,
-    RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance, RequestId,
-    RuntimeConsentRequest, RuntimeConsentResponse, RuntimeModelInventoryRequest,
-    RuntimeModelInventoryResponse, RuntimeOperationEvent, RuntimeOperationStartRequest,
-    RuntimeOperationStartResponse, RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload,
-    SetupApprovalRequest, SetupApprovalResponse, SetupJobCancelRequest, SetupJobCancelResponse,
-    SetupJobEvent, SetupJobEventsRequest, SetupJobId, SetupJobRecoveryRequest,
-    SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse, SetupJobStartRequest,
-    SetupJobStartResponse, SetupJobState, SetupJobStatusRequest, SetupJobStatusResponse,
-    SetupPlanRequest, SetupPlanResponse, ShutdownRequest, ShutdownResponse,
+    CancelGenerationRequest, CancelGenerationResponse, CancelOperationRequest,
+    CancelOperationResponse, ChatGenerationEvent, ClientHello, ConversationId, CoreHello,
+    CorrelationId, CreateConversationRequest, CreateConversationResponse,
+    DeleteConversationRequest, DeleteConversationResponse, ErrorCategory, GenerationId,
+    GetConversationRequest, GetConversationResponse, HardwareScanEvent, HardwareScanStartRequest,
+    HardwareScanStartResponse, HealthRequest, HealthResponse, InstanceId, ListConversationsRequest,
+    ListConversationsResponse, OperationId, PROTOCOL_VERSION, PlatformStatus,
+    RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance,
+    RenameConversationRequest, RenameConversationResponse, RequestId, RuntimeConsentRequest,
+    RuntimeConsentResponse, RuntimeModelInventoryRequest, RuntimeModelInventoryResponse,
+    RuntimeOperationEvent, RuntimeOperationStartRequest, RuntimeOperationStartResponse,
+    RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload, SendMessageRequest,
+    SendMessageResponse, SetupApprovalRequest, SetupApprovalResponse, SetupJobCancelRequest,
+    SetupJobCancelResponse, SetupJobEvent, SetupJobEventsRequest, SetupJobId,
+    SetupJobRecoveryRequest, SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse,
+    SetupJobStartRequest, SetupJobStartResponse, SetupJobState, SetupJobStatusRequest,
+    SetupJobStatusResponse, SetupPlanRequest, SetupPlanResponse, ShutdownRequest, ShutdownResponse,
     TestOperationStartRequest, TestOperationStartResponse, TransportCapability,
 };
 use gixgiz_core::{
-    CapabilityEngine, CoreError, HardwareScanner, OperationContext, RuntimeService, SetupService,
+    CapabilityEngine, ChatService, CoreError, HardwareScanner, OperationContext, RuntimeService,
+    SetupService,
 };
 use gixgiz_runtime::{RuntimeError, RuntimeOperationContext};
 use serde::Deserialize;
@@ -65,6 +71,7 @@ struct AppState {
     capability_engine: CapabilityEngine,
     runtime: RuntimeService,
     setup: Option<SetupService>,
+    chat: Option<ChatService>,
     runtime_operations: RuntimeOperationRegistry,
     request_slots: Arc<Semaphore>,
     event_stream_slots: Arc<Semaphore>,
@@ -106,6 +113,7 @@ impl SidecarHost {
         hardware_scanner: HardwareScanner,
         runtime: RuntimeService,
         setup: Option<SetupService>,
+        chat: Option<ChatService>,
     ) -> Result<Self, HostError> {
         let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
@@ -125,6 +133,7 @@ impl SidecarHost {
             token,
             instance_id,
             status,
+            chat,
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(hardware_scanner),
@@ -236,6 +245,35 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/internal/v1/setup/jobs/{job_id}/retry",
             post(retry_setup_job),
+        )
+        .route("/internal/v1/chat/conversations", post(create_conversation))
+        .route(
+            "/internal/v1/chat/conversations/list",
+            post(list_conversations),
+        )
+        .route(
+            "/internal/v1/chat/conversations/{conversation_id}",
+            post(get_conversation),
+        )
+        .route(
+            "/internal/v1/chat/conversations/{conversation_id}/rename",
+            post(rename_conversation),
+        )
+        .route(
+            "/internal/v1/chat/conversations/{conversation_id}/delete",
+            post(delete_conversation),
+        )
+        .route(
+            "/internal/v1/chat/conversations/{conversation_id}/messages",
+            post(send_chat_message),
+        )
+        .route(
+            "/internal/v1/chat/generations/{generation_id}/events",
+            get(chat_generation_events),
+        )
+        .route(
+            "/internal/v1/chat/generations/{generation_id}/cancel",
+            post(cancel_chat_generation),
         )
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
@@ -379,7 +417,7 @@ async fn handshake(
     Ok(Json(CoreHello {
         application: state.status.application.clone(),
         selected_protocol,
-        supported_capabilities: supported_capabilities(state.setup.is_some()),
+        supported_capabilities: supported_capabilities(state.setup.is_some(), state.chat.is_some()),
         runtime_provider_id: Some(state.runtime.provider_id()),
         readiness: state.status.readiness.clone(),
         instance_id: state.instance_id,
@@ -1074,7 +1112,7 @@ fn negotiate_protocol(client_min: u32, client_max: u32) -> Option<u32> {
     }
 }
 
-fn supported_capabilities(setup_available: bool) -> Vec<TransportCapability> {
+fn supported_capabilities(setup_available: bool, chat_available: bool) -> Vec<TransportCapability> {
     let mut capabilities = vec![
         TransportCapability::Health,
         TransportCapability::TestOperationEvents,
@@ -1089,6 +1127,9 @@ fn supported_capabilities(setup_available: bool) -> Vec<TransportCapability> {
     ];
     if setup_available {
         capabilities.push(TransportCapability::SetupWorkflow);
+    }
+    if chat_available {
+        capabilities.push(TransportCapability::LocalChat);
     }
     capabilities
 }
@@ -1428,6 +1469,279 @@ impl IntoResponse for ApiFailure {
     }
 }
 
+const CHAT_EVENT_CHANNEL_CAPACITY: usize = 32;
+
+#[derive(Debug, Deserialize)]
+struct ChatEventsQuery {
+    #[serde(default)]
+    after_sequence: u64,
+}
+
+fn chat_service(state: &AppState, ids: BoundaryIds) -> Result<&ChatService, ApiFailure> {
+    state.chat.as_ref().ok_or_else(|| {
+        ApiFailure::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCategory::Unavailable,
+            "chat.service_unavailable",
+            "Local chat is unavailable.",
+            RecoveryAction::Restart,
+            "Restart GixGiz, then open the chat workspace again.",
+            ids,
+        )
+    })
+}
+
+fn chat_failure(error: CoreError, ids: BoundaryIds) -> ApiFailure {
+    let context = OperationContext::new(ids.correlation_id, ids.request_id);
+    let payload = error.to_safe_payload(&context);
+    let status = match payload.category {
+        ErrorCategory::InvalidInput => StatusCode::BAD_REQUEST,
+        ErrorCategory::PermissionDenied => StatusCode::FORBIDDEN,
+        ErrorCategory::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        ErrorCategory::Conflict | ErrorCategory::IncompatibleVersion | ErrorCategory::Cancelled => {
+            StatusCode::CONFLICT
+        }
+        ErrorCategory::ResourceExhausted => StatusCode::TOO_MANY_REQUESTS,
+        ErrorCategory::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiFailure {
+        status,
+        payload: Box::new(payload),
+    }
+}
+
+fn parse_conversation_path(value: &str, ids: BoundaryIds) -> Result<ConversationId, ApiFailure> {
+    ConversationId::from_str(value).map_err(|_| {
+        ApiFailure::new(
+            StatusCode::BAD_REQUEST,
+            ErrorCategory::InvalidInput,
+            "chat.invalid_conversation_id",
+            "The conversation identifier was invalid.",
+            RecoveryAction::NoAction,
+            "Reload the conversation list, then try again.",
+            ids,
+        )
+    })
+}
+
+fn parse_generation_path(value: &str, ids: BoundaryIds) -> Result<GenerationId, ApiFailure> {
+    GenerationId::from_str(value).map_err(|_| {
+        ApiFailure::new(
+            StatusCode::BAD_REQUEST,
+            ErrorCategory::InvalidInput,
+            "chat.invalid_generation_id",
+            "The reply identifier was invalid.",
+            RecoveryAction::NoAction,
+            "Reload the conversation, then try again.",
+            ids,
+        )
+    })
+}
+
+fn chat_identifier_mismatch(ids: BoundaryIds) -> ApiFailure {
+    ApiFailure::new(
+        StatusCode::BAD_REQUEST,
+        ErrorCategory::InvalidInput,
+        "chat.identifier_mismatch",
+        "The request path and body referred to different records.",
+        RecoveryAction::Retry,
+        "Retry with matching identifiers.",
+        ids,
+    )
+}
+
+fn invalid_chat_events_query(ids: BoundaryIds) -> ApiFailure {
+    ApiFailure::new(
+        StatusCode::BAD_REQUEST,
+        ErrorCategory::InvalidInput,
+        "chat.invalid_events_query",
+        "The reply stream cursor was invalid.",
+        RecoveryAction::Retry,
+        "Reload the conversation, then observe the reply again.",
+        ids,
+    )
+}
+
+async fn create_conversation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<CreateConversationRequest>, JsonRejection>,
+) -> Result<Json<CreateConversationResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    chat_service(&state, ids)?
+        .create_conversation(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn list_conversations(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<ListConversationsRequest>, JsonRejection>,
+) -> Result<Json<ListConversationsResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    chat_service(&state, ids)?
+        .list_conversations(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn get_conversation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(conversation_id): Path<String>,
+    payload: Result<Json<GetConversationRequest>, JsonRejection>,
+) -> Result<Json<GetConversationResponse>, ApiFailure> {
+    let conversation_id = parse_conversation_path(&conversation_id, ids)?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    if request.conversation_id != conversation_id {
+        return Err(chat_identifier_mismatch(ids));
+    }
+    chat_service(&state, ids)?
+        .get_conversation(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn rename_conversation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(conversation_id): Path<String>,
+    payload: Result<Json<RenameConversationRequest>, JsonRejection>,
+) -> Result<Json<RenameConversationResponse>, ApiFailure> {
+    let conversation_id = parse_conversation_path(&conversation_id, ids)?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    if request.conversation_id != conversation_id {
+        return Err(chat_identifier_mismatch(ids));
+    }
+    chat_service(&state, ids)?
+        .rename_conversation(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn delete_conversation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(conversation_id): Path<String>,
+    payload: Result<Json<DeleteConversationRequest>, JsonRejection>,
+) -> Result<Json<DeleteConversationResponse>, ApiFailure> {
+    let conversation_id = parse_conversation_path(&conversation_id, ids)?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    if request.conversation_id != conversation_id {
+        return Err(chat_identifier_mismatch(ids));
+    }
+    chat_service(&state, ids)?
+        .delete_conversation(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn send_chat_message(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(conversation_id): Path<String>,
+    payload: Result<Json<SendMessageRequest>, JsonRejection>,
+) -> Result<Json<SendMessageResponse>, ApiFailure> {
+    let conversation_id = parse_conversation_path(&conversation_id, ids)?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    if request.conversation_id != conversation_id {
+        return Err(chat_identifier_mismatch(ids));
+    }
+    // Returns once the generation is admitted; output arrives on the event stream.
+    chat_service(&state, ids)?
+        .send_message(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn cancel_chat_generation(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(generation_id): Path<String>,
+    payload: Result<Json<CancelGenerationRequest>, JsonRejection>,
+) -> Result<Json<CancelGenerationResponse>, ApiFailure> {
+    let generation_id = parse_generation_path(&generation_id, ids)?;
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    if request.generation_id != generation_id {
+        return Err(chat_identifier_mismatch(ids));
+    }
+    chat_service(&state, ids)?
+        .cancel_generation(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
+async fn chat_generation_events(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    Path(generation_id): Path<String>,
+    query: Result<Query<ChatEventsQuery>, QueryRejection>,
+) -> Result<Response, ApiFailure> {
+    let generation_id = parse_generation_path(&generation_id, ids)?;
+    let query = query.map_err(|_| invalid_chat_events_query(ids))?.0;
+    if query.after_sequence > i64::MAX as u64 {
+        return Err(invalid_chat_events_query(ids));
+    }
+    let stream_permit = acquire_event_stream(&state, ids)?;
+    let subscription = chat_service(&state, ids)?
+        .observe(generation_id, query.after_sequence)
+        .map_err(|error| chat_failure(error, ids))?;
+    let (sender, receiver) = mpsc::channel(CHAT_EVENT_CHANNEL_CAPACITY);
+
+    tokio::spawn(async move {
+        let _stream_permit = stream_permit;
+        let mut live = subscription.receiver;
+        for event in subscription.replay {
+            let terminal = event.terminal_state.is_some();
+            if send_chat_event(&sender, event).await.is_err() || terminal {
+                return;
+            }
+        }
+        if subscription.terminal {
+            return;
+        }
+        while let Ok(event) = live.recv().await {
+            let terminal = event.terminal_state.is_some();
+            if send_chat_event(&sender, event).await.is_err() || terminal {
+                return;
+            }
+        }
+    });
+
+    Ok(Sse::new(ReceiverStream::new(receiver)).into_response())
+}
+
+async fn send_chat_event(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    event: ChatGenerationEvent,
+) -> Result<(), ()> {
+    let sequence = event.sequence.to_string();
+    let data = serde_json::to_string(&event).map_err(|_| ())?;
+    sender
+        .send(Ok(Event::default()
+            .event("chat_generation")
+            .id(sequence)
+            .data(data)))
+        .await
+        .map_err(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1457,12 +1771,13 @@ mod tests {
         CollectedHardwareEvidence, CoreError, HardwareProvider, OperationContext, PlatformCore,
     };
     use gixgiz_runtime::{
-        ModelProgressSender, RuntimeCancellationSemantics, RuntimeDetector, RuntimeError,
-        RuntimeFuture, RuntimeLifecycle, RuntimeModelAcquisitionPlan,
-        RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus, RuntimeModelInspection,
-        RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
-        RuntimeOperationContext, RuntimeProvider, RuntimeReadinessInferenceResult,
-        RuntimeStorageAvailability, RuntimeStoragePreflight, testing::FakeRuntimeProvider,
+        ChatDeltaSender, ModelProgressSender, RuntimeCancellationSemantics, RuntimeChatProvider,
+        RuntimeChatRequest, RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeGenerationResult,
+        RuntimeLifecycle, RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult,
+        RuntimeModelAcquisitionStatus, RuntimeModelInspection, RuntimeModelInventoryProvider,
+        RuntimeModelSetupProvider, RuntimeObservation, RuntimeOperationContext, RuntimeProvider,
+        RuntimeReadinessInferenceResult, RuntimeStorageAvailability, RuntimeStoragePreflight,
+        testing::FakeRuntimeProvider,
     };
     use http_body_util::BodyExt;
     use serde_json::Value;
@@ -1706,6 +2021,21 @@ mod tests {
         }
     }
 
+    impl RuntimeChatProvider for SetupRuntimeProvider {
+        fn generate(
+            &self,
+            _request: RuntimeChatRequest,
+            _deltas: ChatDeltaSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+            // This double covers setup behavior only; chat is exercised elsewhere.
+            Box::pin(async move {
+                context.check()?;
+                Err(RuntimeError::Unsupported)
+            })
+        }
+    }
+
     impl RuntimeProvider for SetupRuntimeProvider {
         fn provider_id(&self) -> &RuntimeProviderId {
             &self.provider_id
@@ -1832,6 +2162,21 @@ mod tests {
         }
     }
 
+    impl RuntimeChatProvider for CancellableRuntimeProvider {
+        fn generate(
+            &self,
+            _request: RuntimeChatRequest,
+            _deltas: ChatDeltaSender,
+            context: RuntimeOperationContext,
+        ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+            // This double covers setup behavior only; chat is exercised elsewhere.
+            Box::pin(async move {
+                context.check()?;
+                Err(RuntimeError::Unsupported)
+            })
+        }
+    }
+
     impl RuntimeProvider for CancellableRuntimeProvider {
         fn provider_id(&self) -> &RuntimeProviderId {
             &self.provider_id
@@ -1895,6 +2240,7 @@ mod tests {
             token: BearerToken::parse(TOKEN.to_owned()).expect("fixed token is valid"),
             instance_id: InstanceId::new(),
             status,
+            chat: None,
             handshaken: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             operations: OperationRegistry::default(),
             hardware_scans: HardwareScanRegistry::new(test_hardware_scanner()),
@@ -2124,6 +2470,443 @@ mod tests {
         })
         .await
         .expect("setup reaches expected durable state")
+    }
+
+    /// Builds a host with a real chat service over an isolated database.
+    ///
+    /// The temporary directory must outlive the state, so it is returned too.
+    fn chat_state() -> (tempfile::TempDir, AppState) {
+        let temporary = tempfile::tempdir().expect("temporary directory is available");
+        let context = OperationContext::generated();
+        let mut core = PlatformCore::with_persistence_root(temporary.path().join("data-root"));
+        let provider: Arc<dyn RuntimeProvider> = Arc::new(FakeRuntimeProvider::new(
+            RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            Ok(chat_observation()),
+            Ok(chat_observation()),
+            Ok(RuntimeModelInventory {
+                schema_version: gixgiz_contracts::RUNTIME_REPORT_SCHEMA_VERSION,
+                provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+                models: Vec::new(),
+                truncated: false,
+                collected_at_unix_ms: 1,
+            }),
+        ));
+        let chat = core.chat_service(provider);
+        let status = core.start(&context).expect("core starts with persistence");
+        let mut state = state_with_status(status);
+        state.chat = chat;
+        (temporary, state)
+    }
+
+    fn chat_observation() -> RuntimeObservation {
+        RuntimeObservation {
+            provider_id: RuntimeProviderId::new("gixgiz.runtime.test.v1"),
+            display_name: RuntimeDisplayName::new("Test runtime"),
+            state: RuntimeState::Ready,
+            endpoint_safety: RuntimeEndpointSafety::LoopbackVerified,
+            version: None,
+            capabilities: Vec::new(),
+            reasons: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    fn conversation_path(conversation_id: ConversationId, action: &str) -> String {
+        if action.is_empty() {
+            format!("/internal/v1/chat/conversations/{conversation_id}")
+        } else {
+            format!("/internal/v1/chat/conversations/{conversation_id}/{action}")
+        }
+    }
+
+    async fn create_conversation_via_router(
+        router: &Router,
+    ) -> gixgiz_contracts::ConversationSnapshot {
+        let request = CreateConversationRequest {
+            title: None,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/chat/conversations",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("router responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        response_json::<CreateConversationResponse>(response)
+            .await
+            .conversation
+    }
+
+    #[tokio::test]
+    async fn local_chat_capability_is_advertised_only_when_the_service_exists() {
+        let (_temporary, state) = chat_state();
+        let with_chat = build_router(state);
+        let without_chat = build_router(test_state());
+
+        let enabled: CoreHello = response_json(
+            with_chat
+                .oneshot(json_request(
+                    "/internal/v1/handshake",
+                    Some(TOKEN),
+                    &hello(1, 1),
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+        let disabled: CoreHello = response_json(
+            without_chat
+                .oneshot(json_request(
+                    "/internal/v1/handshake",
+                    Some(TOKEN),
+                    &hello(1, 1),
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        assert!(
+            enabled
+                .supported_capabilities
+                .contains(&TransportCapability::LocalChat)
+        );
+        assert!(
+            !disabled
+                .supported_capabilities
+                .contains(&TransportCapability::LocalChat)
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_conversation_crud_round_trips_through_the_boundary() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        complete_handshake(&router).await;
+
+        let created = create_conversation_via_router(&router).await;
+        let conversation_id = created.conversation_id;
+
+        let list_request = ListConversationsRequest {
+            limit: 50,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let listed: ListConversationsResponse = response_json(
+            router
+                .clone()
+                .oneshot(json_request(
+                    "/internal/v1/chat/conversations/list",
+                    Some(TOKEN),
+                    &list_request,
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        let rename_request = RenameConversationRequest {
+            conversation_id,
+            title: "Renamed thread".to_owned(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let renamed: RenameConversationResponse = response_json(
+            router
+                .clone()
+                .oneshot(json_request(
+                    &conversation_path(conversation_id, "rename"),
+                    Some(TOKEN),
+                    &rename_request,
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        let get_request = GetConversationRequest {
+            conversation_id,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let fetched: GetConversationResponse = response_json(
+            router
+                .clone()
+                .oneshot(json_request(
+                    &conversation_path(conversation_id, ""),
+                    Some(TOKEN),
+                    &get_request,
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        let delete_request = DeleteConversationRequest {
+            conversation_id,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let deleted: DeleteConversationResponse = response_json(
+            router
+                .clone()
+                .oneshot(json_request(
+                    &conversation_path(conversation_id, "delete"),
+                    Some(TOKEN),
+                    &delete_request,
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        let missing = router
+            .oneshot(json_request(
+                &conversation_path(conversation_id, ""),
+                Some(TOKEN),
+                &get_request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(listed.conversations.len(), 1);
+        assert!(!listed.truncated);
+        assert_eq!(renamed.conversation.title, "Renamed thread");
+        assert_eq!(fetched.conversation.title, "Renamed thread");
+        assert!(deleted.deleted);
+        assert_eq!(missing.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn chat_routes_reject_unauthenticated_and_unhandshaken_callers() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        let request = ListConversationsRequest {
+            limit: 50,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+
+        let unauthenticated = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/chat/conversations/list",
+                None,
+                &request,
+            ))
+            .await
+            .expect("router responds");
+        let unhandshaken = router
+            .oneshot(json_request(
+                "/internal/v1/chat/conversations/list",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            error_payload(unauthenticated).await.code,
+            "transport.authentication_required"
+        );
+        assert_eq!(unhandshaken.status(), StatusCode::PRECONDITION_REQUIRED);
+        assert_eq!(
+            error_payload(unhandshaken).await.code,
+            "transport.handshake_required"
+        );
+    }
+
+    #[tokio::test]
+    async fn chat_path_and_body_identifiers_must_match() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        complete_handshake(&router).await;
+        let created = create_conversation_via_router(&router).await;
+
+        let mismatched = GetConversationRequest {
+            conversation_id: ConversationId::new(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .oneshot(json_request(
+                &conversation_path(created.conversation_id, ""),
+                Some(TOKEN),
+                &mismatched,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_payload(response).await.code,
+            "chat.identifier_mismatch"
+        );
+    }
+
+    #[tokio::test]
+    async fn chat_rejects_an_invalid_body_and_an_invalid_conversation_path() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        complete_handshake(&router).await;
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+
+        let invalid_body = Request::builder()
+            .method(Method::POST)
+            .uri("/internal/v1/chat/conversations")
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::from("not-json"))
+            .expect("request builds");
+        let body_response = router
+            .clone()
+            .oneshot(invalid_body)
+            .await
+            .expect("router responds");
+
+        let path_request = GetConversationRequest {
+            conversation_id: ConversationId::new(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let path_response = router
+            .oneshot(json_request(
+                "/internal/v1/chat/conversations/not-a-uuid",
+                Some(TOKEN),
+                &path_request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(body_response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_payload(body_response).await.code,
+            "transport.invalid_json_body"
+        );
+        assert_eq!(path_response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_payload(path_response).await.code,
+            "chat.invalid_conversation_id"
+        );
+    }
+
+    #[tokio::test]
+    async fn chat_routes_fail_safely_without_a_durable_service() {
+        let router = build_router(test_state());
+        complete_handshake(&router).await;
+        let request = ListConversationsRequest {
+            limit: 50,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+
+        let response = router
+            .oneshot(json_request(
+                "/internal/v1/chat/conversations/list",
+                Some(TOKEN),
+                &request,
+            ))
+            .await
+            .expect("router responds");
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            error_payload(response).await.code,
+            "chat.service_unavailable"
+        );
+    }
+
+    #[tokio::test]
+    async fn sending_without_recorded_reuse_consent_maps_to_a_safe_actionable_payload() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        complete_handshake(&router).await;
+        let created = create_conversation_via_router(&router).await;
+
+        let send = SendMessageRequest {
+            conversation_id: created.conversation_id,
+            content: "hello".to_owned(),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let response = router
+            .oneshot(json_request(
+                &conversation_path(created.conversation_id, "messages"),
+                Some(TOKEN),
+                &send,
+            ))
+            .await
+            .expect("router responds");
+
+        // Chat inherits the runtime reuse-consent gate; it fires before any
+        // model lookup, so the boundary reports permission rather than absence.
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let payload = error_payload(response).await;
+        assert_eq!(payload.category, ErrorCategory::PermissionDenied);
+        assert_eq!(payload.code, "chat.runtime_consent_required");
+        assert_eq!(payload.correlation_id, send.correlation_id);
+        // The provider is never named in a user-facing chat failure.
+        assert!(!payload.message.to_ascii_lowercase().contains("ollama"));
+    }
+
+    #[tokio::test]
+    async fn unknown_generations_fail_closed_for_observation_and_cancellation() {
+        let (_temporary, state) = chat_state();
+        let router = build_router(state);
+        complete_handshake(&router).await;
+        let generation_id = GenerationId::new();
+
+        let cancel = CancelGenerationRequest {
+            generation_id,
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let cancelled: CancelGenerationResponse = response_json(
+            router
+                .clone()
+                .oneshot(json_request(
+                    &format!("/internal/v1/chat/generations/{generation_id}/cancel"),
+                    Some(TOKEN),
+                    &cancel,
+                ))
+                .await
+                .expect("router responds"),
+        )
+        .await;
+
+        let ids = BoundaryIds {
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let events = Request::builder()
+            .method(Method::GET)
+            .uri(format!(
+                "/internal/v1/chat/generations/{generation_id}/events?after_sequence=0"
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(CORRELATION_HEADER, ids.correlation_id.to_string())
+            .header(REQUEST_HEADER, ids.request_id.to_string())
+            .body(Body::empty())
+            .expect("request builds");
+        let events_response = router.oneshot(events).await.expect("router responds");
+
+        assert!(!cancelled.accepted);
+        assert_eq!(events_response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            error_payload(events_response).await.code,
+            "chat.generation_not_found"
+        );
     }
 
     #[tokio::test]
@@ -2784,6 +3567,7 @@ mod tests {
             test_hardware_scanner(),
             test_runtime_service(),
             None,
+            None,
         )
         .await
         .expect("loopback listener binds");
@@ -3369,6 +4153,7 @@ mod tests {
             state.status,
             test_hardware_scanner(),
             test_runtime_service(),
+            None,
             None,
         )
         .await

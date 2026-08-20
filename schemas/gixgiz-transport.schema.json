@@ -192,6 +192,57 @@
       ],
       "type": "object"
     },
+    "CancelGenerationRequest": {
+      "description": "Authenticated request cancelling one active generation.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "generation_id": {
+          "$ref": "#/$defs/GenerationId",
+          "description": "Generation being cancelled."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "generation_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "CancelGenerationResponse": {
+      "description": "Outcome of one cooperative cancellation request.",
+      "properties": {
+        "accepted": {
+          "description": "Whether cancellation intent was recorded for an active generation.",
+          "type": "boolean"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "generation_id": {
+          "$ref": "#/$defs/GenerationId",
+          "description": "Generation targeted by the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "generation_id",
+        "accepted",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
     "CancelOperationRequest": {
       "description": "Authenticated explicit cancellation request.",
       "properties": {
@@ -469,6 +520,643 @@
       "description": "Version of the deterministic local planning catalogue.",
       "type": "string"
     },
+    "ChatFailureCode": {
+      "description": "Stable machine-readable reason a chat operation could not proceed.",
+      "oneOf": [
+        {
+          "const": "runtime_unavailable",
+          "description": "The local runtime is not reachable or not ready.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_incompatible",
+          "description": "The verified runtime version or capability set no longer satisfies policy.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_consent_required",
+          "description": "Recorded reuse consent does not currently permit provider access.",
+          "type": "string"
+        },
+        {
+          "const": "model_unavailable",
+          "description": "The conversation's model is no longer available from the provider.",
+          "type": "string"
+        },
+        {
+          "const": "model_changed",
+          "description": "The provider mapping for the conversation's model changed since setup.",
+          "type": "string"
+        },
+        {
+          "const": "generation_timed_out",
+          "description": "The generation exceeded an inactivity or total-duration bound.",
+          "type": "string"
+        },
+        {
+          "const": "provider_disconnected",
+          "description": "The provider stream ended before a valid terminal completion.",
+          "type": "string"
+        },
+        {
+          "const": "malformed_provider_stream",
+          "description": "The provider produced an event that failed bounded validation.",
+          "type": "string"
+        },
+        {
+          "const": "message_too_large",
+          "description": "The submitted user message exceeded the accepted size bound.",
+          "type": "string"
+        },
+        {
+          "const": "context_too_large",
+          "description": "The assembled context exceeded the accepted size bound.",
+          "type": "string"
+        },
+        {
+          "const": "conversation_not_found",
+          "description": "The requested conversation does not exist.",
+          "type": "string"
+        },
+        {
+          "const": "generation_not_found",
+          "description": "The requested generation does not exist.",
+          "type": "string"
+        },
+        {
+          "const": "generation_already_active",
+          "description": "Another generation is already active for this conversation.",
+          "type": "string"
+        },
+        {
+          "const": "persistence_unavailable",
+          "description": "Durable conversation storage is unavailable.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "The operation stopped because cancellation was requested.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized failure code.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatGenerationEvent": {
+      "description": "Ordered transport event describing one bounded generation attempt.",
+      "properties": {
+        "assistant_message_id": {
+          "$ref": "#/$defs/MessageId",
+          "description": "Assistant message receiving the generated content."
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation owning the generation."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by the whole generation and its safe failures."
+        },
+        "delta": {
+          "description": "Bounded assistant text increment carried by a delta event.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SafeErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe boundary error present only on a failing terminal event."
+        },
+        "generation_id": {
+          "$ref": "#/$defs/GenerationId",
+          "description": "Generation attempt this event belongs to."
+        },
+        "kind": {
+          "$ref": "#/$defs/ChatGenerationEventKind",
+          "description": "Event classification."
+        },
+        "occurred_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds assigned by Rust.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "description": "Strictly increasing sequence starting at one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "terminal_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatGenerationTerminalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal outcome present only on a terminal event."
+        }
+      },
+      "required": [
+        "schema_version",
+        "generation_id",
+        "conversation_id",
+        "assistant_message_id",
+        "correlation_id",
+        "sequence",
+        "kind",
+        "occurred_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "ChatGenerationEventKind": {
+      "description": "Ordered event emitted while one assistant generation runs.",
+      "oneOf": [
+        {
+          "const": "started",
+          "description": "The generation was admitted and the provider request began.",
+          "type": "string"
+        },
+        {
+          "const": "delta",
+          "description": "A bounded increment of assistant text is available.",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "description": "The provider produced a valid terminal completion.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Cooperative cancellation stopped the generation.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The generation failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "description": "An inactivity or total-duration bound was exceeded.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized event kind.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatGenerationEventsRequest": {
+      "description": "Authenticated request for a bounded ordered generation-event page.",
+      "properties": {
+        "after_sequence": {
+          "description": "Exclusive lower bound; the response starts strictly after this sequence.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "generation_id": {
+          "$ref": "#/$defs/GenerationId",
+          "description": "Generation being observed."
+        },
+        "limit": {
+          "description": "Maximum events to return, bounded by [`MAX_GENERATION_EVENT_PAGE`].",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "generation_id",
+        "after_sequence",
+        "limit",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "ChatGenerationEventsResponse": {
+      "description": "Bounded ordered generation-event page.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "events": {
+          "description": "Ordered events strictly after the requested cursor.",
+          "items": {
+            "$ref": "#/$defs/ChatGenerationEvent"
+          },
+          "type": "array"
+        },
+        "replay_incomplete": {
+          "description": "Whether bounded retention discarded events before the returned page.\n\nClients that observe this must reload the authoritative conversation\nsnapshot rather than reconstructing state from events alone.",
+          "type": "boolean"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "events",
+        "replay_incomplete",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "ChatGenerationTerminalState": {
+      "description": "Terminal outcome of one bounded generation attempt.",
+      "oneOf": [
+        {
+          "const": "completed",
+          "description": "The provider produced a valid terminal completion.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Cooperative cancellation stopped the generation.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "The generation failed safely.",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "description": "An inactivity or total-duration bound was exceeded.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized terminal state.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatLocalityStatus": {
+      "description": "Where the active conversation is executed.",
+      "oneOf": [
+        {
+          "const": "running_locally",
+          "description": "Generation runs against a verified loopback runtime on this device.\n\nThis asserts local execution only. It does not assert that the device is\ndisconnected from every network.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "Locality could not be established from current evidence.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatMessage": {
+      "description": "One persisted conversation message.",
+      "properties": {
+        "completed_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when a terminal state was committed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "content": {
+          "description": "Bounded message text.\n\nFor an assistant message that is generating, cancelled, or failed this\nholds the accumulated partial output and must be presented as incomplete.",
+          "type": "string"
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Owning conversation."
+        },
+        "created_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the message was created.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GenerationId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Generation attempt that produced an assistant message."
+        },
+        "message_id": {
+          "$ref": "#/$defs/MessageId",
+          "description": "Durable message identifier."
+        },
+        "role": {
+          "$ref": "#/$defs/ChatRole",
+          "description": "Message author."
+        },
+        "sequence": {
+          "description": "Deterministic order within the conversation, starting at one.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/ChatMessageStatus",
+          "description": "Durable lifecycle state."
+        },
+        "updated_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the message last changed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "message_id",
+        "conversation_id",
+        "role",
+        "status",
+        "sequence",
+        "content",
+        "created_at_unix_ms",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "ChatMessageStatus": {
+      "description": "Durable lifecycle state of one conversation message.",
+      "oneOf": [
+        {
+          "const": "pending",
+          "description": "The message is persisted and no generation has started.",
+          "type": "string"
+        },
+        {
+          "const": "generating",
+          "description": "A bounded assistant generation is currently producing content.",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "description": "The message reached a complete, verified terminal state.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "Explicit cancellation stopped generation; retained content is partial.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "Generation failed safely; retained content is partial or empty.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized status.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatModelIdentity": {
+      "description": "Bounded identity of the model bound to one conversation.",
+      "properties": {
+        "canonical_model_id": {
+          "$ref": "#/$defs/CandidateModelId",
+          "description": "Canonical catalogue identity verified by the setup workflow."
+        },
+        "display_name": {
+          "description": "Bounded display name safe for beginner-facing presentation.",
+          "type": "string"
+        },
+        "family": {
+          "description": "Bounded model family label.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "canonical_model_id",
+        "display_name",
+        "family"
+      ],
+      "type": "object"
+    },
+    "ChatRecoveryAction": {
+      "description": "Recommended next action after a chat failure.",
+      "oneOf": [
+        {
+          "const": "retry_generation",
+          "description": "Send the message again without other changes.",
+          "type": "string"
+        },
+        {
+          "const": "check_runtime",
+          "description": "Review local runtime status before retrying.",
+          "type": "string"
+        },
+        {
+          "const": "run_model_setup",
+          "description": "Run the model setup workflow again before chatting.",
+          "type": "string"
+        },
+        {
+          "const": "shorten_message",
+          "description": "Shorten the message or start a new conversation.",
+          "type": "string"
+        },
+        {
+          "const": "start_new_conversation",
+          "description": "Start a new conversation to continue.",
+          "type": "string"
+        },
+        {
+          "const": "restart_application",
+          "description": "Restart GixGiz to recover a healthy session.",
+          "type": "string"
+        },
+        {
+          "const": "no_action",
+          "description": "No user action changes the outcome.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized recovery action.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatRole": {
+      "description": "Author of one conversation message.\n\nThe v0.1 conversation model contains no system or tool authorship.",
+      "oneOf": [
+        {
+          "const": "user",
+          "description": "Content written by the person using GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "assistant",
+          "description": "Content produced by the selected local model.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized role.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChatRuntimeStatus": {
+      "description": "Bounded runtime and locality status presented beside a conversation.",
+      "properties": {
+        "blocked_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatFailureCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stable failure code explaining why generation is unavailable."
+        },
+        "locality": {
+          "$ref": "#/$defs/ChatLocalityStatus",
+          "description": "Where generation executes."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatModelIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Verified model identity when one is bound and available."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Stable provider identity serving this conversation."
+        },
+        "ready": {
+          "description": "Whether a new generation may currently start.",
+          "type": "boolean"
+        },
+        "recovery_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatRecoveryAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Recommended action when generation is unavailable."
+        },
+        "runtime_display_name": {
+          "$ref": "#/$defs/RuntimeDisplayName",
+          "description": "Bounded provider display name."
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "provider_id",
+        "runtime_display_name",
+        "locality",
+        "ready"
+      ],
+      "type": "object"
+    },
+    "ChatWarning": {
+      "description": "Safe non-blocking chat warning shown alongside conversation state.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ChatWarningCode",
+          "description": "Stable machine-readable warning code."
+        },
+        "message": {
+          "description": "Bounded plain-language explanation safe for display.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "ChatWarningCode": {
+      "description": "Stable machine-readable chat warning.",
+      "oneOf": [
+        {
+          "const": "context_truncated",
+          "description": "Older messages were excluded because the context bound was reached.",
+          "type": "string"
+        },
+        {
+          "const": "partial_assistant_content",
+          "description": "Retained assistant content is incomplete.",
+          "type": "string"
+        },
+        {
+          "const": "interrupted_generation_recovered",
+          "description": "A previously running generation was interrupted before this session started.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized warning code.",
+          "type": "string"
+        }
+      ]
+    },
     "ClientHello": {
       "description": "First authenticated request sent by the Flutter desktop.",
       "properties": {
@@ -564,6 +1252,138 @@
         }
       ]
     },
+    "ConversationId": {
+      "description": "Opaque identifier for one local conversation.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "ConversationSnapshot": {
+      "description": "Authoritative persisted conversation state.",
+      "properties": {
+        "active_generation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GenerationId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Generation currently producing content, when one is active."
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Durable conversation identifier."
+        },
+        "created_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the conversation was created.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "description": "Ordered persisted messages.",
+          "items": {
+            "$ref": "#/$defs/ChatMessage"
+          },
+          "type": "array"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatModelIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Verified model identity bound to the conversation."
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "description": "Bounded conversation title.",
+          "type": "string"
+        },
+        "updated_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the conversation last changed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "description": "Safe warnings describing truncation, partial content, or recovery.",
+          "items": {
+            "$ref": "#/$defs/ChatWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "conversation_id",
+        "title",
+        "messages",
+        "warnings",
+        "created_at_unix_ms",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "ConversationSummary": {
+      "description": "Bounded conversation entry used by the conversation list.",
+      "properties": {
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Durable conversation identifier."
+        },
+        "created_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the conversation was created.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "message_count": {
+          "description": "Number of persisted messages in the conversation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatModelIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Verified model identity bound to the conversation."
+        },
+        "title": {
+          "description": "Bounded conversation title.",
+          "type": "string"
+        },
+        "updated_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds when the conversation last changed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "title",
+        "message_count",
+        "created_at_unix_ms",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    },
     "CoreHello": {
       "description": "Successful protocol and capability negotiation returned by the core.",
       "properties": {
@@ -653,6 +1473,112 @@
         "vendor",
         "physical_core_count",
         "logical_core_count"
+      ],
+      "type": "object"
+    },
+    "CreateConversationRequest": {
+      "description": "Authenticated request creating one empty local conversation.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        },
+        "title": {
+          "description": "Optional bounded initial title; Rust assigns a safe default when absent.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "CreateConversationResponse": {
+      "description": "Authoritative snapshot of the created conversation.",
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/ConversationSnapshot",
+          "description": "Authoritative persisted conversation."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "conversation",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "DeleteConversationRequest": {
+      "description": "Authenticated request deleting one conversation and its owned messages.",
+      "properties": {
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation being deleted."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "conversation_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "DeleteConversationResponse": {
+      "description": "Bounded description of what an explicit conversation deletion removed.",
+      "properties": {
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation that was removed."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "deleted": {
+          "description": "Whether the deletion removed durable records.",
+          "type": "boolean"
+        },
+        "deleted_message_count": {
+          "description": "Number of owned messages removed with the conversation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "conversation_id",
+        "deleted_message_count",
+        "deleted",
+        "correlation_id",
+        "request_id"
       ],
       "type": "object"
     },
@@ -856,6 +1782,57 @@
           "type": "string"
         }
       ]
+    },
+    "GenerationId": {
+      "description": "Opaque identifier for one bounded assistant generation attempt.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "GetConversationRequest": {
+      "description": "Authenticated request for one authoritative conversation snapshot.",
+      "properties": {
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation being read."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "conversation_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "GetConversationResponse": {
+      "description": "Authoritative conversation snapshot.",
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/ConversationSnapshot",
+          "description": "Authoritative persisted conversation."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "conversation",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
     },
     "GpuCollectionEvidence": {
       "description": "Bounded GPU collection and collection-level availability.",
@@ -1152,6 +2129,70 @@
       "format": "uuid",
       "type": "string"
     },
+    "ListConversationsRequest": {
+      "description": "Authenticated request for a bounded conversation page.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "limit": {
+          "description": "Maximum conversations to return, bounded by [`MAX_CONVERSATIONS_PER_PAGE`].",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "limit",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "ListConversationsResponse": {
+      "description": "Bounded conversation page ordered by most recent activity.",
+      "properties": {
+        "conversations": {
+          "description": "Bounded conversation entries, most recently updated first.",
+          "items": {
+            "$ref": "#/$defs/ConversationSummary"
+          },
+          "type": "array"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "truncated": {
+          "description": "Whether more conversations exist beyond the returned page.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "conversations",
+        "truncated",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
     "MachineArchitecture": {
       "description": "Normalized machine architecture.",
       "oneOf": [
@@ -1306,6 +2347,11 @@
         "safety_margin_bytes"
       ],
       "type": "object"
+    },
+    "MessageId": {
+      "description": "Opaque identifier for one persisted conversation message.",
+      "format": "uuid",
+      "type": "string"
     },
     "ModelAcquisitionPhase": {
       "description": "Normalized provider acquisition phase.",
@@ -2278,6 +3324,57 @@
       "required": [
         "action",
         "message"
+      ],
+      "type": "object"
+    },
+    "RenameConversationRequest": {
+      "description": "Authenticated request renaming one conversation.",
+      "properties": {
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation being renamed."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        },
+        "title": {
+          "description": "Bounded replacement title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "title",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RenameConversationResponse": {
+      "description": "Authoritative conversation snapshot after renaming.",
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/ConversationSnapshot",
+          "description": "Authoritative persisted conversation."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "conversation",
+        "correlation_id",
+        "request_id"
       ],
       "type": "object"
     },
@@ -3448,6 +4545,82 @@
         "code",
         "message",
         "recovery",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SendMessageRequest": {
+      "description": "Authenticated request appending one user message and starting generation.",
+      "properties": {
+        "content": {
+          "description": "Bounded user message text.",
+          "type": "string"
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/ConversationId",
+          "description": "Conversation receiving the message."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared by the generation and its events."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "conversation_id",
+        "content",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SendMessageResponse": {
+      "description": "Persisted message pair and the admitted generation attempt.",
+      "properties": {
+        "assistant_message": {
+          "$ref": "#/$defs/ChatMessage",
+          "description": "Assistant message admitted in the generating state."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "generation_id": {
+          "$ref": "#/$defs/GenerationId",
+          "description": "Admitted generation attempt to observe."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        },
+        "schema_version": {
+          "description": "Chat schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "user_message": {
+          "$ref": "#/$defs/ChatMessage",
+          "description": "Persisted user message."
+        },
+        "warnings": {
+          "description": "Safe warnings raised while assembling bounded context.",
+          "items": {
+            "$ref": "#/$defs/ChatWarning"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "user_message",
+        "assistant_message",
+        "generation_id",
+        "warnings",
         "correlation_id",
         "request_id"
       ],
@@ -5465,6 +6638,11 @@
           "type": "string"
         },
         {
+          "const": "local_chat",
+          "description": "Create conversations and stream bounded local assistant generations.",
+          "type": "string"
+        },
+        {
           "const": "shutdown",
           "description": "Request bounded sidecar shutdown.",
           "type": "string"
@@ -5617,17 +6795,53 @@
     "bootstrap_request": {
       "$ref": "#/$defs/BootstrapRequest"
     },
+    "cancel_generation_request": {
+      "$ref": "#/$defs/CancelGenerationRequest"
+    },
+    "cancel_generation_response": {
+      "$ref": "#/$defs/CancelGenerationResponse"
+    },
     "cancel_operation_request": {
       "$ref": "#/$defs/CancelOperationRequest"
     },
     "cancel_operation_response": {
       "$ref": "#/$defs/CancelOperationResponse"
     },
+    "chat_generation_event": {
+      "$ref": "#/$defs/ChatGenerationEvent"
+    },
+    "chat_generation_events_request": {
+      "$ref": "#/$defs/ChatGenerationEventsRequest"
+    },
+    "chat_generation_events_response": {
+      "$ref": "#/$defs/ChatGenerationEventsResponse"
+    },
+    "chat_runtime_status": {
+      "$ref": "#/$defs/ChatRuntimeStatus"
+    },
     "client_hello": {
       "$ref": "#/$defs/ClientHello"
     },
     "core_hello": {
       "$ref": "#/$defs/CoreHello"
+    },
+    "create_conversation_request": {
+      "$ref": "#/$defs/CreateConversationRequest"
+    },
+    "create_conversation_response": {
+      "$ref": "#/$defs/CreateConversationResponse"
+    },
+    "delete_conversation_request": {
+      "$ref": "#/$defs/DeleteConversationRequest"
+    },
+    "delete_conversation_response": {
+      "$ref": "#/$defs/DeleteConversationResponse"
+    },
+    "get_conversation_request": {
+      "$ref": "#/$defs/GetConversationRequest"
+    },
+    "get_conversation_response": {
+      "$ref": "#/$defs/GetConversationResponse"
     },
     "hardware_scan_event": {
       "$ref": "#/$defs/HardwareScanEvent"
@@ -5644,11 +6858,23 @@
     "health_response": {
       "$ref": "#/$defs/HealthResponse"
     },
+    "list_conversations_request": {
+      "$ref": "#/$defs/ListConversationsRequest"
+    },
+    "list_conversations_response": {
+      "$ref": "#/$defs/ListConversationsResponse"
+    },
     "recommendation_request": {
       "$ref": "#/$defs/RecommendationRequest"
     },
     "recommendation_response": {
       "$ref": "#/$defs/RecommendationResponse"
+    },
+    "rename_conversation_request": {
+      "$ref": "#/$defs/RenameConversationRequest"
+    },
+    "rename_conversation_response": {
+      "$ref": "#/$defs/RenameConversationResponse"
     },
     "runtime_consent_request": {
       "$ref": "#/$defs/RuntimeConsentRequest"
@@ -5679,6 +6905,12 @@
     },
     "safe_error_payload": {
       "$ref": "#/$defs/SafeErrorPayload"
+    },
+    "send_message_request": {
+      "$ref": "#/$defs/SendMessageRequest"
+    },
+    "send_message_response": {
+      "$ref": "#/$defs/SendMessageResponse"
     },
     "setup_approval_request": {
       "$ref": "#/$defs/SetupApprovalRequest"
@@ -5785,6 +7017,24 @@
     "setup_job_event",
     "setup_job_events_request",
     "setup_job_events_response",
+    "create_conversation_request",
+    "create_conversation_response",
+    "list_conversations_request",
+    "list_conversations_response",
+    "get_conversation_request",
+    "get_conversation_response",
+    "rename_conversation_request",
+    "rename_conversation_response",
+    "delete_conversation_request",
+    "delete_conversation_response",
+    "send_message_request",
+    "send_message_response",
+    "chat_generation_event",
+    "chat_generation_events_request",
+    "chat_generation_events_response",
+    "chat_runtime_status",
+    "cancel_generation_request",
+    "cancel_generation_response",
     "test_operation_start_request",
     "test_operation_start_response",
     "test_operation_event",

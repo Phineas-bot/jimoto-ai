@@ -9,7 +9,8 @@ use gixgiz_persistence::Persistence;
 use gixgiz_runtime::RuntimeProvider;
 
 use crate::{
-    CoreError, OperationContext, RuntimeService, SetupService, persistence::PersistenceHealthSource,
+    ChatService, CoreError, OperationContext, RuntimeService, SetupService,
+    persistence::PersistenceHealthSource,
 };
 
 /// Explicit in-process lifecycle of the Task 03 platform core.
@@ -121,6 +122,20 @@ impl PlatformCore {
         match &self.persistence {
             PersistenceAccess::Available(persistence) => {
                 Some(SetupService::with_persistence(provider, persistence))
+            }
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
+        }
+    }
+
+    /// Composes local chat with the core's Rust-owned persistence.
+    #[must_use]
+    pub fn chat_service(
+        &self,
+        provider: std::sync::Arc<dyn RuntimeProvider>,
+    ) -> Option<ChatService> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => {
+                Some(ChatService::with_persistence(provider, persistence))
             }
             PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
         }

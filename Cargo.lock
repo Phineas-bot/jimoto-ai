@@ -212,6 +212,7 @@ dependencies = [
  "gixgiz-contracts",
  "gixgiz-persistence",
  "gixgiz-runtime",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

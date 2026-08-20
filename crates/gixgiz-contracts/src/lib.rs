@@ -7,6 +7,7 @@
 #![deny(missing_docs)]
 
 mod capability;
+mod chat;
 mod error;
 mod hardware;
 mod identity;
@@ -24,6 +25,19 @@ pub use capability::{
     RecommendationRequest, RecommendationResponse, RecommendationWarning,
     RecommendationWarningCode, ResourceEstimate, RuleSetVersion, StorageEstimate,
     UserPreferenceProfile, WorkloadTier,
+};
+pub use chat::{
+    CHAT_SCHEMA_VERSION, CancelGenerationRequest, CancelGenerationResponse, ChatFailureCode,
+    ChatGenerationEvent, ChatGenerationEventKind, ChatGenerationEventsRequest,
+    ChatGenerationEventsResponse, ChatGenerationTerminalState, ChatLocalityStatus, ChatMessage,
+    ChatMessageStatus, ChatModelIdentity, ChatRecoveryAction, ChatRole, ChatRuntimeStatus,
+    ChatWarning, ChatWarningCode, ConversationId, ConversationSnapshot, ConversationSummary,
+    CreateConversationRequest, CreateConversationResponse, DeleteConversationRequest,
+    DeleteConversationResponse, GenerationId, GetConversationRequest, GetConversationResponse,
+    ListConversationsRequest, ListConversationsResponse, MAX_ASSISTANT_OUTPUT_BYTES,
+    MAX_CONVERSATION_TITLE_BYTES, MAX_CONVERSATIONS_PER_PAGE, MAX_GENERATION_EVENT_PAGE,
+    MAX_USER_MESSAGE_BYTES, MessageId, RenameConversationRequest, RenameConversationResponse,
+    SendMessageRequest, SendMessageResponse,
 };
 pub use error::{ErrorCategory, RecoveryAction, RecoveryGuidance, SafeErrorPayload};
 pub use hardware::{

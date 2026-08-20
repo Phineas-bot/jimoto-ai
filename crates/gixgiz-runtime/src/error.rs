@@ -74,6 +74,9 @@ pub enum RuntimeError {
     /// The fixed bounded readiness inference failed.
     #[error("the model readiness inference failed")]
     ReadinessInferenceFailed,
+    /// Provider chat generation ended without a validated terminal completion.
+    #[error("the provider chat generation did not complete")]
+    GenerationFailed,
     /// Provider output exceeded a fixed bound.
     #[error("runtime provider output exceeded its limit")]
     OutputLimit,
@@ -114,6 +117,7 @@ impl RuntimeError {
             Self::ModelStorageUnavailable => RuntimeErrorCode::ModelStorageUnavailable,
             Self::ModelStorageExhausted => RuntimeErrorCode::ModelStorageExhausted,
             Self::ReadinessInferenceFailed => RuntimeErrorCode::ReadinessInferenceFailed,
+            Self::GenerationFailed => RuntimeErrorCode::GenerationFailed,
             Self::OutputLimit => RuntimeErrorCode::OutputLimit,
             Self::Internal => RuntimeErrorCode::Internal,
         }
@@ -276,6 +280,13 @@ impl RuntimeError {
                 "The local model did not pass the readiness test.",
                 RecoveryAction::Retry,
                 "Check the runtime status, then retry model verification.",
+            ),
+            Self::GenerationFailed => (
+                ErrorCategory::Degraded,
+                "runtime.generation_failed",
+                "The local model stopped before finishing its reply.",
+                RecoveryAction::Retry,
+                "Check the runtime status, then send the message again.",
             ),
             Self::PolicyUnavailable => (
                 ErrorCategory::Unavailable,

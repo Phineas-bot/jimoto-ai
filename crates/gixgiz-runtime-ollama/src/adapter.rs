@@ -19,15 +19,18 @@ use gixgiz_contracts::{
     RuntimeWarning, RuntimeWarningCode, SetupDestinationCategory,
 };
 use gixgiz_runtime::{
-    ModelProgressSender, RuntimeCancellationSemantics, RuntimeDetector, RuntimeError,
-    RuntimeFuture, RuntimeLifecycle, RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult,
-    RuntimeModelAcquisitionStatus, RuntimeModelInspection, RuntimeModelInventoryProvider,
-    RuntimeModelSetupProvider, RuntimeObservation, RuntimeOperationContext, RuntimeProvider,
-    RuntimeReadinessInferenceResult, RuntimeStorageAvailability, RuntimeStoragePreflight,
+    ChatDeltaSender, ModelProgressSender, RuntimeCancellationSemantics, RuntimeChatProvider,
+    RuntimeChatRequest, RuntimeChatRole, RuntimeDetector, RuntimeError, RuntimeFuture,
+    RuntimeGenerationResult, RuntimeLifecycle, RuntimeModelAcquisitionPlan,
+    RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus, RuntimeModelInspection,
+    RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
+    RuntimeOperationContext, RuntimeProvider, RuntimeReadinessInferenceResult,
+    RuntimeStorageAvailability, RuntimeStoragePreflight,
 };
 use tracing::Instrument;
 
 use crate::{
+    chat_http::{ChatHttpLimits, HyperLoopbackChatHttpClient, OllamaChatHttpClient},
     discovery::{ExecutableLocator, ValidatedExecutable, WindowsExecutableLocator},
     endpoint::OLLAMA_HOST_ENV,
     endpoint::ValidatedEndpoint,
@@ -36,7 +39,7 @@ use crate::{
     model_http::{HyperLoopbackModelHttpClient, ModelHttpLimits, OllamaModelHttpClient},
     models::{MappedModel, map_model, provider_tag_for_candidate},
     process::{OwnedProcessControl, OwnedProcessStatus, ProcessLimits, TokioOwnedProcessControl},
-    protocol::{TagModel, decode_tags, decode_version},
+    protocol::{ChatRequestMessage, TagModel, decode_tags, decode_version},
     storage::{FsModelStorageProbe, ModelStorageProbe},
     version::{VersionPolicy, VersionSupport},
 };
@@ -72,6 +75,7 @@ pub struct OllamaAdapter {
     locator: Arc<dyn ExecutableLocator>,
     http: Arc<dyn OllamaHttpClient>,
     model_http: Arc<dyn OllamaModelHttpClient>,
+    chat_http: Arc<dyn OllamaChatHttpClient>,
     storage: Arc<dyn ModelStorageProbe>,
     processes: Arc<dyn OwnedProcessControl>,
     clock: Arc<dyn Clock>,
@@ -104,6 +108,7 @@ impl OllamaAdapter {
             locator: Arc::new(WindowsExecutableLocator::new(explicit_executable)),
             http: Arc::new(HyperLoopbackHttpClient),
             model_http: Arc::new(HyperLoopbackModelHttpClient),
+            chat_http: Arc::new(HyperLoopbackChatHttpClient),
             storage: Arc::new(FsModelStorageProbe::default()),
             processes: TokioOwnedProcessControl::shared(),
             clock: Arc::new(SystemClock),
@@ -128,6 +133,7 @@ impl OllamaAdapter {
             locator,
             http,
             model_http: Arc::new(HyperLoopbackModelHttpClient),
+            chat_http: Arc::new(HyperLoopbackChatHttpClient),
             storage: Arc::new(FsModelStorageProbe::default()),
             processes,
             clock,
@@ -1540,6 +1546,7 @@ impl From<OllamaAdapterError> for RuntimeError {
             OllamaAdapterError::ModelAcquisitionFailed => Self::ModelAcquisitionFailed,
             OllamaAdapterError::StorageUnavailable => Self::ModelStorageUnavailable,
             OllamaAdapterError::ReadinessFailed => Self::ReadinessInferenceFailed,
+            OllamaAdapterError::GenerationFailed => Self::GenerationFailed,
             OllamaAdapterError::LifecycleUnsupported => Self::Unsupported,
             OllamaAdapterError::LifecycleConflict => Self::Busy,
             OllamaAdapterError::ProcessStartFailed | OllamaAdapterError::ProcessControlFailed => {
@@ -1547,6 +1554,85 @@ impl From<OllamaAdapterError> for RuntimeError {
             }
             OllamaAdapterError::Internal => Self::Internal,
         }
+    }
+}
+
+const CHAT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+const CHAT_MAX_LINE_BYTES: usize = 64 * 1024;
+const CHAT_MAX_EVENTS: usize = 16 * 1024;
+const CHAT_NUM_CTX: u32 = 4096;
+
+const fn chat_limits(max_output_bytes: usize) -> ChatHttpLimits {
+    ChatHttpLimits {
+        connect_timeout: HTTP_TIMEOUT,
+        idle_timeout: CHAT_IDLE_TIMEOUT,
+        max_line_bytes: CHAT_MAX_LINE_BYTES,
+        max_events: CHAT_MAX_EVENTS,
+        max_output_bytes,
+        num_ctx: CHAT_NUM_CTX,
+    }
+}
+
+const fn chat_role(role: RuntimeChatRole) -> Option<&'static str> {
+    match role {
+        RuntimeChatRole::User => Some("user"),
+        RuntimeChatRole::Assistant => Some("assistant"),
+        _ => None,
+    }
+}
+
+impl RuntimeChatProvider for OllamaAdapter {
+    fn generate(
+        &self,
+        request: RuntimeChatRequest,
+        deltas: ChatDeltaSender,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+        let span = tracing::info_span!(
+            "runtime_provider_chat_generate",
+            provider_id = OLLAMA_PROVIDER_ID,
+            correlation_id = %context.correlation_id(),
+            request_id = %context.request_id(),
+            context_messages = request.messages.len(),
+        );
+        Box::pin(
+            async move {
+                context.check()?;
+                if request.messages.is_empty() || request.max_output_bytes == 0 {
+                    return Err(RuntimeError::InvalidInput);
+                }
+                let provider_tag = provider_tag_for_candidate(&request.canonical_model_id)
+                    .ok_or(RuntimeError::ModelNotMapped)?;
+                let endpoint = self.valid_endpoint()?;
+                let mut messages = Vec::with_capacity(request.messages.len());
+                for message in &request.messages {
+                    let role = chat_role(message.role).ok_or(RuntimeError::InvalidInput)?;
+                    messages.push(ChatRequestMessage {
+                        role,
+                        content: message.content.as_str(),
+                    });
+                }
+
+                let outcome = run_bounded(
+                    &context,
+                    self.chat_http.generate(
+                        endpoint,
+                        provider_tag,
+                        &messages,
+                        deltas,
+                        chat_limits(request.max_output_bytes),
+                    ),
+                )
+                .await
+                .map_err(RuntimeError::from)?;
+
+                Ok(RuntimeGenerationResult {
+                    emitted_bytes: outcome.emitted_bytes,
+                    completed_at_unix_ms: self.clock.unix_ms(),
+                })
+            }
+            .instrument(span),
+        )
     }
 }
 

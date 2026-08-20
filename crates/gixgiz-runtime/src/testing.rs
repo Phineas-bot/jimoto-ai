@@ -8,7 +8,8 @@ use gixgiz_contracts::{
 };
 
 use crate::{
-    ModelProgressSender, RuntimeDetector, RuntimeError, RuntimeFuture, RuntimeLifecycle,
+    ChatDeltaSender, ModelProgressSender, RuntimeChatProvider, RuntimeChatRequest, RuntimeDetector,
+    RuntimeError, RuntimeFuture, RuntimeGenerationDelta, RuntimeGenerationResult, RuntimeLifecycle,
     RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult, RuntimeModelInspection,
     RuntimeModelInventoryProvider, RuntimeModelSetupProvider, RuntimeObservation,
     RuntimeOperationContext, RuntimeProvider, RuntimeReadinessInferenceResult,
@@ -34,6 +35,8 @@ pub enum FakeRuntimeCall {
     InspectModel,
     /// Fixed bounded readiness inference was requested.
     RunReadinessInference,
+    /// A bounded streaming chat generation was requested.
+    Generate,
 }
 
 /// Configurable provider that performs no process, filesystem, or network I/O.
@@ -49,6 +52,8 @@ pub struct FakeRuntimeProvider {
     inspection: Arc<Mutex<Result<RuntimeModelInspection, RuntimeError>>>,
     readiness: Arc<Mutex<Result<RuntimeReadinessInferenceResult, RuntimeError>>>,
     progress: Arc<Mutex<Vec<ModelAcquisitionProgress>>>,
+    chat_deltas: Arc<Mutex<Vec<String>>>,
+    chat_result: Arc<Mutex<Result<RuntimeGenerationResult, RuntimeError>>>,
     calls: Arc<Mutex<Vec<FakeRuntimeCall>>>,
 }
 
@@ -72,8 +77,25 @@ impl FakeRuntimeProvider {
             inspection: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
             readiness: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
             progress: Arc::new(Mutex::new(Vec::new())),
+            chat_deltas: Arc::new(Mutex::new(Vec::new())),
+            chat_result: Arc::new(Mutex::new(Err(RuntimeError::Unsupported))),
             calls: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Configures the deltas and terminal outcome of one fake chat generation.
+    ///
+    /// Each delta is emitted only after a cancellation and deadline check, so
+    /// tests can cancel deterministically between increments.
+    #[must_use]
+    pub fn with_chat_results(
+        mut self,
+        deltas: Vec<String>,
+        result: Result<RuntimeGenerationResult, RuntimeError>,
+    ) -> Self {
+        self.chat_deltas = Arc::new(Mutex::new(deltas));
+        self.chat_result = Arc::new(Mutex::new(result));
+        self
     }
 
     /// Configures fixed deterministic model-setup results without changing the legacy constructor.
@@ -246,6 +268,45 @@ impl RuntimeModelSetupProvider for FakeRuntimeProvider {
             context.check()?;
             self.record(FakeRuntimeCall::RunReadinessInference)?;
             self.readiness
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone()
+        })
+    }
+}
+
+impl RuntimeChatProvider for FakeRuntimeProvider {
+    fn generate(
+        &self,
+        _request: RuntimeChatRequest,
+        deltas: ChatDeltaSender,
+        context: RuntimeOperationContext,
+    ) -> RuntimeFuture<'_, RuntimeGenerationResult> {
+        Box::pin(async move {
+            context.check()?;
+            self.record(FakeRuntimeCall::Generate)?;
+            let configured = self
+                .chat_deltas
+                .lock()
+                .map_err(|_| RuntimeError::Internal)?
+                .clone();
+            let mut emitted_bytes = 0;
+            for text in configured {
+                context.check()?;
+                emitted_bytes += text.len();
+                if deltas
+                    .send(RuntimeGenerationDelta {
+                        text,
+                        emitted_bytes,
+                    })
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            context.check()?;
+            self.chat_result
                 .lock()
                 .map_err(|_| RuntimeError::Internal)?
                 .clone()

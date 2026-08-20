@@ -18,7 +18,8 @@ class AppShell extends StatelessWidget {
 
     final route = switch (index) {
       0 => AppRoutes.foundation,
-      1 => AppRoutes.about,
+      1 => AppRoutes.chat,
+      2 => AppRoutes.about,
       _ => throw ArgumentError.value(index, 'index', 'Unknown destination'),
     };
     Navigator.of(context).pushReplacementNamed(route);
@@ -51,6 +52,18 @@ class AppShell extends StatelessWidget {
                         semanticLabel: localizations.foundationNavigationLabel,
                       ),
                       label: Text(localizations.foundationNavigationLabel),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(
+                        Icons.forum_outlined,
+                        key: AppKeys.chatNavigation,
+                        semanticLabel: localizations.chatNavigationLabel,
+                      ),
+                      selectedIcon: Icon(
+                        Icons.forum,
+                        semanticLabel: localizations.chatNavigationLabel,
+                      ),
+                      label: Text(localizations.chatNavigationLabel),
                     ),
                     NavigationRailDestination(
                       icon: Icon(

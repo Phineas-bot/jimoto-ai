@@ -187,6 +187,66 @@ class BootstrapRequest {
   }
 }
 
+class CancelGenerationRequest {
+  const CancelGenerationRequest({
+    required this.correlationId,
+    required this.generationId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final GenerationId generationId;
+  final RequestId requestId;
+
+  factory CancelGenerationRequest.fromJson(Map<String, dynamic> json) {
+    return CancelGenerationRequest(
+      correlationId: _contractString(json['correlation_id'], 'CancelGenerationRequest.correlation_id'),
+      generationId: _contractString(json['generation_id'], 'CancelGenerationRequest.generation_id'),
+      requestId: _contractString(json['request_id'], 'CancelGenerationRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'generation_id': generationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class CancelGenerationResponse {
+  const CancelGenerationResponse({
+    required this.accepted,
+    required this.correlationId,
+    required this.generationId,
+    required this.requestId,
+  });
+
+  final bool accepted;
+  final CorrelationId correlationId;
+  final GenerationId generationId;
+  final RequestId requestId;
+
+  factory CancelGenerationResponse.fromJson(Map<String, dynamic> json) {
+    return CancelGenerationResponse(
+      accepted: _contractBool(json['accepted'], 'CancelGenerationResponse.accepted'),
+      correlationId: _contractString(json['correlation_id'], 'CancelGenerationResponse.correlation_id'),
+      generationId: _contractString(json['generation_id'], 'CancelGenerationResponse.generation_id'),
+      requestId: _contractString(json['request_id'], 'CancelGenerationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'accepted': accepted,
+      'correlation_id': correlationId,
+      'generation_id': generationId,
+      'request_id': requestId,
+    };
+  }
+}
+
 class CancelOperationRequest {
   const CancelOperationRequest({
     required this.correlationId,
@@ -423,6 +483,497 @@ enum CapabilityReportStatus {
 
 typedef CatalogueVersion = String;
 
+enum ChatFailureCode {
+  runtimeUnavailable('runtime_unavailable'),
+  runtimeIncompatible('runtime_incompatible'),
+  runtimeConsentRequired('runtime_consent_required'),
+  modelUnavailable('model_unavailable'),
+  modelChanged('model_changed'),
+  generationTimedOut('generation_timed_out'),
+  providerDisconnected('provider_disconnected'),
+  malformedProviderStream('malformed_provider_stream'),
+  messageTooLarge('message_too_large'),
+  contextTooLarge('context_too_large'),
+  conversationNotFound('conversation_not_found'),
+  generationNotFound('generation_not_found'),
+  generationAlreadyActive('generation_already_active'),
+  persistenceUnavailable('persistence_unavailable'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const ChatFailureCode(this.wireValue);
+
+  final String wireValue;
+
+  static ChatFailureCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ChatGenerationEvent {
+  const ChatGenerationEvent({
+    required this.assistantMessageId,
+    required this.conversationId,
+    required this.correlationId,
+    required this.delta,
+    required this.error,
+    required this.generationId,
+    required this.kind,
+    required this.occurredAtUnixMs,
+    required this.schemaVersion,
+    required this.sequence,
+    required this.terminalState,
+  });
+
+  final MessageId assistantMessageId;
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final String? delta;
+  final SafeErrorPayload? error;
+  final GenerationId generationId;
+  final ChatGenerationEventKind kind;
+  final int occurredAtUnixMs;
+  final int schemaVersion;
+  final int sequence;
+  final ChatGenerationTerminalState? terminalState;
+
+  factory ChatGenerationEvent.fromJson(Map<String, dynamic> json) {
+    return ChatGenerationEvent(
+      assistantMessageId: _contractString(json['assistant_message_id'], 'ChatGenerationEvent.assistant_message_id'),
+      conversationId: _contractString(json['conversation_id'], 'ChatGenerationEvent.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'ChatGenerationEvent.correlation_id'),
+      delta: json['delta'] == null ? null : _contractString(json['delta'], 'ChatGenerationEvent.delta'),
+      error: json['error'] == null ? null : SafeErrorPayload.fromJson(_contractMap(json['error'], 'ChatGenerationEvent.error')),
+      generationId: _contractString(json['generation_id'], 'ChatGenerationEvent.generation_id'),
+      kind: ChatGenerationEventKind.fromJson(json['kind']),
+      occurredAtUnixMs: _contractInt(json['occurred_at_unix_ms'], 'ChatGenerationEvent.occurred_at_unix_ms'),
+      schemaVersion: _contractInt(json['schema_version'], 'ChatGenerationEvent.schema_version'),
+      sequence: _contractInt(json['sequence'], 'ChatGenerationEvent.sequence'),
+      terminalState: json['terminal_state'] == null ? null : ChatGenerationTerminalState.fromJson(json['terminal_state']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'assistant_message_id': assistantMessageId,
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'delta': delta,
+      'error': error?.toJson(),
+      'generation_id': generationId,
+      'kind': kind.toJson(),
+      'occurred_at_unix_ms': occurredAtUnixMs,
+      'schema_version': schemaVersion,
+      'sequence': sequence,
+      'terminal_state': terminalState?.toJson(),
+    };
+  }
+}
+
+enum ChatGenerationEventKind {
+  started('started'),
+  delta('delta'),
+  completed('completed'),
+  cancelled('cancelled'),
+  failed('failed'),
+  timedOut('timed_out'),
+  unknown('unknown'),
+  ;
+
+  const ChatGenerationEventKind(this.wireValue);
+
+  final String wireValue;
+
+  static ChatGenerationEventKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ChatGenerationEventsRequest {
+  const ChatGenerationEventsRequest({
+    required this.afterSequence,
+    required this.correlationId,
+    required this.generationId,
+    required this.limit,
+    required this.requestId,
+  });
+
+  final int afterSequence;
+  final CorrelationId correlationId;
+  final GenerationId generationId;
+  final int limit;
+  final RequestId requestId;
+
+  factory ChatGenerationEventsRequest.fromJson(Map<String, dynamic> json) {
+    return ChatGenerationEventsRequest(
+      afterSequence: _contractInt(json['after_sequence'], 'ChatGenerationEventsRequest.after_sequence'),
+      correlationId: _contractString(json['correlation_id'], 'ChatGenerationEventsRequest.correlation_id'),
+      generationId: _contractString(json['generation_id'], 'ChatGenerationEventsRequest.generation_id'),
+      limit: _contractInt(json['limit'], 'ChatGenerationEventsRequest.limit'),
+      requestId: _contractString(json['request_id'], 'ChatGenerationEventsRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'after_sequence': afterSequence,
+      'correlation_id': correlationId,
+      'generation_id': generationId,
+      'limit': limit,
+      'request_id': requestId,
+    };
+  }
+}
+
+class ChatGenerationEventsResponse {
+  const ChatGenerationEventsResponse({
+    required this.correlationId,
+    required this.events,
+    required this.replayIncomplete,
+    required this.requestId,
+    required this.schemaVersion,
+  });
+
+  final CorrelationId correlationId;
+  final List<ChatGenerationEvent> events;
+  final bool replayIncomplete;
+  final RequestId requestId;
+  final int schemaVersion;
+
+  factory ChatGenerationEventsResponse.fromJson(Map<String, dynamic> json) {
+    return ChatGenerationEventsResponse(
+      correlationId: _contractString(json['correlation_id'], 'ChatGenerationEventsResponse.correlation_id'),
+      events: _contractList(json['events'], 'ChatGenerationEventsResponse.events').map((item) => ChatGenerationEvent.fromJson(_contractMap(item, 'ChatGenerationEventsResponse.events[]'))).toList(growable: false),
+      replayIncomplete: _contractBool(json['replay_incomplete'], 'ChatGenerationEventsResponse.replay_incomplete'),
+      requestId: _contractString(json['request_id'], 'ChatGenerationEventsResponse.request_id'),
+      schemaVersion: _contractInt(json['schema_version'], 'ChatGenerationEventsResponse.schema_version'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'events': events.map((item) => item.toJson()).toList(growable: false),
+      'replay_incomplete': replayIncomplete,
+      'request_id': requestId,
+      'schema_version': schemaVersion,
+    };
+  }
+}
+
+enum ChatGenerationTerminalState {
+  completed('completed'),
+  cancelled('cancelled'),
+  failed('failed'),
+  timedOut('timed_out'),
+  unknown('unknown'),
+  ;
+
+  const ChatGenerationTerminalState(this.wireValue);
+
+  final String wireValue;
+
+  static ChatGenerationTerminalState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum ChatLocalityStatus {
+  runningLocally('running_locally'),
+  unknown('unknown'),
+  ;
+
+  const ChatLocalityStatus(this.wireValue);
+
+  final String wireValue;
+
+  static ChatLocalityStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.completedAtUnixMs,
+    required this.content,
+    required this.conversationId,
+    required this.createdAtUnixMs,
+    required this.generationId,
+    required this.messageId,
+    required this.role,
+    required this.sequence,
+    required this.status,
+    required this.updatedAtUnixMs,
+  });
+
+  final int? completedAtUnixMs;
+  final String content;
+  final ConversationId conversationId;
+  final int createdAtUnixMs;
+  final GenerationId? generationId;
+  final MessageId messageId;
+  final ChatRole role;
+  final int sequence;
+  final ChatMessageStatus status;
+  final int updatedAtUnixMs;
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      completedAtUnixMs: json['completed_at_unix_ms'] == null ? null : _contractInt(json['completed_at_unix_ms'], 'ChatMessage.completed_at_unix_ms'),
+      content: _contractString(json['content'], 'ChatMessage.content'),
+      conversationId: _contractString(json['conversation_id'], 'ChatMessage.conversation_id'),
+      createdAtUnixMs: _contractInt(json['created_at_unix_ms'], 'ChatMessage.created_at_unix_ms'),
+      generationId: json['generation_id'] == null ? null : _contractString(json['generation_id'], 'ChatMessage.generation_id'),
+      messageId: _contractString(json['message_id'], 'ChatMessage.message_id'),
+      role: ChatRole.fromJson(json['role']),
+      sequence: _contractInt(json['sequence'], 'ChatMessage.sequence'),
+      status: ChatMessageStatus.fromJson(json['status']),
+      updatedAtUnixMs: _contractInt(json['updated_at_unix_ms'], 'ChatMessage.updated_at_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'completed_at_unix_ms': completedAtUnixMs,
+      'content': content,
+      'conversation_id': conversationId,
+      'created_at_unix_ms': createdAtUnixMs,
+      'generation_id': generationId,
+      'message_id': messageId,
+      'role': role.toJson(),
+      'sequence': sequence,
+      'status': status.toJson(),
+      'updated_at_unix_ms': updatedAtUnixMs,
+    };
+  }
+}
+
+enum ChatMessageStatus {
+  pending('pending'),
+  generating('generating'),
+  completed('completed'),
+  cancelled('cancelled'),
+  failed('failed'),
+  unknown('unknown'),
+  ;
+
+  const ChatMessageStatus(this.wireValue);
+
+  final String wireValue;
+
+  static ChatMessageStatus fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ChatModelIdentity {
+  const ChatModelIdentity({
+    required this.canonicalModelId,
+    required this.displayName,
+    required this.family,
+  });
+
+  final CandidateModelId canonicalModelId;
+  final String displayName;
+  final String family;
+
+  factory ChatModelIdentity.fromJson(Map<String, dynamic> json) {
+    return ChatModelIdentity(
+      canonicalModelId: _contractString(json['canonical_model_id'], 'ChatModelIdentity.canonical_model_id'),
+      displayName: _contractString(json['display_name'], 'ChatModelIdentity.display_name'),
+      family: _contractString(json['family'], 'ChatModelIdentity.family'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'canonical_model_id': canonicalModelId,
+      'display_name': displayName,
+      'family': family,
+    };
+  }
+}
+
+enum ChatRecoveryAction {
+  retryGeneration('retry_generation'),
+  checkRuntime('check_runtime'),
+  runModelSetup('run_model_setup'),
+  shortenMessage('shorten_message'),
+  startNewConversation('start_new_conversation'),
+  restartApplication('restart_application'),
+  noAction('no_action'),
+  unknown('unknown'),
+  ;
+
+  const ChatRecoveryAction(this.wireValue);
+
+  final String wireValue;
+
+  static ChatRecoveryAction fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum ChatRole {
+  user('user'),
+  assistant('assistant'),
+  unknown('unknown'),
+  ;
+
+  const ChatRole(this.wireValue);
+
+  final String wireValue;
+
+  static ChatRole fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class ChatRuntimeStatus {
+  const ChatRuntimeStatus({
+    required this.blockedBy,
+    required this.locality,
+    required this.model,
+    required this.providerId,
+    required this.ready,
+    required this.recoveryAction,
+    required this.runtimeDisplayName,
+    required this.schemaVersion,
+  });
+
+  final ChatFailureCode? blockedBy;
+  final ChatLocalityStatus locality;
+  final ChatModelIdentity? model;
+  final RuntimeProviderId providerId;
+  final bool ready;
+  final ChatRecoveryAction? recoveryAction;
+  final RuntimeDisplayName runtimeDisplayName;
+  final int schemaVersion;
+
+  factory ChatRuntimeStatus.fromJson(Map<String, dynamic> json) {
+    return ChatRuntimeStatus(
+      blockedBy: json['blocked_by'] == null ? null : ChatFailureCode.fromJson(json['blocked_by']),
+      locality: ChatLocalityStatus.fromJson(json['locality']),
+      model: json['model'] == null ? null : ChatModelIdentity.fromJson(_contractMap(json['model'], 'ChatRuntimeStatus.model')),
+      providerId: _contractString(json['provider_id'], 'ChatRuntimeStatus.provider_id'),
+      ready: _contractBool(json['ready'], 'ChatRuntimeStatus.ready'),
+      recoveryAction: json['recovery_action'] == null ? null : ChatRecoveryAction.fromJson(json['recovery_action']),
+      runtimeDisplayName: _contractString(json['runtime_display_name'], 'ChatRuntimeStatus.runtime_display_name'),
+      schemaVersion: _contractInt(json['schema_version'], 'ChatRuntimeStatus.schema_version'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'blocked_by': blockedBy?.toJson(),
+      'locality': locality.toJson(),
+      'model': model?.toJson(),
+      'provider_id': providerId,
+      'ready': ready,
+      'recovery_action': recoveryAction?.toJson(),
+      'runtime_display_name': runtimeDisplayName,
+      'schema_version': schemaVersion,
+    };
+  }
+}
+
+class ChatWarning {
+  const ChatWarning({
+    required this.code,
+    required this.message,
+  });
+
+  final ChatWarningCode code;
+  final String message;
+
+  factory ChatWarning.fromJson(Map<String, dynamic> json) {
+    return ChatWarning(
+      code: ChatWarningCode.fromJson(json['code']),
+      message: _contractString(json['message'], 'ChatWarning.message'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code.toJson(),
+      'message': message,
+    };
+  }
+}
+
+enum ChatWarningCode {
+  contextTruncated('context_truncated'),
+  partialAssistantContent('partial_assistant_content'),
+  interruptedGenerationRecovered('interrupted_generation_recovered'),
+  unknown('unknown'),
+  ;
+
+  const ChatWarningCode(this.wireValue);
+
+  final String wireValue;
+
+  static ChatWarningCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
 class ClientHello {
   const ClientHello({
     required this.clientName,
@@ -512,6 +1063,100 @@ enum ConfidenceLevel {
   String toJson() => wireValue;
 }
 
+typedef ConversationId = String;
+
+class ConversationSnapshot {
+  const ConversationSnapshot({
+    required this.activeGenerationId,
+    required this.conversationId,
+    required this.createdAtUnixMs,
+    required this.messages,
+    required this.model,
+    required this.schemaVersion,
+    required this.title,
+    required this.updatedAtUnixMs,
+    required this.warnings,
+  });
+
+  final GenerationId? activeGenerationId;
+  final ConversationId conversationId;
+  final int createdAtUnixMs;
+  final List<ChatMessage> messages;
+  final ChatModelIdentity? model;
+  final int schemaVersion;
+  final String title;
+  final int updatedAtUnixMs;
+  final List<ChatWarning> warnings;
+
+  factory ConversationSnapshot.fromJson(Map<String, dynamic> json) {
+    return ConversationSnapshot(
+      activeGenerationId: json['active_generation_id'] == null ? null : _contractString(json['active_generation_id'], 'ConversationSnapshot.active_generation_id'),
+      conversationId: _contractString(json['conversation_id'], 'ConversationSnapshot.conversation_id'),
+      createdAtUnixMs: _contractInt(json['created_at_unix_ms'], 'ConversationSnapshot.created_at_unix_ms'),
+      messages: _contractList(json['messages'], 'ConversationSnapshot.messages').map((item) => ChatMessage.fromJson(_contractMap(item, 'ConversationSnapshot.messages[]'))).toList(growable: false),
+      model: json['model'] == null ? null : ChatModelIdentity.fromJson(_contractMap(json['model'], 'ConversationSnapshot.model')),
+      schemaVersion: _contractInt(json['schema_version'], 'ConversationSnapshot.schema_version'),
+      title: _contractString(json['title'], 'ConversationSnapshot.title'),
+      updatedAtUnixMs: _contractInt(json['updated_at_unix_ms'], 'ConversationSnapshot.updated_at_unix_ms'),
+      warnings: _contractList(json['warnings'], 'ConversationSnapshot.warnings').map((item) => ChatWarning.fromJson(_contractMap(item, 'ConversationSnapshot.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active_generation_id': activeGenerationId,
+      'conversation_id': conversationId,
+      'created_at_unix_ms': createdAtUnixMs,
+      'messages': messages.map((item) => item.toJson()).toList(growable: false),
+      'model': model?.toJson(),
+      'schema_version': schemaVersion,
+      'title': title,
+      'updated_at_unix_ms': updatedAtUnixMs,
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class ConversationSummary {
+  const ConversationSummary({
+    required this.conversationId,
+    required this.createdAtUnixMs,
+    required this.messageCount,
+    required this.model,
+    required this.title,
+    required this.updatedAtUnixMs,
+  });
+
+  final ConversationId conversationId;
+  final int createdAtUnixMs;
+  final int messageCount;
+  final ChatModelIdentity? model;
+  final String title;
+  final int updatedAtUnixMs;
+
+  factory ConversationSummary.fromJson(Map<String, dynamic> json) {
+    return ConversationSummary(
+      conversationId: _contractString(json['conversation_id'], 'ConversationSummary.conversation_id'),
+      createdAtUnixMs: _contractInt(json['created_at_unix_ms'], 'ConversationSummary.created_at_unix_ms'),
+      messageCount: _contractInt(json['message_count'], 'ConversationSummary.message_count'),
+      model: json['model'] == null ? null : ChatModelIdentity.fromJson(_contractMap(json['model'], 'ConversationSummary.model')),
+      title: _contractString(json['title'], 'ConversationSummary.title'),
+      updatedAtUnixMs: _contractInt(json['updated_at_unix_ms'], 'ConversationSummary.updated_at_unix_ms'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'created_at_unix_ms': createdAtUnixMs,
+      'message_count': messageCount,
+      'model': model?.toJson(),
+      'title': title,
+      'updated_at_unix_ms': updatedAtUnixMs,
+    };
+  }
+}
+
 class CoreHello {
   const CoreHello({
     required this.application,
@@ -590,6 +1235,126 @@ class CpuEvidence {
       'name': name.toJson(),
       'physical_core_count': physicalCoreCount.toJson(),
       'vendor': vendor.toJson(),
+    };
+  }
+}
+
+class CreateConversationRequest {
+  const CreateConversationRequest({
+    required this.correlationId,
+    required this.requestId,
+    required this.title,
+  });
+
+  final CorrelationId correlationId;
+  final RequestId requestId;
+  final String? title;
+
+  factory CreateConversationRequest.fromJson(Map<String, dynamic> json) {
+    return CreateConversationRequest(
+      correlationId: _contractString(json['correlation_id'], 'CreateConversationRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'CreateConversationRequest.request_id'),
+      title: json['title'] == null ? null : _contractString(json['title'], 'CreateConversationRequest.title'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'request_id': requestId,
+      'title': title,
+    };
+  }
+}
+
+class CreateConversationResponse {
+  const CreateConversationResponse({
+    required this.conversation,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationSnapshot conversation;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory CreateConversationResponse.fromJson(Map<String, dynamic> json) {
+    return CreateConversationResponse(
+      conversation: ConversationSnapshot.fromJson(_contractMap(json['conversation'], 'CreateConversationResponse.conversation')),
+      correlationId: _contractString(json['correlation_id'], 'CreateConversationResponse.correlation_id'),
+      requestId: _contractString(json['request_id'], 'CreateConversationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation': conversation.toJson(),
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class DeleteConversationRequest {
+  const DeleteConversationRequest({
+    required this.conversationId,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory DeleteConversationRequest.fromJson(Map<String, dynamic> json) {
+    return DeleteConversationRequest(
+      conversationId: _contractString(json['conversation_id'], 'DeleteConversationRequest.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'DeleteConversationRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'DeleteConversationRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class DeleteConversationResponse {
+  const DeleteConversationResponse({
+    required this.conversationId,
+    required this.correlationId,
+    required this.deleted,
+    required this.deletedMessageCount,
+    required this.requestId,
+  });
+
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final bool deleted;
+  final int deletedMessageCount;
+  final RequestId requestId;
+
+  factory DeleteConversationResponse.fromJson(Map<String, dynamic> json) {
+    return DeleteConversationResponse(
+      conversationId: _contractString(json['conversation_id'], 'DeleteConversationResponse.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'DeleteConversationResponse.correlation_id'),
+      deleted: _contractBool(json['deleted'], 'DeleteConversationResponse.deleted'),
+      deletedMessageCount: _contractInt(json['deleted_message_count'], 'DeleteConversationResponse.deleted_message_count'),
+      requestId: _contractString(json['request_id'], 'DeleteConversationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'deleted': deleted,
+      'deleted_message_count': deletedMessageCount,
+      'request_id': requestId,
     };
   }
 }
@@ -732,6 +1497,64 @@ enum EvidenceSource {
   }
 
   String toJson() => wireValue;
+}
+
+typedef GenerationId = String;
+
+class GetConversationRequest {
+  const GetConversationRequest({
+    required this.conversationId,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory GetConversationRequest.fromJson(Map<String, dynamic> json) {
+    return GetConversationRequest(
+      conversationId: _contractString(json['conversation_id'], 'GetConversationRequest.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'GetConversationRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'GetConversationRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class GetConversationResponse {
+  const GetConversationResponse({
+    required this.conversation,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationSnapshot conversation;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory GetConversationResponse.fromJson(Map<String, dynamic> json) {
+    return GetConversationResponse(
+      conversation: ConversationSnapshot.fromJson(_contractMap(json['conversation'], 'GetConversationResponse.conversation')),
+      correlationId: _contractString(json['correlation_id'], 'GetConversationResponse.correlation_id'),
+      requestId: _contractString(json['request_id'], 'GetConversationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation': conversation.toJson(),
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
 }
 
 class GpuCollectionEvidence {
@@ -1003,6 +1826,70 @@ class HealthResponse {
 
 typedef InstanceId = String;
 
+class ListConversationsRequest {
+  const ListConversationsRequest({
+    required this.correlationId,
+    required this.limit,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final int limit;
+  final RequestId requestId;
+
+  factory ListConversationsRequest.fromJson(Map<String, dynamic> json) {
+    return ListConversationsRequest(
+      correlationId: _contractString(json['correlation_id'], 'ListConversationsRequest.correlation_id'),
+      limit: _contractInt(json['limit'], 'ListConversationsRequest.limit'),
+      requestId: _contractString(json['request_id'], 'ListConversationsRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'limit': limit,
+      'request_id': requestId,
+    };
+  }
+}
+
+class ListConversationsResponse {
+  const ListConversationsResponse({
+    required this.conversations,
+    required this.correlationId,
+    required this.requestId,
+    required this.schemaVersion,
+    required this.truncated,
+  });
+
+  final List<ConversationSummary> conversations;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+  final int schemaVersion;
+  final bool truncated;
+
+  factory ListConversationsResponse.fromJson(Map<String, dynamic> json) {
+    return ListConversationsResponse(
+      conversations: _contractList(json['conversations'], 'ListConversationsResponse.conversations').map((item) => ConversationSummary.fromJson(_contractMap(item, 'ListConversationsResponse.conversations[]'))).toList(growable: false),
+      correlationId: _contractString(json['correlation_id'], 'ListConversationsResponse.correlation_id'),
+      requestId: _contractString(json['request_id'], 'ListConversationsResponse.request_id'),
+      schemaVersion: _contractInt(json['schema_version'], 'ListConversationsResponse.schema_version'),
+      truncated: _contractBool(json['truncated'], 'ListConversationsResponse.truncated'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversations': conversations.map((item) => item.toJson()).toList(growable: false),
+      'correlation_id': correlationId,
+      'request_id': requestId,
+      'schema_version': schemaVersion,
+      'truncated': truncated,
+    };
+  }
+}
+
 enum MachineArchitecture {
   x8664('x86_64'),
   arm64('arm64'),
@@ -1139,6 +2026,8 @@ class MemoryEstimate {
     };
   }
 }
+
+typedef MessageId = String;
 
 enum ModelAcquisitionPhase {
   preparing('preparing'),
@@ -1938,6 +2827,66 @@ class RecoveryGuidance {
     return {
       'action': action.toJson(),
       'message': message,
+    };
+  }
+}
+
+class RenameConversationRequest {
+  const RenameConversationRequest({
+    required this.conversationId,
+    required this.correlationId,
+    required this.requestId,
+    required this.title,
+  });
+
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+  final String title;
+
+  factory RenameConversationRequest.fromJson(Map<String, dynamic> json) {
+    return RenameConversationRequest(
+      conversationId: _contractString(json['conversation_id'], 'RenameConversationRequest.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'RenameConversationRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'RenameConversationRequest.request_id'),
+      title: _contractString(json['title'], 'RenameConversationRequest.title'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'request_id': requestId,
+      'title': title,
+    };
+  }
+}
+
+class RenameConversationResponse {
+  const RenameConversationResponse({
+    required this.conversation,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationSnapshot conversation;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory RenameConversationResponse.fromJson(Map<String, dynamic> json) {
+    return RenameConversationResponse(
+      conversation: ConversationSnapshot.fromJson(_contractMap(json['conversation'], 'RenameConversationResponse.conversation')),
+      correlationId: _contractString(json['correlation_id'], 'RenameConversationResponse.correlation_id'),
+      requestId: _contractString(json['request_id'], 'RenameConversationResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation': conversation.toJson(),
+      'correlation_id': correlationId,
+      'request_id': requestId,
     };
   }
 }
@@ -2937,6 +3886,82 @@ class SafeErrorPayload {
       'message': message,
       'recovery': recovery.toJson(),
       'request_id': requestId,
+    };
+  }
+}
+
+class SendMessageRequest {
+  const SendMessageRequest({
+    required this.content,
+    required this.conversationId,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final String content;
+  final ConversationId conversationId;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory SendMessageRequest.fromJson(Map<String, dynamic> json) {
+    return SendMessageRequest(
+      content: _contractString(json['content'], 'SendMessageRequest.content'),
+      conversationId: _contractString(json['conversation_id'], 'SendMessageRequest.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'SendMessageRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'SendMessageRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'content': content,
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class SendMessageResponse {
+  const SendMessageResponse({
+    required this.assistantMessage,
+    required this.correlationId,
+    required this.generationId,
+    required this.requestId,
+    required this.schemaVersion,
+    required this.userMessage,
+    required this.warnings,
+  });
+
+  final ChatMessage assistantMessage;
+  final CorrelationId correlationId;
+  final GenerationId generationId;
+  final RequestId requestId;
+  final int schemaVersion;
+  final ChatMessage userMessage;
+  final List<ChatWarning> warnings;
+
+  factory SendMessageResponse.fromJson(Map<String, dynamic> json) {
+    return SendMessageResponse(
+      assistantMessage: ChatMessage.fromJson(_contractMap(json['assistant_message'], 'SendMessageResponse.assistant_message')),
+      correlationId: _contractString(json['correlation_id'], 'SendMessageResponse.correlation_id'),
+      generationId: _contractString(json['generation_id'], 'SendMessageResponse.generation_id'),
+      requestId: _contractString(json['request_id'], 'SendMessageResponse.request_id'),
+      schemaVersion: _contractInt(json['schema_version'], 'SendMessageResponse.schema_version'),
+      userMessage: ChatMessage.fromJson(_contractMap(json['user_message'], 'SendMessageResponse.user_message')),
+      warnings: _contractList(json['warnings'], 'SendMessageResponse.warnings').map((item) => ChatWarning.fromJson(_contractMap(item, 'SendMessageResponse.warnings[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'assistant_message': assistantMessage.toJson(),
+      'correlation_id': correlationId,
+      'generation_id': generationId,
+      'request_id': requestId,
+      'schema_version': schemaVersion,
+      'user_message': userMessage.toJson(),
+      'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
     };
   }
 }
@@ -4654,6 +5679,7 @@ enum TransportCapability {
   runtimeLifecycle('runtime_lifecycle'),
   runtimeModelInventory('runtime_model_inventory'),
   setupWorkflow('setup_workflow'),
+  localChat('local_chat'),
   shutdown('shutdown'),
   unknown('unknown'),
   ;

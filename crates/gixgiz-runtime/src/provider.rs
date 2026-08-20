@@ -6,7 +6,9 @@ use gixgiz_contracts::{
     RuntimeWarning,
 };
 
-use crate::{RuntimeError, RuntimeModelSetupProvider, RuntimeOperationContext};
+use crate::{
+    RuntimeChatProvider, RuntimeError, RuntimeModelSetupProvider, RuntimeOperationContext,
+};
 
 /// Sendable boxed future used by object-safe runtime provider traits.
 pub type RuntimeFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, RuntimeError>> + Send + 'a>>;
@@ -64,6 +66,7 @@ pub trait RuntimeProvider:
     + RuntimeLifecycle
     + RuntimeModelInventoryProvider
     + RuntimeModelSetupProvider
+    + RuntimeChatProvider
     + Send
     + Sync
 {
