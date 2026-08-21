@@ -229,6 +229,11 @@ pub enum ChatGenerationEventKind {
     Failed,
     /// An inactivity or total-duration bound was exceeded.
     TimedOut,
+    /// The provider stopped, but the authoritative terminal database write failed.
+    ///
+    /// This closes the transient stream without claiming a durable terminal
+    /// state. Startup recovery classifies the still-generating SQLite record.
+    DurabilityInterrupted,
     /// A newer peer supplied an unrecognized event kind.
     #[serde(other)]
     Unknown,
@@ -388,6 +393,28 @@ pub struct ChatRuntimeStatus {
     pub recovery_action: Option<ChatRecoveryAction>,
 }
 
+/// Authenticated request for provider-neutral chat locality/readiness.
+#[derive(Clone, Copy, Debug, Eq, JsonSchema, PartialEq, Serialize, Deserialize)]
+pub struct ChatRuntimeStatusRequest {
+    /// Conversation whose bound model should be checked, when selected.
+    pub conversation_id: Option<ConversationId>,
+    /// Identifier shared with the response and safe failures.
+    pub correlation_id: CorrelationId,
+    /// Identifier unique to this request.
+    pub request_id: RequestId,
+}
+
+/// Authoritative chat locality/readiness with boundary identifiers.
+#[derive(Clone, Debug, Eq, JsonSchema, PartialEq, Serialize, Deserialize)]
+pub struct ChatRuntimeStatusResponse {
+    /// Provider-neutral status derived by Rust.
+    pub status: ChatRuntimeStatus,
+    /// Identifier copied from the request.
+    pub correlation_id: CorrelationId,
+    /// Identifier copied from the request.
+    pub request_id: RequestId,
+}
+
 /// One persisted conversation message.
 #[derive(Clone, Debug, Eq, JsonSchema, PartialEq, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -408,6 +435,11 @@ pub struct ChatMessage {
     pub content: String,
     /// Generation attempt that produced an assistant message.
     pub generation_id: Option<GenerationId>,
+    /// Highest generation event sequence committed with this message.
+    ///
+    /// A client may use this cursor for bounded replay after reloading an
+    /// active generation from authoritative SQLite state.
+    pub last_event_sequence: u64,
     /// UTC Unix timestamp in milliseconds when the message was created.
     pub created_at_unix_ms: u64,
     /// UTC Unix timestamp in milliseconds when the message last changed.

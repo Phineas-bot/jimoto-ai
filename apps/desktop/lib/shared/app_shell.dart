@@ -102,6 +102,11 @@ class AppShell extends StatelessWidget {
                 label: localizations.foundationNavigationLabel,
               ),
               NavigationDestination(
+                icon: Icon(Icons.forum_outlined, key: AppKeys.chatNavigation),
+                selectedIcon: const Icon(Icons.forum),
+                label: localizations.chatNavigationLabel,
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.info_outline, key: AppKeys.aboutNavigation),
                 selectedIcon: const Icon(Icons.info),
                 label: localizations.aboutNavigationLabel,

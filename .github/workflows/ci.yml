@@ -21,7 +21,6 @@ jobs:
     timeout-minutes: 60
     env:
       CARGO_TERM_COLOR: always
-      PUB_CACHE: ${{ runner.temp }}\pub-cache
 
     steps:
       - name: Check out repository
@@ -67,6 +66,12 @@ jobs:
           flutter-version: 3.44.8
           dry-run: true
 
+      - name: Configure Flutter package cache
+        shell: pwsh
+        run: |
+          "PUB_CACHE=$env:RUNNER_TEMP\pub-cache" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Cache pinned Flutter SDK
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -83,7 +88,7 @@ jobs:
       - name: Cache Dart and Flutter packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ env.PUB_CACHE }}
+          path: ${{ runner.temp }}\pub-cache
           key: gixgiz-${{ runner.os }}-${{ runner.arch }}-pub-${{ hashFiles('apps/desktop/pubspec.lock', 'apps/desktop/pubspec.yaml') }}
           restore-keys: |
             gixgiz-${{ runner.os }}-${{ runner.arch }}-pub-

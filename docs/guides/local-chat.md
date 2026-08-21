@@ -47,6 +47,10 @@ Schema version 4 adds two tables:
 Invariants are enforced in SQL rather than trusted to application code:
 
 - A partial unique index permits **one active generation per conversation**.
+- Send admission atomically creates the completed user message and generating
+  assistant message only after proving the conversation has no active generation.
+- Deletion is rejected while the conversation has an active generation; the user
+  must stop it and wait for a durable terminal state first.
 - A user message is always `completed` and never carries a generation.
 - Terminal status and `completed_at_unix_ms` imply each other in both directions.
 - Only a `failed` message may carry a failure code.
@@ -54,6 +58,11 @@ Invariants are enforced in SQL rather than trusted to application code:
 
 Assistant output is committed at bounded checkpoints during generation, so a
 crash leaves a coherent partial rather than a torn write or an empty message.
+Terminal generation events are published only after the matching SQLite
+transition commits. If that terminal write fails, the stream reports a
+nonterminal durability interruption and the persisted `generating` state is
+left for deterministic startup recovery.
+
 
 On startup the core reclassifies every message still marked `generating`:
 cancellation-requested becomes `cancelled`, everything else becomes `failed`
@@ -103,12 +112,13 @@ dropped the response carries a `context_truncated` warning.
 
 ## Transport
 
-Eight authenticated routes sit behind the existing sidecar guards: bearer token,
+Nine authenticated routes sit behind the existing sidecar guards: bearer token,
 completed handshake, valid correlation and request identifiers, JSON content
 type, bounded request bodies, concurrency limits, and bounded event streams.
 
 ```text
 POST /internal/v1/chat/conversations
+POST /internal/v1/chat/status
 POST /internal/v1/chat/conversations/list
 POST /internal/v1/chat/conversations/{conversation_id}
 POST /internal/v1/chat/conversations/{conversation_id}/rename
@@ -127,6 +137,12 @@ assistant message identities, and a correlation identifier. Replay is a bounded
 in-memory window, not a durable log. When `replay_incomplete` is set the client
 must reload the authoritative conversation snapshot rather than reconstruct
 state from events. A client disconnect never fails a generation.
+
+Flutter reloads a snapshot with an active generation into an explicit recovering
+state, resumes from the last persisted event sequence when the in-memory replay
+still exists, and otherwise refreshes SQLite-authoritative state. It never maps
+an active snapshot to ordinary ready state. Locality is shown as verified only
+when the core reports both a ready local runtime and the bound model available.
 
 ## Cancellation
 
@@ -150,6 +166,9 @@ owns. It removes nothing else: not the runtime, not the model, not
 provider-owned model files, not setup records, and not other conversations.
 
 ## Privacy and logging
+Deletion returns a stable conflict while the conversation has a generating
+assistant message. Flutter also disables the action as an immediate UX guard.
+
 
 Default logs contain identifiers, counts, byte totals, durations, terminal
 states, and safe error codes. They never contain user messages, assistant
@@ -168,7 +187,8 @@ Deterministic tests use a fake provider, temporary SQLite databases, and no
 network or administrator rights. They cover streaming and completion,
 cancellation, provider failure, missing reuse consent, oversized input, unknown
 conversations, restart recovery, model binding, context bounding, and bounded
-event replay.
+event replay. Remediation regressions additionally cover atomic concurrent send,
+active deletion, terminal persistence faults, active-state rehydration, and log redaction.
 
 The real-provider chat smoke remains ignored by default and requires an
 explicitly prepared runtime with a model that setup already verified. It sends

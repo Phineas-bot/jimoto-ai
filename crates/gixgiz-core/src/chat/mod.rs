@@ -17,15 +17,16 @@ use std::{
 use gixgiz_contracts::{
     CHAT_SCHEMA_VERSION, CancelGenerationRequest, CancelGenerationResponse, CandidateModelId,
     ChatFailureCode, ChatGenerationEvent, ChatGenerationEventKind, ChatGenerationEventsRequest,
-    ChatGenerationEventsResponse, ChatGenerationTerminalState, ChatMessage, ChatMessageStatus,
-    ChatModelIdentity, ChatRole, ChatWarning, ChatWarningCode, ConversationId,
-    ConversationSnapshot, ConversationSummary, CorrelationId, CreateConversationRequest,
-    CreateConversationResponse, DeleteConversationRequest, DeleteConversationResponse,
-    GenerationId, GetConversationRequest, GetConversationResponse, ListConversationsRequest,
-    ListConversationsResponse, MAX_ASSISTANT_OUTPUT_BYTES, MAX_CONVERSATION_TITLE_BYTES,
-    MAX_CONVERSATIONS_PER_PAGE, MAX_GENERATION_EVENT_PAGE, MAX_USER_MESSAGE_BYTES, MessageId,
-    RenameConversationRequest, RenameConversationResponse, RequestId, RuntimeProviderId,
-    SendMessageRequest, SendMessageResponse,
+    ChatGenerationEventsResponse, ChatGenerationTerminalState, ChatLocalityStatus, ChatMessage,
+    ChatMessageStatus, ChatModelIdentity, ChatRecoveryAction, ChatRole, ChatRuntimeStatus,
+    ChatRuntimeStatusRequest, ChatRuntimeStatusResponse, ChatWarning, ChatWarningCode,
+    ConversationId, ConversationSnapshot, ConversationSummary, CorrelationId,
+    CreateConversationRequest, CreateConversationResponse, DeleteConversationRequest,
+    DeleteConversationResponse, GenerationId, GetConversationRequest, GetConversationResponse,
+    ListConversationsRequest, ListConversationsResponse, MAX_ASSISTANT_OUTPUT_BYTES,
+    MAX_CONVERSATION_TITLE_BYTES, MAX_CONVERSATIONS_PER_PAGE, MAX_GENERATION_EVENT_PAGE,
+    MAX_USER_MESSAGE_BYTES, MessageId, RenameConversationRequest, RenameConversationResponse,
+    RequestId, RuntimeProviderId, SendMessageRequest, SendMessageResponse,
 };
 use gixgiz_persistence::{
     ChatRepository, PersistedChatMessage, PersistedChatMessageStatus, PersistedChatRole,
@@ -36,6 +37,7 @@ use gixgiz_runtime::{
     RuntimeOperationContext, RuntimeProvider,
 };
 use tokio::sync::mpsc;
+use tracing::Instrument;
 
 use crate::{CoreError, RuntimeService};
 use context::{BoundedContext, MAX_CONTEXT_BYTES};
@@ -154,6 +156,136 @@ impl ChatService {
         })
     }
 
+    /// Returns provider-neutral evidence for the chat locality indicator.
+    pub async fn runtime_status(
+        &self,
+        request: ChatRuntimeStatusRequest,
+    ) -> Result<ChatRuntimeStatusResponse, CoreError> {
+        let provider_id = self.provider.provider_id().clone();
+        let context = RuntimeOperationContext::new(
+            request.correlation_id,
+            request.request_id,
+            READINESS_TIMEOUT,
+        );
+        let report = match self.runtime.status(&provider_id, context.clone()).await {
+            Ok(report) => report,
+            Err(error) => {
+                return Ok(ChatRuntimeStatusResponse {
+                    status: blocked_runtime_status(
+                        provider_id,
+                        gixgiz_contracts::RuntimeDisplayName::new("Local runtime"),
+                        runtime_chat_failure(&error),
+                    ),
+                    correlation_id: request.correlation_id,
+                    request_id: request.request_id,
+                });
+            }
+        };
+        let display_name = report.display_name.clone();
+        let blocked = if report.state == gixgiz_contracts::RuntimeState::Incompatible {
+            Some(ChatFailureCode::RuntimeIncompatible)
+        } else if report.state != gixgiz_contracts::RuntimeState::Ready
+            || report.endpoint_safety != gixgiz_contracts::RuntimeEndpointSafety::LoopbackVerified
+        {
+            Some(ChatFailureCode::RuntimeUnavailable)
+        } else {
+            None
+        };
+        if let Some(code) = blocked {
+            return Ok(ChatRuntimeStatusResponse {
+                status: blocked_runtime_status(provider_id, display_name, code),
+                correlation_id: request.correlation_id,
+                request_id: request.request_id,
+            });
+        }
+
+        let conversation = if let Some(conversation_id) = request.conversation_id {
+            let repository = self.repository.clone();
+            Some(
+                blocking(move || repository.conversation(conversation_id))
+                    .await?
+                    .map_err(persistence_failure)?
+                    .ok_or(CoreError::Chat(ChatFailureCode::ConversationNotFound))?,
+            )
+        } else {
+            None
+        };
+        let inventory = match self.runtime.list_models(&provider_id, 100, context).await {
+            Ok(inventory) => inventory,
+            Err(error) => {
+                return Ok(ChatRuntimeStatusResponse {
+                    status: blocked_runtime_status(
+                        provider_id,
+                        display_name,
+                        runtime_chat_failure(&error),
+                    ),
+                    correlation_id: request.correlation_id,
+                    request_id: request.request_id,
+                });
+            }
+        };
+        let bound_model = conversation
+            .as_ref()
+            .and_then(|value| value.canonical_model_id.as_deref())
+            .map(CandidateModelId::new);
+        let available = match bound_model.as_ref() {
+            Some(candidate) => inventory
+                .models
+                .iter()
+                .find(|model| model.mapping.catalogue_id.as_ref() == Some(candidate)),
+            None => inventory
+                .models
+                .iter()
+                .find(|model| model.mapping.catalogue_id.is_some()),
+        };
+        let Some(available) = available else {
+            let code = if bound_model.is_some() {
+                ChatFailureCode::ModelChanged
+            } else {
+                ChatFailureCode::ModelUnavailable
+            };
+            return Ok(ChatRuntimeStatusResponse {
+                status: blocked_runtime_status(provider_id, display_name, code),
+                correlation_id: request.correlation_id,
+                request_id: request.request_id,
+            });
+        };
+        let Some(candidate) = available.mapping.catalogue_id.clone() else {
+            return Ok(ChatRuntimeStatusResponse {
+                status: blocked_runtime_status(
+                    provider_id,
+                    display_name,
+                    ChatFailureCode::ModelUnavailable,
+                ),
+                correlation_id: request.correlation_id,
+                request_id: request.request_id,
+            });
+        };
+        let model = conversation
+            .as_ref()
+            .and_then(Self::model_identity)
+            .unwrap_or_else(|| ChatModelIdentity {
+                canonical_model_id: candidate,
+                display_name: available.display_name.clone(),
+                family: String::new(),
+            });
+
+        Ok(ChatRuntimeStatusResponse {
+            status: ChatRuntimeStatus {
+                schema_version: CHAT_SCHEMA_VERSION,
+                provider_id,
+                runtime_display_name: display_name,
+                model: Some(model),
+                locality: ChatLocalityStatus::RunningLocally,
+                ready: true,
+                blocked_by: None,
+                recovery_action: None,
+            },
+            correlation_id: request.correlation_id,
+            request_id: request.request_id,
+        })
+    }
+
     /// Replaces one conversation title.
     pub async fn rename_conversation(
         &self,
@@ -184,7 +316,7 @@ impl ChatService {
         let deleted_message_count =
             blocking(move || repository.delete_conversation(conversation_id))
                 .await?
-                .map_err(persistence_failure)?;
+                .map_err(admission_failure)?;
 
         Ok(DeleteConversationResponse {
             conversation_id,
@@ -213,35 +345,15 @@ impl ChatService {
             .verify_ready_model(conversation_id, request.correlation_id, request.request_id)
             .await?;
 
-        let repository = self.repository.clone();
-        let now = unix_millis();
-        let user_content = content.clone();
-        let user_message = blocking(move || {
-            repository.append_user_message(conversation_id, MessageId::new(), &user_content, now)
-        })
-        .await?
-        .map_err(persistence_failure)?;
-
         let history = self.history(conversation_id).await?;
-        let BoundedContext { messages, warnings } = context::build(&history);
+        let BoundedContext { messages, warnings } = context::build_with_user(&history, &content)
+            .map_err(|()| CoreError::Chat(ChatFailureCode::ContextTooLarge))?;
         let context_bytes: usize = messages.iter().map(|message| message.content.len()).sum();
         if context_bytes > MAX_CONTEXT_BYTES {
             return Err(CoreError::Chat(ChatFailureCode::ContextTooLarge));
         }
 
         let generation_id = GenerationId::new();
-        let repository = self.repository.clone();
-        let assistant_message = blocking(move || {
-            repository.open_assistant_generation(
-                conversation_id,
-                MessageId::new(),
-                generation_id,
-                unix_millis(),
-            )
-        })
-        .await?
-        .map_err(|_| CoreError::Chat(ChatFailureCode::GenerationAlreadyActive))?;
-
         let cancellation = RuntimeCancellationToken::new();
         if !self
             .generations
@@ -250,10 +362,38 @@ impl ChatService {
             return Err(CoreError::Chat(ChatFailureCode::GenerationAlreadyActive));
         }
 
+        let repository = self.repository.clone();
+        let admission = blocking(move || {
+            repository.admit_generation(
+                conversation_id,
+                MessageId::new(),
+                MessageId::new(),
+                generation_id,
+                &content,
+                unix_millis(),
+            )
+        })
+        .await
+        .and_then(|result| result.map_err(admission_failure));
+        let admission = match admission {
+            Ok(admission) => admission,
+            Err(error) => {
+                self.generations.release(generation_id);
+                return Err(error);
+            }
+        };
+        tracing::debug!(
+            conversation_id = %conversation_id,
+            generation_id = %generation_id,
+            context_messages = messages.len(),
+            context_bytes,
+            "chat generation admitted"
+        );
+
         self.spawn_generation(GenerationTask {
             generation_id,
             conversation_id,
-            assistant_message_id: assistant_message.message_id,
+            assistant_message_id: admission.assistant_message.message_id,
             correlation_id: request.correlation_id,
             request_id: request.request_id,
             canonical_model_id: model,
@@ -263,8 +403,8 @@ impl ChatService {
 
         Ok(SendMessageResponse {
             schema_version: CHAT_SCHEMA_VERSION,
-            user_message: contract_message(user_message),
-            assistant_message: contract_message(assistant_message),
+            user_message: contract_message(admission.user_message),
+            assistant_message: contract_message(admission.assistant_message),
             generation_id,
             warnings,
             correlation_id: request.correlation_id,
@@ -465,8 +605,15 @@ impl ChatService {
     }
 
     fn spawn_generation(&self, task: GenerationTask) {
+        let span = tracing::info_span!(
+            "chat_generation",
+            conversation_id = %task.conversation_id,
+            generation_id = %task.generation_id,
+            correlation_id = %task.correlation_id,
+            request_id = %task.request_id,
+        );
         let service = self.clone();
-        tokio::spawn(async move { service.run_generation(task).await });
+        tokio::spawn(async move { service.run_generation(task).await }.instrument(span));
     }
 
     async fn run_generation(&self, task: GenerationTask) {
@@ -575,7 +722,7 @@ impl ChatService {
         let sequence = state.sequence + 1;
         let now = unix_millis();
         let code = failure_code.map(ToOwned::to_owned);
-        let _ = blocking(move || {
+        let committed = blocking(move || {
             repository.finish_assistant_generation(
                 generation_id,
                 persisted,
@@ -585,22 +732,61 @@ impl ChatService {
                 now,
             )
         })
-        .await;
+        .await
+        .and_then(|result| result.map_err(persistence_failure));
 
-        let error = failure_code.map(|code| {
-            gixgiz_contracts::SafeErrorPayload::new(
-                gixgiz_contracts::ErrorCategory::Degraded,
-                code,
-                "The local model stopped before finishing its reply.",
-                gixgiz_contracts::RecoveryGuidance {
-                    action: gixgiz_contracts::RecoveryAction::Retry,
-                    message: "Check the local runtime, then send the message again.".to_owned(),
-                },
-                task.correlation_id,
-                task.request_id,
-            )
+        if committed.is_ok() {
+            let error = failure_code.map(|code| {
+                gixgiz_contracts::SafeErrorPayload::new(
+                    gixgiz_contracts::ErrorCategory::Degraded,
+                    code,
+                    "The local model stopped before finishing its reply.",
+                    gixgiz_contracts::RecoveryGuidance {
+                        action: gixgiz_contracts::RecoveryAction::Retry,
+                        message: "Check the local runtime, then send the message again.".to_owned(),
+                    },
+                    task.correlation_id,
+                    task.request_id,
+                )
+            });
+            tracing::info!(
+                terminal_state = ?terminal,
+                failure_code = failure_code.unwrap_or("none"),
+                output_bytes = state.accumulated.len(),
+                "chat generation terminal state committed"
+            );
+            self.emit(&mut state, kind, None, Some((terminal, error)));
+        } else {
+            tracing::warn!(
+                error_code = "chat.persistence_unavailable",
+                "chat terminal state was not committed"
+            );
+            let context = crate::OperationContext::new(task.correlation_id, task.request_id);
+            let error =
+                CoreError::Chat(ChatFailureCode::PersistenceUnavailable).to_safe_payload(&context);
+            self.emit_durability_interrupted(&mut state, error);
+        }
+    }
+
+    fn emit_durability_interrupted(
+        &self,
+        state: &mut GenerationState,
+        error: gixgiz_contracts::SafeErrorPayload,
+    ) {
+        state.sequence += 1;
+        self.generations.publish(ChatGenerationEvent {
+            schema_version: CHAT_SCHEMA_VERSION,
+            generation_id: state.generation_id,
+            conversation_id: state.conversation_id,
+            assistant_message_id: state.assistant_message_id,
+            correlation_id: state.correlation_id,
+            sequence: state.sequence,
+            kind: ChatGenerationEventKind::DurabilityInterrupted,
+            delta: None,
+            terminal_state: None,
+            error: Some(error),
+            occurred_at_unix_ms: unix_millis(),
         });
-        self.emit(&mut state, kind, None, Some((terminal, error)));
     }
 
     fn emit(
@@ -734,6 +920,7 @@ fn contract_message(message: PersistedChatMessage) -> ChatMessage {
         sequence: message.sequence,
         content: message.content,
         generation_id: message.generation_id,
+        last_event_sequence: message.last_event_sequence,
         created_at_unix_ms: message.created_at_unix_ms,
         updated_at_unix_ms: message.updated_at_unix_ms,
         completed_at_unix_ms: message.completed_at_unix_ms,
@@ -772,6 +959,37 @@ fn runtime_failure(error: RuntimeError) -> CoreError {
 
 fn persistence_failure(_error: gixgiz_persistence::PersistenceError) -> CoreError {
     CoreError::Chat(ChatFailureCode::PersistenceUnavailable)
+}
+
+fn admission_failure(error: gixgiz_persistence::PersistenceError) -> CoreError {
+    match error {
+        gixgiz_persistence::PersistenceError::RecordConflict {
+            entity: "chat_generation",
+        } => CoreError::Chat(ChatFailureCode::GenerationAlreadyActive),
+        other => persistence_failure(other),
+    }
+}
+
+fn blocked_runtime_status(
+    provider_id: RuntimeProviderId,
+    runtime_display_name: gixgiz_contracts::RuntimeDisplayName,
+    code: ChatFailureCode,
+) -> ChatRuntimeStatus {
+    ChatRuntimeStatus {
+        schema_version: CHAT_SCHEMA_VERSION,
+        provider_id,
+        runtime_display_name,
+        model: None,
+        locality: ChatLocalityStatus::Unknown,
+        ready: false,
+        blocked_by: Some(code),
+        recovery_action: Some(match code {
+            ChatFailureCode::ModelUnavailable | ChatFailureCode::ModelChanged => {
+                ChatRecoveryAction::RunModelSetup
+            }
+            _ => ChatRecoveryAction::CheckRuntime,
+        }),
+    }
 }
 
 fn unix_millis() -> u64 {

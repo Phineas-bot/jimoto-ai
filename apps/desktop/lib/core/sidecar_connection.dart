@@ -118,6 +118,10 @@ abstract interface class CoreSidecarSession {
 
   Future<SetupJobRetryResponse> retrySetupJob(SetupJobRetryRequest request);
 
+  Future<ChatRuntimeStatusResponse> chatRuntimeStatus(
+    ChatRuntimeStatusRequest request,
+  );
+
   Future<CreateConversationResponse> createConversation(
     CreateConversationRequest request,
   );
@@ -1253,6 +1257,27 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   }
 
   @override
+  Future<ChatRuntimeStatusResponse> chatRuntimeStatus(
+    ChatRuntimeStatusRequest request,
+  ) async {
+    final response = ChatRuntimeStatusResponse.fromJson(
+      await _post(
+        '/internal/v1/chat/status',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(
+      response.correlationId,
+      response.requestId,
+      request.correlationId,
+      request.requestId,
+    );
+    return response;
+  }
+
+  @override
   Future<CreateConversationResponse> createConversation(
     CreateConversationRequest request,
   ) async {
@@ -1358,7 +1383,9 @@ class IoCoreSidecarSession implements CoreSidecarSession {
   }
 
   @override
-  Future<SendMessageResponse> sendChatMessage(SendMessageRequest request) async {
+  Future<SendMessageResponse> sendChatMessage(
+    SendMessageRequest request,
+  ) async {
     final response = SendMessageResponse.fromJson(
       await _post(
         _chatConversationPath(request.conversationId, 'messages'),

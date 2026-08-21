@@ -1305,6 +1305,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Talk with the local model that GixGiz prepared on this PC.';
 
   @override
+  String get chatLocalityChecking => 'Checking local runtime...';
+
+  @override
+  String get chatLocalityUnknown => 'Local status is not verified';
+
+  @override
+  String get chatRuntimeUnavailable => 'Local runtime needs attention';
+
+  @override
+  String get chatModelUnavailable => 'Local model is not available';
+
+  @override
   String get chatRunningLocally => 'Running locally on this PC';
 
   @override
@@ -1332,6 +1344,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatConversationLoading => 'Opening conversation';
+
+  @override
+  String get chatRecoveringReply => 'Recovering the active local reply';
 
   @override
   String get chatNoConversationSelected =>
@@ -1371,6 +1386,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatRetryAction => 'Try again';
 
   @override
+  String get chatReturnToSetupAction => 'Return to setup';
+
+  @override
   String get chatRenameAction => 'Rename conversation';
 
   @override
@@ -1378,6 +1396,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatDeleteAction => 'Delete conversation';
+
+  @override
+  String get chatDeleteActiveTooltip =>
+      'Stop the active reply before deleting this conversation';
 
   @override
   String get chatDeleteConfirmation =>

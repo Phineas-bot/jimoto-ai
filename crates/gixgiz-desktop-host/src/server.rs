@@ -14,10 +14,11 @@ use axum::{
 };
 use gixgiz_contracts::{
     CancelGenerationRequest, CancelGenerationResponse, CancelOperationRequest,
-    CancelOperationResponse, ChatGenerationEvent, ClientHello, ConversationId, CoreHello,
-    CorrelationId, CreateConversationRequest, CreateConversationResponse,
-    DeleteConversationRequest, DeleteConversationResponse, ErrorCategory, GenerationId,
-    GetConversationRequest, GetConversationResponse, HardwareScanEvent, HardwareScanStartRequest,
+    CancelOperationResponse, ChatGenerationEvent, ChatRuntimeStatusRequest,
+    ChatRuntimeStatusResponse, ClientHello, ConversationId, CoreHello, CorrelationId,
+    CreateConversationRequest, CreateConversationResponse, DeleteConversationRequest,
+    DeleteConversationResponse, ErrorCategory, GenerationId, GetConversationRequest,
+    GetConversationResponse, HardwareScanEvent, HardwareScanStartRequest,
     HardwareScanStartResponse, HealthRequest, HealthResponse, InstanceId, ListConversationsRequest,
     ListConversationsResponse, OperationId, PROTOCOL_VERSION, PlatformStatus,
     RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance,
@@ -246,6 +247,7 @@ fn build_router(state: AppState) -> Router {
             "/internal/v1/setup/jobs/{job_id}/retry",
             post(retry_setup_job),
         )
+        .route("/internal/v1/chat/status", post(chat_runtime_status))
         .route("/internal/v1/chat/conversations", post(create_conversation))
         .route(
             "/internal/v1/chat/conversations/list",
@@ -1563,6 +1565,20 @@ fn invalid_chat_events_query(ids: BoundaryIds) -> ApiFailure {
     )
 }
 
+async fn chat_runtime_status(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<ChatRuntimeStatusRequest>, JsonRejection>,
+) -> Result<Json<ChatRuntimeStatusResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    chat_service(&state, ids)?
+        .runtime_status(request)
+        .await
+        .map(Json)
+        .map_err(|error| chat_failure(error, ids))
+}
+
 async fn create_conversation(
     State(state): State<AppState>,
     Extension(ids): Extension<BoundaryIds>,
@@ -2591,6 +2607,26 @@ mod tests {
 
         let created = create_conversation_via_router(&router).await;
         let conversation_id = created.conversation_id;
+
+        let status_request = ChatRuntimeStatusRequest {
+            conversation_id: Some(conversation_id),
+            correlation_id: CorrelationId::new(),
+            request_id: RequestId::new(),
+        };
+        let status_response = router
+            .clone()
+            .oneshot(json_request(
+                "/internal/v1/chat/status",
+                Some(TOKEN),
+                &status_request,
+            ))
+            .await
+            .expect("router responds");
+        assert_eq!(status_response.status(), StatusCode::OK);
+        let chat_status: ChatRuntimeStatusResponse = response_json(status_response).await;
+        assert_eq!(chat_status.correlation_id, status_request.correlation_id);
+        assert_eq!(chat_status.request_id, status_request.request_id);
+        assert!(!chat_status.status.ready);
 
         let list_request = ListConversationsRequest {
             limit: 50,

@@ -158,6 +158,15 @@ pub struct PersistedConversationInput {
     pub created_at_unix_ms: u64,
 }
 
+/// Atomically admitted user and assistant messages for one generation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PersistedGenerationAdmission {
+    /// Completed user message that initiated the generation.
+    pub user_message: PersistedChatMessage,
+    /// Assistant message opened in the generating state.
+    pub assistant_message: PersistedChatMessage,
+}
+
 /// Terminal outcome committed for one assistant generation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -369,6 +378,19 @@ impl ChatRepository {
         conversation_id: ConversationId,
     ) -> Result<u32, PersistenceError> {
         self.persistence.with_write_transaction(|transaction| {
+            let active: i64 = transaction
+                .query_row(
+                    "SELECT COUNT(*) FROM messages
+                     WHERE conversation_id = ?1 AND status = 'generating'",
+                    params![conversation_id.to_string()],
+                    |row| row.get(0),
+                )
+                .map_err(|source| PersistenceError::sqlite("check_delete_generation", source))?;
+            if active > 0 {
+                return Err(PersistenceError::RecordConflict {
+                    entity: "chat_generation",
+                });
+            }
             let owned: i64 = transaction
                 .query_row(
                     "SELECT COUNT(*) FROM messages WHERE conversation_id = ?1",
@@ -507,6 +529,87 @@ impl ChatRepository {
                 )
                 .map_err(|source| PersistenceError::sqlite("insert_assistant_message", source))?;
             read_message(transaction, message_id)
+        })
+    }
+
+    /// Atomically appends a user message and opens its assistant generation.
+    ///
+    /// Conversation validation, active-generation exclusion, both sequence
+    /// allocations, and both inserts share one transaction. A rejected
+    /// generation therefore cannot leave an orphaned user message.
+    pub fn admit_generation(
+        &self,
+        conversation_id: ConversationId,
+        user_message_id: MessageId,
+        assistant_message_id: MessageId,
+        generation_id: GenerationId,
+        content: &str,
+        now_unix_ms: u64,
+    ) -> Result<PersistedGenerationAdmission, PersistenceError> {
+        validate_content(content)?;
+        if content.trim().is_empty() {
+            return Err(PersistenceError::InvalidRecord { field: "content" });
+        }
+        let now = to_i64(now_unix_ms, "created_at_unix_ms")?;
+        self.persistence.with_write_transaction(|transaction| {
+            let active: i64 = transaction
+                .query_row(
+                    "SELECT COUNT(*) FROM messages
+                     WHERE conversation_id = ?1 AND status = 'generating'",
+                    params![conversation_id.to_string()],
+                    |row| row.get(0),
+                )
+                .map_err(|source| PersistenceError::sqlite("check_active_generation", source))?;
+            if active > 0 {
+                return Err(PersistenceError::RecordConflict {
+                    entity: "chat_generation",
+                });
+            }
+
+            let user_sequence = allocate_sequence(transaction, conversation_id, now)?;
+            transaction
+                .execute(
+                    "INSERT INTO messages
+                     (message_id, conversation_id, role, status, sequence, content,
+                      generation_id, cancellation_requested, last_event_sequence, failure_code,
+                      created_at_unix_ms, updated_at_unix_ms, completed_at_unix_ms)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, 0, 0, NULL, ?7, ?7, ?7)",
+                    params![
+                        user_message_id.to_string(),
+                        conversation_id.to_string(),
+                        PersistedChatRole::User.as_str(),
+                        PersistedChatMessageStatus::Completed.as_str(),
+                        user_sequence,
+                        content,
+                        now,
+                    ],
+                )
+                .map_err(|source| PersistenceError::sqlite("admit_user_message", source))?;
+
+            let assistant_sequence = allocate_sequence(transaction, conversation_id, now)?;
+            transaction
+                .execute(
+                    "INSERT INTO messages
+                     (message_id, conversation_id, role, status, sequence, content,
+                      generation_id, cancellation_requested, last_event_sequence, failure_code,
+                      created_at_unix_ms, updated_at_unix_ms, completed_at_unix_ms)
+                     VALUES (?1, ?2, ?3, ?4, ?5, '', ?6, 0, 0, NULL, ?7, ?7, NULL)",
+                    params![
+                        assistant_message_id.to_string(),
+                        conversation_id.to_string(),
+                        PersistedChatRole::Assistant.as_str(),
+                        PersistedChatMessageStatus::Generating.as_str(),
+                        assistant_sequence,
+                        generation_id.to_string(),
+                        now,
+                    ],
+                )
+                .map_err(|source| PersistenceError::sqlite("admit_assistant_message", source))?;
+
+            Ok(PersistedGenerationAdmission {
+                user_message: read_message(transaction, user_message_id)?,
+                assistant_message: read_message(transaction, assistant_message_id)?,
+            })
         })
     }
 

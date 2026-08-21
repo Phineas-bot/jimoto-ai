@@ -183,6 +183,32 @@ void main() {
   });
 
   test(
+    'chat locality remains typed and requests the negotiated capability',
+    () async {
+      const conversationId = '00000000-0000-4000-8000-000000000099';
+      final session = _FakeSession(readiness: ReadinessStatus.ready);
+      final client = SidecarCoreClient(
+        connector: _FakeConnector.session(session),
+      );
+
+      final status = await client.chatRuntimeStatus(
+        conversationId: conversationId,
+      );
+
+      expect(status.locality, ChatLocalityStatus.runningLocally);
+      expect(status.ready, isTrue);
+      expect(
+        session.lastChatRuntimeStatusRequest?.conversationId,
+        conversationId,
+      );
+      expect(
+        session.lastHello?.requestedCapabilities,
+        contains(TransportCapability.localChat),
+      );
+    },
+  );
+
+  test(
     'runtime calls fail locally when capability was not negotiated',
     () async {
       final session = _FakeSession(
@@ -487,6 +513,7 @@ class _FakeSession implements CoreSidecarSession {
       TransportCapability.runtimeConsent,
       TransportCapability.runtimeLifecycle,
       TransportCapability.runtimeModelInventory,
+      TransportCapability.localChat,
       TransportCapability.cancellation,
     ],
   });
@@ -507,6 +534,7 @@ class _FakeSession implements CoreSidecarSession {
   RuntimeConsentDecision? lastConsentDecision;
   RuntimeProviderId? lastRuntimeRequestProviderId;
   SetupApprovalRequest? lastSetupApprovalRequest;
+  ChatRuntimeStatusRequest? lastChatRuntimeStatusRequest;
   SetupJobCancelRequest? lastSetupCancelRequest;
   SetupJobEventsRequest? lastSetupEventsRequest;
   SetupJobRetryRequest? lastSetupRetryRequest;
@@ -905,7 +933,32 @@ class _FakeSession implements CoreSidecarSession {
     );
   }
 
-    @override
+  @override
+  Future<ChatRuntimeStatusResponse> chatRuntimeStatus(
+    ChatRuntimeStatusRequest request,
+  ) async {
+    lastChatRuntimeStatusRequest = request;
+    return ChatRuntimeStatusResponse(
+      status: const ChatRuntimeStatus(
+        blockedBy: null,
+        locality: ChatLocalityStatus.runningLocally,
+        model: ChatModelIdentity(
+          canonicalModelId: 'fixture-model',
+          displayName: 'Fixture model',
+          family: 'fixture',
+        ),
+        providerId: 'gixgiz.runtime.test.v1',
+        ready: true,
+        recoveryAction: null,
+        runtimeDisplayName: 'Fixture runtime',
+        schemaVersion: 1,
+      ),
+      correlationId: request.correlationId,
+      requestId: request.requestId,
+    );
+  }
+
+  @override
   Future<CreateConversationResponse> createConversation(
     CreateConversationRequest request,
   ) => throw UnimplementedError();

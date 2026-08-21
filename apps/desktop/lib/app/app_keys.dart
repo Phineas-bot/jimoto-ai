@@ -122,7 +122,9 @@ abstract final class AppKeys {
   static const chatLocalityBadge = ValueKey<String>('chat.locality');
   static const chatNewConversationButton = ValueKey<String>('chat.new');
   static const chatConversationList = ValueKey<String>('chat.conversations');
-  static const chatConversationsEmpty = ValueKey<String>('chat.conversations_empty');
+  static const chatConversationsEmpty = ValueKey<String>(
+    'chat.conversations_empty',
+  );
   static const chatNoConversationSelected = ValueKey<String>('chat.unselected');
   static const chatMessageList = ValueKey<String>('chat.messages');
   static const chatStreamingMessage = ValueKey<String>('chat.streaming');
@@ -131,8 +133,12 @@ abstract final class AppKeys {
   static const chatStopButton = ValueKey<String>('chat.stop');
   static const chatRenameButton = ValueKey<String>('chat.rename');
   static const chatDeleteButton = ValueKey<String>('chat.delete');
-  static const chatDeleteConfirmButton = ValueKey<String>('chat.delete_confirm');
+  static const chatDeleteConfirmButton = ValueKey<String>(
+    'chat.delete_confirm',
+  );
   static const chatRetryButton = ValueKey<String>('chat.retry');
+  static const chatRecoveryButton = ValueKey<String>('chat.recovery');
+  static const chatRecovering = ValueKey<String>('chat.recovering');
   static const chatAttention = ValueKey<String>('chat.attention');
   static const chatFailed = ValueKey<String>('chat.failed');
 }

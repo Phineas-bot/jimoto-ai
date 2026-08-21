@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    io::{self, Write},
+    sync::{Arc, Mutex, OnceLock},
+    time::Duration,
+};
 
 use gixgiz_contracts::{
     CandidateModelId, ChatFailureCode, ChatMessageStatus, ConversationId, CorrelationId,
@@ -16,6 +20,64 @@ use gixgiz_runtime::{
 use super::*;
 
 const MODEL: &str = "qwen2.5.0.5b-instruct";
+
+const PRIVATE_CHAT_SENTINEL: &str = "GIXGIZ_PRIVATE_CHAT_SENTINEL_DO_NOT_LOG";
+
+#[derive(Clone, Default)]
+struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+
+impl Write for LogBuffer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0
+            .lock()
+            .map_err(|_| io::Error::other("log buffer lock poisoned"))?
+            .extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'writer> tracing_subscriber::fmt::MakeWriter<'writer> for LogBuffer {
+    type Writer = Self;
+
+    fn make_writer(&'writer self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+impl LogBuffer {
+    fn contents(&self) -> String {
+        self.0.lock().map_or_else(
+            |_| String::new(),
+            |bytes| String::from_utf8_lossy(&bytes).into_owned(),
+        )
+    }
+
+    fn clear(&self) {
+        if let Ok(mut bytes) = self.0.lock() {
+            bytes.clear();
+        }
+    }
+}
+fn production_log_capture() -> LogBuffer {
+    static LOGS: OnceLock<LogBuffer> = OnceLock::new();
+    LOGS.get_or_init(|| {
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .without_time()
+            .with_ansi(false)
+            .with_target(false)
+            .with_writer(logs.clone())
+            .finish();
+        tracing::subscriber::set_global_default(subscriber).expect("install test log subscriber");
+        logs
+    })
+    .clone()
+}
 
 fn provider_id() -> RuntimeProviderId {
     RuntimeProviderId::new("gixgiz.runtime.test.v1")
@@ -269,6 +331,52 @@ async fn provider_failure_never_becomes_assistant_text() {
 }
 
 #[tokio::test]
+async fn default_chat_tracing_excludes_private_message_and_provider_content() {
+    let logs = production_log_capture();
+    logs.clear();
+    let cases = vec![
+        (vec![PRIVATE_CHAT_SENTINEL.to_owned()], success()),
+        (Vec::new(), Err(RuntimeError::ProviderUnavailable)),
+        (
+            vec![PRIVATE_CHAT_SENTINEL.to_owned()],
+            Err(RuntimeError::Cancelled),
+        ),
+    ];
+
+    for (deltas, result) in cases {
+        let temporary = tempfile::tempdir().expect("temporary directory is available");
+        let (persistence, service) = harness(&temporary, fake(deltas, result), true).await;
+        let conversation_id = new_conversation(&service).await;
+        let (correlation_id, request_id) = ids();
+        let sent = service
+            .send_message(SendMessageRequest {
+                conversation_id,
+                content: PRIVATE_CHAT_SENTINEL.to_owned(),
+                correlation_id,
+                request_id,
+            })
+            .await
+            .expect("generation is admitted");
+        await_terminal(&persistence, sent.generation_id).await;
+    }
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+    while !logs
+        .contents()
+        .contains("chat generation terminal state committed")
+    {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "terminal log missing"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    let output = logs.contents();
+    assert!(output.contains("chat generation terminal state committed"));
+    assert!(!output.contains(PRIVATE_CHAT_SENTINEL));
+}
+#[tokio::test]
 async fn missing_reuse_consent_blocks_chat_with_an_actionable_code() {
     let temporary = tempfile::tempdir().expect("temporary directory is available");
     let (_persistence, service) =
@@ -517,4 +625,326 @@ async fn cancellation_token_reaches_a_registered_generation() {
     assert!(registry.register(generation_id, token.clone()));
     assert!(registry.cancel(generation_id));
     assert!(token.is_cancelled());
+}
+
+#[tokio::test]
+async fn active_generation_delete_is_rejected_without_losing_its_cancellation_target() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let (persistence, service) = harness(&temporary, fake(Vec::new(), success()), true).await;
+    let conversation_id = new_conversation(&service).await;
+    let generation_id = GenerationId::new();
+    let cancellation = RuntimeCancellationToken::new();
+    persistence
+        .chat()
+        .admit_generation(
+            conversation_id,
+            MessageId::new(),
+            MessageId::new(),
+            generation_id,
+            "keep this",
+            10,
+        )
+        .expect("generation is admitted");
+    assert!(
+        service
+            .generations
+            .register(generation_id, cancellation.clone())
+    );
+
+    let (correlation_id, request_id) = ids();
+    let rejected = service
+        .delete_conversation(DeleteConversationRequest {
+            conversation_id,
+            correlation_id,
+            request_id,
+        })
+        .await;
+
+    assert!(matches!(
+        rejected,
+        Err(CoreError::Chat(ChatFailureCode::GenerationAlreadyActive))
+    ));
+    assert!(service.generations.cancel(generation_id));
+    assert!(cancellation.is_cancelled());
+    assert_eq!(
+        persistence
+            .chat()
+            .messages(conversation_id)
+            .expect("messages remain")
+            .len(),
+        2
+    );
+
+    persistence
+        .chat()
+        .request_cancellation(generation_id, 11)
+        .expect("cancellation intent persists");
+    persistence
+        .chat()
+        .finish_assistant_generation(
+            generation_id,
+            PersistedGenerationOutcome::Cancelled,
+            "",
+            None,
+            1,
+            12,
+        )
+        .expect("terminal cancellation commits");
+    service.generations.release(generation_id);
+    let (correlation_id, request_id) = ids();
+    let deleted = service
+        .delete_conversation(DeleteConversationRequest {
+            conversation_id,
+            correlation_id,
+            request_id,
+        })
+        .await
+        .expect("terminal conversation deletes");
+    assert!(deleted.deleted);
+    assert_eq!(deleted.deleted_message_count, 2);
+}
+
+async fn assert_terminal_write_failure_is_not_published(
+    outcome: Result<RuntimeGenerationResult, RuntimeError>,
+    cancellation_requested: bool,
+) {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let conversation_id;
+    let generation_id = GenerationId::new();
+    {
+        let (persistence, service) = harness(&temporary, fake(Vec::new(), success()), true).await;
+        conversation_id = new_conversation(&service).await;
+        let admission = persistence
+            .chat()
+            .admit_generation(
+                conversation_id,
+                MessageId::new(),
+                MessageId::new(),
+                generation_id,
+                "private user content",
+                10,
+            )
+            .expect("generation is admitted");
+        let cancellation = RuntimeCancellationToken::new();
+        assert!(
+            service
+                .generations
+                .register(generation_id, cancellation.clone())
+        );
+        if cancellation_requested {
+            cancellation.cancel();
+            persistence
+                .chat()
+                .request_cancellation(generation_id, 11)
+                .expect("cancellation intent persists");
+        }
+
+        let database = temporary
+            .path()
+            .join("gixgiz-test-root")
+            .join("data")
+            .join("gixgiz.db");
+        let fault = rusqlite::Connection::open(database).expect("fault connection opens");
+        fault
+            .execute_batch(
+                "CREATE TRIGGER fail_chat_terminal
+                 BEFORE UPDATE OF status ON messages
+                 WHEN OLD.generation_id IS NOT NULL
+                      AND NEW.status IN ('completed', 'cancelled', 'failed')
+                 BEGIN
+                     SELECT RAISE(ABORT, 'injected terminal persistence failure');
+                 END;",
+            )
+            .expect("terminal fault is installed");
+
+        let (correlation_id, request_id) = ids();
+        let task = GenerationTask {
+            generation_id,
+            conversation_id,
+            assistant_message_id: admission.assistant_message.message_id,
+            correlation_id,
+            request_id,
+            canonical_model_id: CandidateModelId::new(MODEL),
+            messages: Vec::new(),
+            cancellation,
+        };
+        let mut state = GenerationState::new(&task);
+        state.accumulated = "private assistant output".to_owned();
+        service.emit(&mut state, ChatGenerationEventKind::Started, None, None);
+        service.commit(state, outcome, &task).await;
+
+        let subscription = service
+            .observe(generation_id, 0)
+            .expect("durability interruption remains observable");
+        assert!(
+            subscription
+                .replay
+                .iter()
+                .all(|event| event.terminal_state.is_none())
+        );
+        let interruption = subscription.replay.last().expect("final event exists");
+        assert_eq!(
+            interruption.kind,
+            ChatGenerationEventKind::DurabilityInterrupted
+        );
+        assert_eq!(
+            interruption.error.as_ref().map(|error| error.code.as_str()),
+            Some("chat.persistence_unavailable")
+        );
+        let durable = persistence
+            .chat()
+            .message_by_generation(generation_id)
+            .expect("generation reads")
+            .expect("generation remains durable");
+        assert_eq!(durable.status, PersistedChatMessageStatus::Generating);
+
+        fault
+            .execute_batch("DROP TRIGGER fail_chat_terminal")
+            .expect("terminal fault is removed");
+    }
+
+    let root = DataRoot::from_override(temporary.path().join("gixgiz-test-root"))
+        .expect("isolated test root initializes");
+    let persistence = Persistence::open(root).expect("database reopens");
+    assert_eq!(
+        persistence
+            .chat()
+            .recover_interrupted_generations(20)
+            .expect("restart recovery commits"),
+        1
+    );
+    let recovered = persistence
+        .chat()
+        .message_by_generation(generation_id)
+        .expect("generation reads")
+        .expect("generation survives restart");
+    assert_eq!(
+        recovered.status,
+        if cancellation_requested {
+            PersistedChatMessageStatus::Cancelled
+        } else {
+            PersistedChatMessageStatus::Failed
+        }
+    );
+}
+
+#[tokio::test]
+async fn provider_completion_is_not_published_when_terminal_storage_fails() {
+    assert_terminal_write_failure_is_not_published(
+        Ok(RuntimeGenerationResult {
+            emitted_bytes: 24,
+            completed_at_unix_ms: 12,
+        }),
+        false,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn provider_cancellation_is_not_published_when_terminal_storage_fails() {
+    assert_terminal_write_failure_is_not_published(Err(RuntimeError::Cancelled), true).await;
+}
+
+#[tokio::test]
+async fn provider_failure_is_not_published_when_terminal_storage_fails() {
+    assert_terminal_write_failure_is_not_published(Err(RuntimeError::ProviderUnavailable), false)
+        .await;
+}
+
+#[tokio::test]
+async fn chat_runtime_status_requires_verified_local_runtime_and_model_evidence() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let (_persistence, service) = harness(&temporary, fake(Vec::new(), success()), true).await;
+    let (correlation_id, request_id) = ids();
+
+    let response = service
+        .runtime_status(ChatRuntimeStatusRequest {
+            conversation_id: None,
+            correlation_id,
+            request_id,
+        })
+        .await
+        .expect("chat runtime status resolves");
+
+    assert!(response.status.ready);
+    assert_eq!(response.status.locality, ChatLocalityStatus::RunningLocally);
+    assert_eq!(
+        response
+            .status
+            .model
+            .as_ref()
+            .map(|model| model.canonical_model_id.as_str()),
+        Some(MODEL)
+    );
+    assert!(response.status.blocked_by.is_none());
+}
+
+#[tokio::test]
+async fn chat_runtime_status_reports_runtime_loss_without_locality_claim() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let provider = FakeRuntimeProvider::new(
+        provider_id(),
+        Err(RuntimeError::ProviderUnavailable),
+        Err(RuntimeError::ProviderUnavailable),
+        Ok(inventory(true)),
+    )
+    .with_chat_results(Vec::new(), success());
+    let (_persistence, service) = harness(&temporary, provider, false).await;
+    let (correlation_id, request_id) = ids();
+
+    let response = service
+        .runtime_status(ChatRuntimeStatusRequest {
+            conversation_id: None,
+            correlation_id,
+            request_id,
+        })
+        .await
+        .expect("unavailable status remains a safe report");
+
+    assert!(!response.status.ready);
+    assert_eq!(response.status.locality, ChatLocalityStatus::Unknown);
+    assert_eq!(
+        response.status.blocked_by,
+        Some(ChatFailureCode::RuntimeUnavailable)
+    );
+    assert_eq!(
+        response.status.recovery_action,
+        Some(ChatRecoveryAction::CheckRuntime)
+    );
+}
+
+#[tokio::test]
+async fn chat_runtime_status_reports_missing_model_without_locality_claim() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let provider = fake(Vec::new(), success());
+    let (persistence, _service) = harness(&temporary, provider, true).await;
+    let unavailable_provider = FakeRuntimeProvider::new(
+        provider_id(),
+        Ok(observation()),
+        Ok(observation()),
+        Ok(inventory(false)),
+    )
+    .with_chat_results(Vec::new(), success());
+    let service = ChatService::with_persistence(Arc::new(unavailable_provider), &persistence);
+    let (correlation_id, request_id) = ids();
+
+    let response = service
+        .runtime_status(ChatRuntimeStatusRequest {
+            conversation_id: None,
+            correlation_id,
+            request_id,
+        })
+        .await
+        .expect("missing model remains a safe report");
+
+    assert!(!response.status.ready);
+    assert_eq!(response.status.locality, ChatLocalityStatus::Unknown);
+    assert_eq!(
+        response.status.blocked_by,
+        Some(ChatFailureCode::ModelUnavailable)
+    );
+    assert_eq!(
+        response.status.recovery_action,
+        Some(ChatRecoveryAction::RunModelSetup)
+    );
 }

@@ -20,7 +20,7 @@ mod setup;
 pub use chat::{
     ChatRepository, INTERRUPTED_FAILURE_CODE, PersistedChatMessage, PersistedChatMessageStatus,
     PersistedChatRole, PersistedConversation, PersistedConversationInput,
-    PersistedGenerationOutcome,
+    PersistedGenerationAdmission, PersistedGenerationOutcome,
 };
 pub use data_root::DataRoot;
 pub use database::{DatabaseConfiguration, Persistence, PersistenceHealth, PersistenceOptions};

@@ -585,6 +585,7 @@ enum ChatGenerationEventKind {
   cancelled('cancelled'),
   failed('failed'),
   timedOut('timed_out'),
+  durabilityInterrupted('durability_interrupted'),
   unknown('unknown'),
   ;
 
@@ -728,6 +729,7 @@ class ChatMessage {
     required this.conversationId,
     required this.createdAtUnixMs,
     required this.generationId,
+    required this.lastEventSequence,
     required this.messageId,
     required this.role,
     required this.sequence,
@@ -740,6 +742,7 @@ class ChatMessage {
   final ConversationId conversationId;
   final int createdAtUnixMs;
   final GenerationId? generationId;
+  final int lastEventSequence;
   final MessageId messageId;
   final ChatRole role;
   final int sequence;
@@ -753,6 +756,7 @@ class ChatMessage {
       conversationId: _contractString(json['conversation_id'], 'ChatMessage.conversation_id'),
       createdAtUnixMs: _contractInt(json['created_at_unix_ms'], 'ChatMessage.created_at_unix_ms'),
       generationId: json['generation_id'] == null ? null : _contractString(json['generation_id'], 'ChatMessage.generation_id'),
+      lastEventSequence: _contractInt(json['last_event_sequence'], 'ChatMessage.last_event_sequence'),
       messageId: _contractString(json['message_id'], 'ChatMessage.message_id'),
       role: ChatRole.fromJson(json['role']),
       sequence: _contractInt(json['sequence'], 'ChatMessage.sequence'),
@@ -768,6 +772,7 @@ class ChatMessage {
       'conversation_id': conversationId,
       'created_at_unix_ms': createdAtUnixMs,
       'generation_id': generationId,
+      'last_event_sequence': lastEventSequence,
       'message_id': messageId,
       'role': role.toJson(),
       'sequence': sequence,
@@ -923,6 +928,62 @@ class ChatRuntimeStatus {
       'recovery_action': recoveryAction?.toJson(),
       'runtime_display_name': runtimeDisplayName,
       'schema_version': schemaVersion,
+    };
+  }
+}
+
+class ChatRuntimeStatusRequest {
+  const ChatRuntimeStatusRequest({
+    required this.conversationId,
+    required this.correlationId,
+    required this.requestId,
+  });
+
+  final ConversationId? conversationId;
+  final CorrelationId correlationId;
+  final RequestId requestId;
+
+  factory ChatRuntimeStatusRequest.fromJson(Map<String, dynamic> json) {
+    return ChatRuntimeStatusRequest(
+      conversationId: json['conversation_id'] == null ? null : _contractString(json['conversation_id'], 'ChatRuntimeStatusRequest.conversation_id'),
+      correlationId: _contractString(json['correlation_id'], 'ChatRuntimeStatusRequest.correlation_id'),
+      requestId: _contractString(json['request_id'], 'ChatRuntimeStatusRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'conversation_id': conversationId,
+      'correlation_id': correlationId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class ChatRuntimeStatusResponse {
+  const ChatRuntimeStatusResponse({
+    required this.correlationId,
+    required this.requestId,
+    required this.status,
+  });
+
+  final CorrelationId correlationId;
+  final RequestId requestId;
+  final ChatRuntimeStatus status;
+
+  factory ChatRuntimeStatusResponse.fromJson(Map<String, dynamic> json) {
+    return ChatRuntimeStatusResponse(
+      correlationId: _contractString(json['correlation_id'], 'ChatRuntimeStatusResponse.correlation_id'),
+      requestId: _contractString(json['request_id'], 'ChatRuntimeStatusResponse.request_id'),
+      status: ChatRuntimeStatus.fromJson(_contractMap(json['status'], 'ChatRuntimeStatusResponse.status')),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'request_id': requestId,
+      'status': status.toJson(),
     };
   }
 }
