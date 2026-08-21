@@ -37,6 +37,86 @@ void main() {
     expect(find.text('Foundation'), findsWidgets);
   });
 
+  testWidgets('narrow navigation reaches each primary destination exactly', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const GixGizApp(
+        coreClient: StubCoreClient(
+          CoreConnectionSnapshot(kind: CoreConnectionKind.ready),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+
+    await tester.tap(find.byKey(AppKeys.chatNavigation));
+    await tester.pumpAndSettle();
+    expect(find.text('Chat'), findsWidgets);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+
+    await tester.tap(find.byKey(AppKeys.aboutNavigation));
+    await tester.pumpAndSettle();
+    expect(find.text('About GixGiz'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      2,
+    );
+
+    await tester.tap(find.byKey(AppKeys.foundationNavigation));
+    await tester.pumpAndSettle();
+    expect(find.text('Foundation'), findsWidgets);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+  });
+
+  testWidgets('keyboard activates the narrow Chat destination', (tester) async {
+    tester.view.physicalSize = const Size(600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const GixGizApp(
+        coreClient: StubCoreClient(
+          CoreConnectionSnapshot(kind: CoreConnectionKind.ready),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (var step = 0; step < 30; step += 1) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      if (_focusContains(tester, find.byKey(AppKeys.chatNavigation))) {
+        break;
+      }
+    }
+
+    expect(_focusContains(tester, find.byKey(AppKeys.chatNavigation)), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat'), findsWidgets);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+  });
   testWidgets('keyboard activates rail navigation destination', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
@@ -176,6 +256,23 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Foundation check failed'), findsOneWidget);
   });
+}
+
+bool _focusContains(WidgetTester tester, Finder finder) {
+  final target = tester.element(finder);
+  final focusContext = FocusManager.instance.primaryFocus?.context;
+  if (focusContext is! Element) {
+    return false;
+  }
+  if (identical(target, focusContext)) {
+    return true;
+  }
+  var contains = false;
+  target.visitAncestorElements((ancestor) {
+    contains = identical(ancestor, focusContext);
+    return !contains;
+  });
+  return contains;
 }
 
 Future<void> _pumpFoundation(

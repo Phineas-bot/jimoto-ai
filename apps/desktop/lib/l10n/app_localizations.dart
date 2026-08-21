@@ -2273,6 +2273,30 @@ abstract class AppLocalizations {
   /// **'Talk with the local model that GixGiz prepared on this PC.'**
   String get chatDescription;
 
+  /// No description provided for @chatLocalityChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking local runtime...'**
+  String get chatLocalityChecking;
+
+  /// No description provided for @chatLocalityUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Local status is not verified'**
+  String get chatLocalityUnknown;
+
+  /// No description provided for @chatRuntimeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Local runtime needs attention'**
+  String get chatRuntimeUnavailable;
+
+  /// No description provided for @chatModelUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Local model is not available'**
+  String get chatModelUnavailable;
+
   /// No description provided for @chatRunningLocally.
   ///
   /// In en, this message translates to:
@@ -2320,6 +2344,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opening conversation'**
   String get chatConversationLoading;
+
+  /// No description provided for @chatRecoveringReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovering the active local reply'**
+  String get chatRecoveringReply;
 
   /// No description provided for @chatNoConversationSelected.
   ///
@@ -2375,6 +2405,12 @@ abstract class AppLocalizations {
   /// **'Try again'**
   String get chatRetryAction;
 
+  /// No description provided for @chatReturnToSetupAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to setup'**
+  String get chatReturnToSetupAction;
+
   /// No description provided for @chatRenameAction.
   ///
   /// In en, this message translates to:
@@ -2392,6 +2428,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete conversation'**
   String get chatDeleteAction;
+
+  /// No description provided for @chatDeleteActiveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the active reply before deleting this conversation'**
+  String get chatDeleteActiveTooltip;
 
   /// No description provided for @chatDeleteConfirmation.
   ///

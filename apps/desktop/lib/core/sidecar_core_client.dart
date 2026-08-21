@@ -503,6 +503,22 @@ class SidecarCoreClient extends CoreClient {
   }
 
   @override
+  Future<ChatRuntimeStatus> chatRuntimeStatus({
+    ConversationId? conversationId,
+  }) async {
+    return _chatRequest((session) async {
+      final response = await session.chatRuntimeStatus(
+        ChatRuntimeStatusRequest(
+          conversationId: conversationId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.status;
+    });
+  }
+
+  @override
   Future<ConversationSnapshot> createConversation({String? title}) async {
     return _chatRequest((session) async {
       final response = await session.createConversation(
@@ -689,6 +705,7 @@ class SidecarCoreClient extends CoreClient {
             TransportCapability.runtimeLifecycle,
             TransportCapability.runtimeModelInventory,
             TransportCapability.setupWorkflow,
+            TransportCapability.localChat,
             TransportCapability.cancellation,
             TransportCapability.shutdown,
           ],

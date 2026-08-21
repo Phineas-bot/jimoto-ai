@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:gixgiz_desktop/app/app_routes.dart';
 import 'package:gixgiz_desktop/core/core_client.dart';
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/features/chat/chat_screen.dart';
@@ -28,6 +29,7 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     unawaited(_loadConversations());
+    unawaited(_loadRuntimeStatus());
   }
 
   @override
@@ -37,6 +39,7 @@ class _ChatPageState extends State<ChatPage> {
       _detachGeneration();
       setState(() => _state = const ChatViewState.initial());
       unawaited(_loadConversations());
+      unawaited(_loadRuntimeStatus());
     }
   }
 
@@ -99,6 +102,46 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _loadRuntimeStatus({ConversationId? conversationId}) async {
+    final client = widget.coreClient;
+    setState(() {
+      _state = _state.copyWith(locality: const ChatLocalityChecking());
+    });
+    try {
+      final status = await client.chatRuntimeStatus(
+        conversationId: conversationId ?? _state.selectedConversationId,
+      );
+      if (!_isCurrent(client)) {
+        return;
+      }
+      setState(() {
+        _state = _state.copyWith(
+          locality: ChatLocalityAvailable(status: status),
+        );
+      });
+    } on CoreClientFailure catch (failure) {
+      if (!_isCurrent(client)) {
+        return;
+      }
+      setState(() {
+        _state = _state.copyWith(
+          locality: ChatLocalityFailed(diagnosticCode: failure.code),
+        );
+      });
+    } on UnsupportedError {
+      if (!_isCurrent(client)) {
+        return;
+      }
+      setState(() {
+        _state = _state.copyWith(
+          locality: const ChatLocalityFailed(
+            diagnosticCode: 'CHAT_STATUS_UNAVAILABLE',
+          ),
+        );
+      });
+    }
+  }
+
   Future<void> _createConversation() async {
     final client = widget.coreClient;
     setState(() => _state = _state.copyWith(busy: true));
@@ -115,6 +158,9 @@ class _ChatPageState extends State<ChatPage> {
         );
       });
       await _loadConversations();
+      unawaited(
+        _loadRuntimeStatus(conversationId: conversation.conversationId),
+      );
     } on CoreClientFailure catch (failure) {
       _reportConversationFailure(client, failure);
     }
@@ -131,18 +177,58 @@ class _ChatPageState extends State<ChatPage> {
     await _reloadConversation(conversationId);
   }
 
-  Future<void> _reloadConversation(ConversationId conversationId) async {
+  Future<void> _reloadConversation(
+    ConversationId conversationId, {
+    bool attachActive = true,
+  }) async {
     final client = widget.coreClient;
     try {
       final snapshot = await client.getConversation(conversationId);
       if (!_isCurrent(client)) {
         return;
       }
+      final generationId = snapshot.activeGenerationId;
+      ChatMessage? activeMessage;
+      if (generationId != null) {
+        for (final message in snapshot.messages) {
+          if (message.generationId == generationId &&
+              message.status == ChatMessageStatus.generating) {
+            activeMessage = message;
+            break;
+          }
+        }
+      }
+      final ConversationState conversation;
+      if (generationId != null) {
+        conversation = attachActive
+            ? ConversationGenerating(
+                snapshot: snapshot,
+                generationId: generationId,
+                streamingText: activeMessage?.content ?? '',
+              )
+            : ConversationRecovering(
+                snapshot: snapshot,
+                generationId: generationId,
+              );
+      } else if (snapshot.messages.isNotEmpty &&
+          snapshot.messages.last.status == ChatMessageStatus.cancelled) {
+        conversation = ConversationCancelled(snapshot: snapshot);
+      } else {
+        conversation = ConversationReady(snapshot: snapshot);
+      }
       setState(() {
-        _state = _state.copyWith(
-          conversation: ConversationReady(snapshot: snapshot),
-        );
+        _state = _state.copyWith(conversation: conversation);
       });
+      unawaited(_loadRuntimeStatus(conversationId: conversationId));
+      if (generationId != null && attachActive) {
+        _attachGeneration(
+          client,
+          conversationId,
+          generationId,
+          afterSequence: activeMessage?.lastEventSequence ?? 0,
+          initialText: activeMessage?.content ?? '',
+        );
+      }
     } on CoreClientFailure catch (failure) {
       _reportConversationFailure(client, failure);
     }
@@ -169,6 +255,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _delete(ConversationId conversationId) async {
+    if (_state.canStop) {
+      return;
+    }
     final client = widget.coreClient;
     _detachGeneration();
     setState(() => _state = _state.copyWith(busy: true));
@@ -210,11 +299,17 @@ class _ChatPageState extends State<ChatPage> {
           conversation: ConversationGenerating(
             snapshot: snapshot,
             generationId: sent.generationId,
-            streamingText: '',
+            streamingText: sent.assistantMessage.content,
           ),
         );
       });
-      _attachGeneration(client, conversationId, sent.generationId);
+      _attachGeneration(
+        client,
+        conversationId,
+        sent.generationId,
+        afterSequence: sent.assistantMessage.lastEventSequence,
+        initialText: sent.assistantMessage.content,
+      );
     } on CoreClientFailure catch (failure) {
       _reportConversationFailure(client, failure);
     }
@@ -223,12 +318,15 @@ class _ChatPageState extends State<ChatPage> {
   void _attachGeneration(
     CoreClient client,
     ConversationId conversationId,
-    GenerationId generationId,
-  ) {
+    GenerationId generationId, {
+    required int afterSequence,
+    required String initialText,
+  }) {
+    _detachGeneration();
     _streamClient = client;
-    final buffer = StringBuffer();
+    final buffer = StringBuffer(initialText);
     _generation = client
-        .observeGeneration(generationId)
+        .observeGeneration(generationId, afterSequence: afterSequence)
         .listen(
           (event) {
             if (!_isCurrent(client) || !identical(client, _streamClient)) {
@@ -253,54 +351,70 @@ class _ChatPageState extends State<ChatPage> {
               }
               return;
             }
-            // Terminal: reload the authoritative snapshot rather than trusting
-            // the accumulated stream.
+            // Terminal: reload SQLite authority instead of trusting the stream.
             _detachGeneration();
             unawaited(_reloadConversation(conversationId));
           },
           onError: (Object error) {
-            if (!_isCurrent(client)) {
-              return;
-            }
-            _detachGeneration();
-            unawaited(_reloadConversation(conversationId));
+            _recoverGeneration(client, conversationId, generationId);
           },
           onDone: () {
-            if (!_isCurrent(client)) {
-              return;
-            }
-            _detachGeneration();
-            unawaited(_reloadConversation(conversationId));
+            _recoverGeneration(client, conversationId, generationId);
           },
         );
   }
 
-  Future<void> _stop() async {
+  void _recoverGeneration(
+    CoreClient client,
+    ConversationId conversationId,
+    GenerationId generationId,
+  ) {
     final current = _state.conversation;
-    if (current is! ConversationGenerating) {
+    if (!_isCurrent(client) ||
+        !identical(client, _streamClient) ||
+        current is! ConversationGenerating ||
+        current.generationId != generationId) {
+      return;
+    }
+    _detachGeneration();
+    unawaited(_reloadConversation(conversationId, attachActive: false));
+  }
+
+  Future<void> _stop() async {
+    final generationId = switch (_state.conversation) {
+      ConversationGenerating(:final generationId) => generationId,
+      ConversationRecovering(:final generationId) => generationId,
+      _ => null,
+    };
+    if (generationId == null) {
       return;
     }
     final client = widget.coreClient;
     try {
-      await client.cancelGeneration(current.generationId);
+      await client.cancelGeneration(generationId);
     } on CoreClientFailure catch (failure) {
       _reportConversationFailure(client, failure);
     }
   }
 
-  void _reportConversationFailure(CoreClient client, CoreClientFailure failure) {
+  void _reportConversationFailure(
+    CoreClient client,
+    CoreClientFailure failure,
+  ) {
     if (!_isCurrent(client)) {
       return;
     }
     final snapshot = switch (_state.conversation) {
       ConversationReady(:final snapshot) => snapshot,
       ConversationGenerating(:final snapshot) => snapshot,
+      ConversationRecovering(:final snapshot) => snapshot,
       ConversationCancelled(:final snapshot) => snapshot,
       ConversationAttention(:final snapshot) => snapshot,
       ConversationFailed(:final snapshot) => snapshot,
       _ => null,
     };
-    final attention = failure.category == ErrorCategory.unavailable ||
+    final attention =
+        failure.category == ErrorCategory.unavailable ||
         failure.category == ErrorCategory.permissionDenied ||
         failure.category == ErrorCategory.conflict ||
         failure.category == ErrorCategory.incompatibleVersion;
@@ -311,14 +425,38 @@ class _ChatPageState extends State<ChatPage> {
             ? ConversationAttention(
                 diagnosticCode: failure.code,
                 recoveryAction: failure.recoveryAction,
+                recoveryMessage: failure.recoveryMessage,
                 snapshot: snapshot,
               )
             : ConversationFailed(
                 diagnosticCode: failure.code,
+                recoveryAction: failure.recoveryAction,
+                recoveryMessage: failure.recoveryMessage,
                 snapshot: snapshot,
               ),
       );
     });
+  }
+
+  Future<void> _recoverConversation(RecoveryAction action) async {
+    switch (action) {
+      case RecoveryAction.retry:
+        final conversationId = _state.selectedConversationId;
+        if (conversationId == null) {
+          await _loadConversations();
+          await _loadRuntimeStatus();
+        } else {
+          await _reloadConversation(conversationId);
+        }
+      case RecoveryAction.checkPrerequisites:
+        if (mounted) {
+          await Navigator.of(
+            context,
+          ).pushReplacementNamed(AppRoutes.foundation);
+        }
+      default:
+        break;
+    }
   }
 
   @override
@@ -331,6 +469,7 @@ class _ChatPageState extends State<ChatPage> {
       onRenameConversation: _rename,
       onDeleteConversation: _delete,
       onSendMessage: _send,
+      onRecover: _recoverConversation,
       onStopGeneration: _stop,
     );
   }

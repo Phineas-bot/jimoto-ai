@@ -12,6 +12,20 @@ const _conversationId = '11111111-1111-4111-8111-111111111111';
 const _generationId = '22222222-2222-4222-8222-222222222222';
 const _correlationId = '33333333-3333-4333-8333-333333333333';
 const _requestId = '44444444-4444-4444-8444-444444444444';
+const _readyRuntimeStatus = ChatRuntimeStatus(
+  schemaVersion: 1,
+  providerId: 'gixgiz.runtime.test.v1',
+  runtimeDisplayName: 'Test local runtime',
+  locality: ChatLocalityStatus.runningLocally,
+  ready: true,
+  model: ChatModelIdentity(
+    canonicalModelId: 'qwen2.5.0.5b-instruct',
+    displayName: 'Qwen 2.5 Compact',
+    family: 'Qwen 2.5',
+  ),
+  blockedBy: null,
+  recoveryAction: null,
+);
 
 ChatMessage _message({
   required String id,
@@ -19,6 +33,7 @@ ChatMessage _message({
   required ChatMessageStatus status,
   required int sequence,
   required String content,
+  int lastEventSequence = 0,
 }) {
   return ChatMessage(
     messageId: id,
@@ -28,6 +43,7 @@ ChatMessage _message({
     sequence: sequence,
     content: content,
     generationId: role == ChatRole.assistant ? _generationId : null,
+    lastEventSequence: lastEventSequence,
     createdAtUnixMs: 1,
     updatedAtUnixMs: 1,
     completedAtUnixMs: status == ChatMessageStatus.generating ? null : 1,
@@ -38,6 +54,7 @@ ConversationSnapshot _snapshot({
   List<ChatMessage> messages = const [],
   List<ChatWarning> warnings = const [],
   String title = 'First conversation',
+  GenerationId? activeGenerationId,
 }) {
   return ConversationSnapshot(
     schemaVersion: 1,
@@ -49,7 +66,7 @@ ConversationSnapshot _snapshot({
       family: 'Qwen 2.5',
     ),
     messages: messages,
-    activeGenerationId: null,
+    activeGenerationId: activeGenerationId,
     warnings: warnings,
     createdAtUnixMs: 1,
     updatedAtUnixMs: 1,
@@ -84,12 +101,15 @@ class _FakeChatClient extends CoreClient {
     ConversationSnapshot? snapshot,
     this.sendFailure,
     this.listFailure,
-  }) : snapshot = snapshot ?? _snapshot();
+    ChatRuntimeStatus? runtimeStatus,
+  }) : runtimeStatus = runtimeStatus ?? _readyRuntimeStatus,
+       snapshot = snapshot ?? _snapshot();
 
   final List<ConversationSummary> conversations;
   ConversationSnapshot snapshot;
   final CoreClientFailure? sendFailure;
   final CoreClientFailure? listFailure;
+  final ChatRuntimeStatus runtimeStatus;
 
   final StreamController<ChatGenerationEvent> controller =
       StreamController<ChatGenerationEvent>.broadcast();
@@ -98,6 +118,7 @@ class _FakeChatClient extends CoreClient {
   int cancelledCount = 0;
   String? renamedTitle;
   String? sentContent;
+  int? observedAfterSequence;
 
   @override
   Future<CoreConnectionSnapshot> checkConnection() async =>
@@ -116,6 +137,11 @@ class _FakeChatClient extends CoreClient {
       requestId: _requestId,
     );
   }
+
+  @override
+  Future<ChatRuntimeStatus> chatRuntimeStatus({
+    ConversationId? conversationId,
+  }) async => runtimeStatus;
 
   @override
   Future<ConversationSnapshot> createConversation({String? title}) async {
@@ -188,13 +214,27 @@ class _FakeChatClient extends CoreClient {
   Stream<ChatGenerationEvent> observeGeneration(
     GenerationId generationId, {
     int afterSequence = 0,
-  }) => controller.stream;
+  }) {
+    observedAfterSequence = afterSequence;
+    return controller.stream;
+  }
 
   @override
   Future<bool> cancelGeneration(GenerationId generationId) async {
     cancelledCount += 1;
     return true;
   }
+}
+
+class _DelayedStatusChatClient extends _FakeChatClient {
+  _DelayedStatusChatClient() : super(conversations: [_summary()]);
+
+  final Completer<ChatRuntimeStatus> status = Completer<ChatRuntimeStatus>();
+
+  @override
+  Future<ChatRuntimeStatus> chatRuntimeStatus({
+    ConversationId? conversationId,
+  }) => status.future;
 }
 
 Widget _host(CoreClient client) {
@@ -236,6 +276,72 @@ void main() {
     expect(find.byKey(AppKeys.chatComposer), findsOneWidget);
   });
 
+  testWidgets('locality stays unknown until core evidence arrives', (
+    tester,
+  ) async {
+    final client = _DelayedStatusChatClient();
+    await tester.pumpWidget(_host(client));
+    await tester.pump();
+
+    expect(find.text('Checking local runtime...'), findsOneWidget);
+    expect(find.textContaining('Running locally'), findsNothing);
+
+    client.status.complete(_readyRuntimeStatus);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Running locally'), findsOneWidget);
+  });
+
+  testWidgets('runtime loss replaces the confident locality statement', (
+    tester,
+  ) async {
+    const unavailable = ChatRuntimeStatus(
+      schemaVersion: 1,
+      providerId: 'gixgiz.runtime.test.v1',
+      runtimeDisplayName: 'Test local runtime',
+      locality: ChatLocalityStatus.unknown,
+      ready: false,
+      model: null,
+      blockedBy: ChatFailureCode.runtimeUnavailable,
+      recoveryAction: ChatRecoveryAction.checkRuntime,
+    );
+    await tester.pumpWidget(
+      _host(
+        _FakeChatClient(
+          conversations: [_summary()],
+          runtimeStatus: unavailable,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local runtime needs attention'), findsOneWidget);
+    expect(find.textContaining('Running locally'), findsNothing);
+  });
+
+  testWidgets('model loss is distinguished from runtime loss', (tester) async {
+    const unavailable = ChatRuntimeStatus(
+      schemaVersion: 1,
+      providerId: 'gixgiz.runtime.test.v1',
+      runtimeDisplayName: 'Test local runtime',
+      locality: ChatLocalityStatus.unknown,
+      ready: false,
+      model: null,
+      blockedBy: ChatFailureCode.modelUnavailable,
+      recoveryAction: ChatRecoveryAction.runModelSetup,
+    );
+    await tester.pumpWidget(
+      _host(
+        _FakeChatClient(
+          conversations: [_summary()],
+          runtimeStatus: unavailable,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local model is not available'), findsOneWidget);
+    expect(find.textContaining('Running locally'), findsNothing);
+  });
   testWidgets('locality is stated without claiming the device is offline', (
     tester,
   ) async {
@@ -295,6 +401,133 @@ void main() {
     expect(client.cancelledCount, 1);
   });
 
+  testWidgets('active generation rehydrates from its durable cursor', (
+    tester,
+  ) async {
+    final generating = _message(
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      role: ChatRole.assistant,
+      status: ChatMessageStatus.generating,
+      sequence: 2,
+      content: 'persisted partial',
+      lastEventSequence: 7,
+    );
+    final client = _FakeChatClient(
+      conversations: [_summary()],
+      snapshot: _snapshot(
+        messages: [generating],
+        activeGenerationId: _generationId,
+      ),
+    );
+
+    await tester.pumpWidget(_host(client));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('First conversation'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.chatStopButton), findsOneWidget);
+    expect(find.byKey(AppKeys.chatSendButton), findsNothing);
+    expect(find.text('persisted partial'), findsOneWidget);
+    expect(client.observedAfterSequence, 7);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(client.cancelledCount, 0);
+
+    await tester.pumpWidget(_host(client));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('First conversation'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AppKeys.chatStopButton));
+    await tester.pumpAndSettle();
+
+    expect(client.observedAfterSequence, 7);
+    expect(client.cancelledCount, 1);
+  });
+
+  testWidgets('active generation reloads the durable terminal snapshot', (
+    tester,
+  ) async {
+    final client = _FakeChatClient(
+      conversations: [_summary()],
+      snapshot: _snapshot(
+        messages: [
+          _message(
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            role: ChatRole.assistant,
+            status: ChatMessageStatus.generating,
+            sequence: 2,
+            content: 'partial',
+            lastEventSequence: 2,
+          ),
+        ],
+        activeGenerationId: _generationId,
+      ),
+    );
+    await tester.pumpWidget(_host(client));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('First conversation'));
+    await tester.pumpAndSettle();
+
+    client.snapshot = _snapshot(
+      messages: [
+        _message(
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          role: ChatRole.assistant,
+          status: ChatMessageStatus.completed,
+          sequence: 2,
+          content: 'final answer',
+          lastEventSequence: 3,
+        ),
+      ],
+    );
+    client.controller.add(
+      _event(
+        sequence: 3,
+        terminal: ChatGenerationTerminalState.completed,
+        kind: ChatGenerationEventKind.completed,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('final answer'), findsOneWidget);
+    expect(find.byKey(AppKeys.chatSendButton), findsOneWidget);
+    expect(find.byKey(AppKeys.chatStopButton), findsNothing);
+  });
+
+  testWidgets('active generation disables conversation deletion', (
+    tester,
+  ) async {
+    final client = _FakeChatClient(
+      conversations: [_summary()],
+      snapshot: _snapshot(
+        messages: [
+          _message(
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            role: ChatRole.assistant,
+            status: ChatMessageStatus.generating,
+            sequence: 2,
+            content: '',
+          ),
+        ],
+        activeGenerationId: _generationId,
+      ),
+    );
+    await tester.pumpWidget(_host(client));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('First conversation'));
+    await tester.pumpAndSettle();
+
+    final delete = tester.widget<IconButton>(
+      find.byKey(AppKeys.chatDeleteButton),
+    );
+    expect(delete.onPressed, isNull);
+    expect(
+      find.byTooltip('Stop the active reply before deleting this conversation'),
+      findsOneWidget,
+    );
+    expect(client.deletedCount, 0);
+  });
   testWidgets('a stopped reply is labelled incomplete from persisted state', (
     tester,
   ) async {
@@ -330,6 +563,7 @@ void main() {
         code: 'chat.runtime_unavailable',
         category: ErrorCategory.unavailable,
         recoveryAction: RecoveryAction.checkPrerequisites,
+        recoveryMessage: 'Check the local runtime from setup.',
       ),
     );
     await tester.pumpWidget(_host(client));
@@ -342,6 +576,9 @@ void main() {
 
     expect(find.byKey(AppKeys.chatAttention), findsOneWidget);
     expect(find.textContaining('chat.runtime_unavailable'), findsOneWidget);
+    expect(find.text('Check the local runtime from setup.'), findsOneWidget);
+    expect(find.byKey(AppKeys.chatRecoveryButton), findsOneWidget);
+    expect(find.text('Return to setup'), findsOneWidget);
   });
 
   testWidgets('deletion requires explicit confirmation', (tester) async {
@@ -353,7 +590,10 @@ void main() {
 
     await tester.tap(find.byKey(AppKeys.chatDeleteButton));
     await tester.pumpAndSettle();
-    expect(find.textContaining('does not remove the local runtime'), findsOneWidget);
+    expect(
+      find.textContaining('does not remove the local runtime'),
+      findsOneWidget,
+    );
     expect(client.deletedCount, 0);
 
     await tester.tap(find.byKey(AppKeys.chatDeleteConfirmButton));

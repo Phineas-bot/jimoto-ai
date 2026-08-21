@@ -15,6 +15,7 @@ class ChatScreen extends StatelessWidget {
     required this.onRenameConversation,
     required this.onDeleteConversation,
     required this.onSendMessage,
+    required this.onRecover,
     required this.onStopGeneration,
     super.key,
   });
@@ -22,11 +23,14 @@ class ChatScreen extends StatelessWidget {
   final ChatViewState state;
   final Future<void> Function() onRefreshConversations;
   final Future<void> Function() onCreateConversation;
-  final Future<void> Function(ConversationId conversationId) onSelectConversation;
+  final Future<void> Function(ConversationId conversationId)
+  onSelectConversation;
   final Future<void> Function(ConversationId conversationId, String title)
   onRenameConversation;
-  final Future<void> Function(ConversationId conversationId) onDeleteConversation;
+  final Future<void> Function(ConversationId conversationId)
+  onDeleteConversation;
   final Future<void> Function(String content) onSendMessage;
+  final Future<void> Function(RecoveryAction action) onRecover;
   final Future<void> Function() onStopGeneration;
 
   @override
@@ -66,6 +70,7 @@ class ChatScreen extends StatelessWidget {
                     onRenameConversation: onRenameConversation,
                     onDeleteConversation: onDeleteConversation,
                     onSendMessage: onSendMessage,
+                    onRecover: onRecover,
                     onStopGeneration: onStopGeneration,
                   ),
                 ),
@@ -88,18 +93,35 @@ class _LocalityBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final snapshot = switch (state.conversation) {
-      ConversationReady(:final snapshot) => snapshot,
-      ConversationGenerating(:final snapshot) => snapshot,
-      ConversationCancelled(:final snapshot) => snapshot,
-      ConversationAttention(:final snapshot) => snapshot,
-      ConversationFailed(:final snapshot) => snapshot,
-      _ => null,
+    final (label, icon) = switch (state.locality) {
+      ChatLocalityChecking() => (
+        localizations.chatLocalityChecking,
+        Icons.sync,
+      ),
+      ChatLocalityFailed() => (
+        localizations.chatLocalityUnknown,
+        Icons.help_outline,
+      ),
+      ChatLocalityAvailable(:final status)
+          when status.ready &&
+              status.locality == ChatLocalityStatus.runningLocally =>
+        (
+          status.model == null
+              ? localizations.chatRunningLocally
+              : localizations.chatRunningLocallyWithModel(
+                  status.model!.displayName,
+                ),
+          Icons.home_outlined,
+        ),
+      ChatLocalityAvailable(:final status)
+          when status.blockedBy == ChatFailureCode.modelUnavailable ||
+              status.blockedBy == ChatFailureCode.modelChanged =>
+        (localizations.chatModelUnavailable, Icons.inventory_2_outlined),
+      ChatLocalityAvailable() => (
+        localizations.chatRuntimeUnavailable,
+        Icons.warning_amber_outlined,
+      ),
     };
-    final model = snapshot?.model;
-    final label = model == null
-        ? localizations.chatRunningLocally
-        : localizations.chatRunningLocallyWithModel(model.displayName);
 
     return Semantics(
       key: AppKeys.chatLocalityBadge,
@@ -109,7 +131,7 @@ class _LocalityBadge extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            const Icon(Icons.home_outlined, size: 18),
+            Icon(icon, size: 18),
             const SizedBox(width: 8),
             Flexible(child: Text(label, style: theme.textTheme.bodyMedium)),
           ],
@@ -129,7 +151,8 @@ class _ConversationList extends StatelessWidget {
 
   final ChatViewState state;
   final Future<void> Function() onCreateConversation;
-  final Future<void> Function(ConversationId conversationId) onSelectConversation;
+  final Future<void> Function(ConversationId conversationId)
+  onSelectConversation;
   final Future<void> Function() onRefreshConversations;
 
   @override
@@ -195,14 +218,17 @@ class _ConversationPane extends StatelessWidget {
     required this.onRenameConversation,
     required this.onDeleteConversation,
     required this.onSendMessage,
+    required this.onRecover,
     required this.onStopGeneration,
   });
 
   final ChatViewState state;
   final Future<void> Function(ConversationId conversationId, String title)
   onRenameConversation;
-  final Future<void> Function(ConversationId conversationId) onDeleteConversation;
+  final Future<void> Function(ConversationId conversationId)
+  onDeleteConversation;
   final Future<void> Function(String content) onSendMessage;
+  final Future<void> Function(RecoveryAction action) onRecover;
   final Future<void> Function() onStopGeneration;
 
   @override
@@ -237,6 +263,15 @@ class _ConversationPane extends StatelessWidget {
           onSendMessage: onSendMessage,
           onStopGeneration: onStopGeneration,
         ),
+      ConversationRecovering(:final snapshot) => _Transcript(
+        snapshot: snapshot,
+        state: state,
+        streamingText: null,
+        onRenameConversation: onRenameConversation,
+        onDeleteConversation: onDeleteConversation,
+        onSendMessage: onSendMessage,
+        onStopGeneration: onStopGeneration,
+      ),
       ConversationCancelled(:final snapshot) => _Transcript(
         snapshot: snapshot,
         state: state,
@@ -246,16 +281,32 @@ class _ConversationPane extends StatelessWidget {
         onSendMessage: onSendMessage,
         onStopGeneration: onStopGeneration,
       ),
-      ConversationAttention(:final diagnosticCode) => _InlineProblem(
-        key: AppKeys.chatAttention,
-        message: localizations.chatAttentionMessage,
-        diagnosticCode: diagnosticCode,
-      ),
-      ConversationFailed(:final diagnosticCode) => _InlineProblem(
-        key: AppKeys.chatFailed,
-        message: localizations.chatFailedMessage,
-        diagnosticCode: diagnosticCode,
-      ),
+      ConversationAttention(
+        :final diagnosticCode,
+        :final recoveryAction,
+        :final recoveryMessage,
+      ) =>
+        _InlineProblem(
+          key: AppKeys.chatAttention,
+          message: localizations.chatAttentionMessage,
+          diagnosticCode: diagnosticCode,
+          recoveryMessage: recoveryMessage,
+          recoveryAction: recoveryAction,
+          onRecover: onRecover,
+        ),
+      ConversationFailed(
+        :final diagnosticCode,
+        :final recoveryAction,
+        :final recoveryMessage,
+      ) =>
+        _InlineProblem(
+          key: AppKeys.chatFailed,
+          message: localizations.chatFailedMessage,
+          diagnosticCode: diagnosticCode,
+          recoveryMessage: recoveryMessage,
+          recoveryAction: recoveryAction,
+          onRecover: onRecover,
+        ),
     };
   }
 }
@@ -276,7 +327,8 @@ class _Transcript extends StatelessWidget {
   final String? streamingText;
   final Future<void> Function(ConversationId conversationId, String title)
   onRenameConversation;
-  final Future<void> Function(ConversationId conversationId) onDeleteConversation;
+  final Future<void> Function(ConversationId conversationId)
+  onDeleteConversation;
   final Future<void> Function(String content) onSendMessage;
   final Future<void> Function() onStopGeneration;
 
@@ -298,21 +350,33 @@ class _Transcript extends StatelessWidget {
             IconButton(
               key: AppKeys.chatRenameButton,
               tooltip: localizations.chatRenameAction,
-              onPressed: state.busy
+              onPressed: state.busy || state.canStop
                   ? null
                   : () => _promptRename(context, localizations),
               icon: const Icon(Icons.edit_outlined),
             ),
             IconButton(
               key: AppKeys.chatDeleteButton,
-              tooltip: localizations.chatDeleteAction,
-              onPressed: state.busy
+              tooltip: state.canStop
+                  ? localizations.chatDeleteActiveTooltip
+                  : localizations.chatDeleteAction,
+              onPressed: state.busy || state.canStop
                   ? null
                   : () => _confirmDelete(context, localizations),
               icon: const Icon(Icons.delete_outline),
             ),
           ],
         ),
+        if (state.conversation is ConversationRecovering)
+          Semantics(
+            key: AppKeys.chatRecovering,
+            liveRegion: true,
+            label: localizations.chatRecoveringReply,
+            child: Text(
+              localizations.chatRecoveringReply,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         for (final warning in snapshot.warnings)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -327,9 +391,10 @@ class _Transcript extends StatelessWidget {
             key: AppKeys.chatMessageList,
             children: [
               for (final message in snapshot.messages)
-                _MessageBubble(message: message),
-              if (streamingText != null)
-                _StreamingBubble(text: streamingText!),
+                if (streamingText == null ||
+                    message.status != ChatMessageStatus.generating)
+                  _MessageBubble(message: message),
+              if (streamingText != null) _StreamingBubble(text: streamingText!),
             ],
           ),
         ),
@@ -561,17 +626,24 @@ class _InlineProblem extends StatelessWidget {
   const _InlineProblem({
     required this.message,
     required this.diagnosticCode,
+    this.recoveryMessage,
+    this.recoveryAction,
+    this.onRecover,
     this.onRetry,
     super.key,
   });
 
   final String message;
   final String diagnosticCode;
+  final String? recoveryMessage;
+  final RecoveryAction? recoveryAction;
+  final Future<void> Function(RecoveryAction action)? onRecover;
   final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final actionLabel = _actionLabel(localizations, recoveryAction);
     final theme = Theme.of(context);
     return Center(
       child: Column(
@@ -584,6 +656,11 @@ class _InlineProblem extends StatelessWidget {
               child: Text(message, textAlign: TextAlign.center),
             ),
           ),
+          if (recoveryMessage != null &&
+              recoveryMessage!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(recoveryMessage!, textAlign: TextAlign.center),
+          ],
           const SizedBox(height: 8),
           Text(
             localizations.diagnosticCodeLabel(diagnosticCode),
@@ -597,8 +674,27 @@ class _InlineProblem extends StatelessWidget {
               child: Text(localizations.chatRetryAction),
             ),
           ],
+          if (actionLabel != null && onRecover != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: AppKeys.chatRecoveryButton,
+              onPressed: () => onRecover!(recoveryAction!),
+              child: Text(actionLabel),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+String? _actionLabel(
+  AppLocalizations localizations,
+  RecoveryAction? recoveryAction,
+) {
+  return switch (recoveryAction) {
+    RecoveryAction.retry => localizations.chatRetryAction,
+    RecoveryAction.checkPrerequisites => localizations.chatReturnToSetupAction,
+    _ => null,
+  };
 }

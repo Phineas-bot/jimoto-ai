@@ -232,6 +232,14 @@ abstract class CoreClient {
     );
   }
 
+  Future<ChatRuntimeStatus> chatRuntimeStatus({
+    ConversationId? conversationId,
+  }) {
+    return Future.error(
+      UnsupportedError('Local chat is not supported by this client.'),
+    );
+  }
+
   Future<ConversationSnapshot> createConversation({String? title}) {
     return Future.error(
       UnsupportedError('Local chat is not supported by this client.'),

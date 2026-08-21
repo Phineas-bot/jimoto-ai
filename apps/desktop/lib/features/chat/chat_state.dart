@@ -1,5 +1,26 @@
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 
+/// Provider-neutral locality/readiness evidence for chat.
+sealed class ChatLocalityState {
+  const ChatLocalityState();
+}
+
+final class ChatLocalityChecking extends ChatLocalityState {
+  const ChatLocalityChecking();
+}
+
+final class ChatLocalityAvailable extends ChatLocalityState {
+  const ChatLocalityAvailable({required this.status});
+
+  final ChatRuntimeStatus status;
+}
+
+final class ChatLocalityFailed extends ChatLocalityState {
+  const ChatLocalityFailed({required this.diagnosticCode});
+
+  final String diagnosticCode;
+}
+
 /// State of the conversation list panel.
 sealed class ConversationListState {
   const ConversationListState();
@@ -63,8 +84,19 @@ final class ConversationGenerating extends ConversationState {
   final String streamingText;
 }
 
-/// The last reply was stopped by the user; retained text is partial.
+/// SQLite reports an active generation whose live replay is being recovered.
+final class ConversationRecovering extends ConversationState {
+  const ConversationRecovering({
+    required this.snapshot,
+    required this.generationId,
+  });
+
+  final ConversationSnapshot snapshot;
+  final GenerationId generationId;
+}
+
 final class ConversationCancelled extends ConversationState {
+/// The last reply was stopped by the user; retained text is partial.
   const ConversationCancelled({required this.snapshot});
 
   final ConversationSnapshot snapshot;
@@ -75,18 +107,27 @@ final class ConversationAttention extends ConversationState {
   const ConversationAttention({
     required this.diagnosticCode,
     required this.recoveryAction,
+    this.recoveryMessage,
     this.snapshot,
   });
 
   final String diagnosticCode;
   final RecoveryAction recoveryAction;
+  final String? recoveryMessage;
   final ConversationSnapshot? snapshot;
 }
 
 final class ConversationFailed extends ConversationState {
-  const ConversationFailed({required this.diagnosticCode, this.snapshot});
+  const ConversationFailed({
+    required this.diagnosticCode,
+    this.recoveryAction = RecoveryAction.noAction,
+    this.recoveryMessage,
+    this.snapshot,
+  });
 
   final String diagnosticCode;
+  final RecoveryAction recoveryAction;
+  final String? recoveryMessage;
   final ConversationSnapshot? snapshot;
 }
 
@@ -95,6 +136,7 @@ class ChatViewState {
   const ChatViewState({
     required this.conversations,
     required this.conversation,
+    this.locality = const ChatLocalityChecking(),
     required this.selectedConversationId,
     this.busy = false,
   });
@@ -102,11 +144,13 @@ class ChatViewState {
   const ChatViewState.initial()
     : conversations = const ConversationListLoading(),
       conversation = const ConversationUnselected(),
+      locality = const ChatLocalityChecking(),
       selectedConversationId = null,
       busy = false;
 
   final ConversationListState conversations;
   final ConversationState conversation;
+  final ChatLocalityState locality;
   final ConversationId? selectedConversationId;
 
   /// A create, rename, or delete action is in flight.
@@ -116,15 +160,18 @@ class ChatViewState {
   bool get canSend =>
       !busy &&
       selectedConversationId != null &&
-      conversation is! ConversationGenerating &&
-      conversation is! ConversationLoading;
+      (conversation is ConversationReady ||
+          conversation is ConversationCancelled);
 
-  /// Whether a reply is currently streaming and can be stopped.
-  bool get canStop => conversation is ConversationGenerating;
+  /// Whether a reply is active and can still be targeted for cancellation.
+  bool get canStop =>
+      conversation is ConversationGenerating ||
+      conversation is ConversationRecovering;
 
   ChatViewState copyWith({
     ConversationListState? conversations,
     ConversationState? conversation,
+    ChatLocalityState? locality,
     ConversationId? selectedConversationId,
     bool clearSelection = false,
     bool? busy,
@@ -132,6 +179,7 @@ class ChatViewState {
     return ChatViewState(
       conversations: conversations ?? this.conversations,
       conversation: conversation ?? this.conversation,
+      locality: locality ?? this.locality,
       selectedConversationId: clearSelection
           ? null
           : (selectedConversationId ?? this.selectedConversationId),
