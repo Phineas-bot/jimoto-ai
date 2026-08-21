@@ -210,7 +210,8 @@ fn validate_limits(limits: ChatHttpLimits) -> Result<(), OllamaAdapterError> {
 
 #[cfg(test)]
 mod tests {
-    use gixgiz_runtime::CHAT_DELTA_CHANNEL_CAPACITY;
+    use gixgiz_contracts::{CorrelationId, RequestId};
+    use gixgiz_runtime::{CHAT_DELTA_CHANNEL_CAPACITY, RuntimeError, RuntimeOperationContext};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
@@ -352,12 +353,26 @@ mod tests {
 
     #[tokio::test]
     async fn a_provider_reported_error_stops_the_generation() {
-        let endpoint = serve("{\"error\":\"runner failed\"}\n", false).await;
+        const PRIVATE_SENTINEL: &str = "GIXGIZ_PRIVATE_CHAT_SENTINEL_DO_NOT_LOG";
+        let endpoint = serve(
+            "{\"error\":\"GIXGIZ_PRIVATE_CHAT_SENTINEL_DO_NOT_LOG\"}\n",
+            false,
+        )
+        .await;
 
         let (outcome, deltas) = drain(&endpoint, limits()).await;
 
         assert!(deltas.is_empty());
         assert_eq!(outcome, Err(OllamaAdapterError::GenerationFailed));
+        let safe = RuntimeError::from(OllamaAdapterError::GenerationFailed).to_safe_payload(
+            &RuntimeOperationContext::new(
+                CorrelationId::new(),
+                RequestId::new(),
+                Duration::from_secs(1),
+            ),
+        );
+        let serialized = serde_json::to_string(&safe).expect("serialize safe error");
+        assert!(!serialized.contains(PRIVATE_SENTINEL));
     }
 
     #[tokio::test]
