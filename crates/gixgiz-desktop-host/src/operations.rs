@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex, MutexGuard},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -12,12 +12,19 @@ use gixgiz_core::CancellationToken;
 use tokio::sync::broadcast;
 
 const EVENT_CHANNEL_CAPACITY: usize = 16;
+const MAX_RETAINED_TERMINAL_OPERATIONS: usize = 32;
 const PROGRESS_STEPS: u64 = 3;
 const STEP_DELAY: Duration = Duration::from_millis(75);
 
 #[derive(Clone, Default)]
 pub(crate) struct OperationRegistry {
-    records: Arc<Mutex<HashMap<OperationId, OperationRecord>>>,
+    state: Arc<Mutex<OperationState>>,
+}
+
+#[derive(Default)]
+struct OperationState {
+    records: HashMap<OperationId, OperationRecord>,
+    terminal_order: VecDeque<OperationId>,
 }
 
 struct OperationRecord {
@@ -65,7 +72,7 @@ impl OperationRegistry {
             sender,
             terminal: false,
         };
-        self.lock()?.insert(operation_id, record);
+        self.lock()?.records.insert(operation_id, record);
 
         let registry = self.clone();
         tokio::spawn(async move {
@@ -78,8 +85,11 @@ impl OperationRegistry {
         &self,
         operation_id: OperationId,
     ) -> Result<OperationSubscription, OperationError> {
-        let records = self.lock()?;
-        let record = records.get(&operation_id).ok_or(OperationError::NotFound)?;
+        let state = self.lock()?;
+        let record = state
+            .records
+            .get(&operation_id)
+            .ok_or(OperationError::NotFound)?;
         Ok(OperationSubscription {
             replay: record.events.clone(),
             receiver: record.sender.subscribe(),
@@ -92,8 +102,11 @@ impl OperationRegistry {
         operation_id: OperationId,
         correlation_id: CorrelationId,
     ) -> Result<bool, OperationError> {
-        let records = self.lock()?;
-        let record = records.get(&operation_id).ok_or(OperationError::NotFound)?;
+        let state = self.lock()?;
+        let record = state
+            .records
+            .get(&operation_id)
+            .ok_or(OperationError::NotFound)?;
         if record.correlation_id != correlation_id {
             return Err(OperationError::CorrelationMismatch);
         }
@@ -141,6 +154,7 @@ impl OperationRegistry {
 
     fn cancellation(&self, operation_id: OperationId) -> Result<CancellationToken, OperationError> {
         self.lock()?
+            .records
             .get(&operation_id)
             .map(|record| record.cancellation.clone())
             .ok_or(OperationError::NotFound)
@@ -176,31 +190,40 @@ impl OperationRegistry {
         message: Option<&str>,
         terminal_state: Option<TestOperationTerminalState>,
     ) -> Result<(), OperationError> {
-        let mut records = self.lock()?;
-        let record = records
-            .get_mut(&operation_id)
-            .ok_or(OperationError::NotFound)?;
-        if record.terminal {
-            return Ok(());
+        let mut state = self.lock()?;
+        {
+            let record = state
+                .records
+                .get_mut(&operation_id)
+                .ok_or(OperationError::NotFound)?;
+            if record.terminal {
+                return Ok(());
+            }
+            let next = event(
+                operation_id,
+                record.correlation_id,
+                record.events.len() as u64 + 1,
+                kind,
+                message,
+                terminal_state,
+            );
+            record.terminal = terminal_state.is_some();
+            record.events.push(next.clone());
+            let _ = record.sender.send(next);
         }
-        let next = event(
-            operation_id,
-            record.correlation_id,
-            record.events.len() as u64 + 1,
-            kind,
-            message,
-            terminal_state,
-        );
-        record.terminal = terminal_state.is_some();
-        record.events.push(next.clone());
-        let _ = record.sender.send(next);
+        if terminal_state.is_some() {
+            state.terminal_order.push_back(operation_id);
+            while state.terminal_order.len() > MAX_RETAINED_TERMINAL_OPERATIONS {
+                if let Some(expired) = state.terminal_order.pop_front() {
+                    state.records.remove(&expired);
+                }
+            }
+        }
         Ok(())
     }
 
-    fn lock(
-        &self,
-    ) -> Result<MutexGuard<'_, HashMap<OperationId, OperationRecord>>, OperationError> {
-        self.records.lock().map_err(|_| OperationError::Internal)
+    fn lock(&self) -> Result<MutexGuard<'_, OperationState>, OperationError> {
+        self.state.lock().map_err(|_| OperationError::Internal)
     }
 }
 
@@ -282,6 +305,51 @@ mod tests {
                 .last()
                 .and_then(|event| event.terminal_state),
             Some(TestOperationTerminalState::Cancelled)
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn terminal_retention_is_bounded_without_evicting_active_operations() {
+        let registry = OperationRegistry::default();
+        let correlation_id = CorrelationId::new();
+        let mut terminal_ids = Vec::new();
+
+        for _ in 0..(MAX_RETAINED_TERMINAL_OPERATIONS + 5) {
+            let operation_id = registry.start(correlation_id).expect("operation starts");
+            registry
+                .push_terminal(
+                    operation_id,
+                    TestOperationEventKind::Completed,
+                    TestOperationTerminalState::Completed,
+                    "completed",
+                )
+                .expect("operation reaches terminal state");
+            terminal_ids.push(operation_id);
+        }
+
+        let active_id = registry
+            .start(correlation_id)
+            .expect("active operation starts");
+        {
+            let state = registry.lock().expect("registry remains available");
+            assert_eq!(state.records.len(), MAX_RETAINED_TERMINAL_OPERATIONS + 1);
+            assert_eq!(state.terminal_order.len(), MAX_RETAINED_TERMINAL_OPERATIONS);
+        }
+
+        assert!(matches!(
+            registry.subscribe(terminal_ids[0]),
+            Err(OperationError::NotFound)
+        ));
+        assert!(registry.subscribe(terminal_ids[5]).is_ok());
+        assert!(
+            !registry
+                .subscribe(active_id)
+                .expect("active retained")
+                .terminal
+        );
+        assert_eq!(
+            registry.cancel(active_id, CorrelationId::new()),
+            Err(OperationError::CorrelationMismatch)
         );
     }
 }
