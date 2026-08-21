@@ -1,3 +1,5 @@
+use std::sync::{Arc, Barrier};
+
 use gixgiz_contracts::{ConversationId, GenerationId, MessageId, RuntimeProviderId};
 use gixgiz_persistence::{
     CURRENT_SCHEMA_VERSION, ChatRepository, DataRoot, INTERRUPTED_FAILURE_CODE,
@@ -425,4 +427,157 @@ fn chat_storage_holds_no_provider_payload_or_secret_columns() {
             "messages exposes a {forbidden} column"
         );
     }
+}
+#[test]
+fn generation_admission_is_atomic_under_concurrent_sends() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let (_persistence, repository) = open_repository(&temporary);
+    let conversation_id = ConversationId::new();
+    repository
+        .create_conversation(&conversation_input(conversation_id))
+        .expect("conversation is created");
+    let repository = Arc::new(repository);
+    let barrier = Arc::new(Barrier::new(3));
+
+    let handles: Vec<_> = ["first", "second"]
+        .into_iter()
+        .map(|content| {
+            let repository = repository.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                repository.admit_generation(
+                    conversation_id,
+                    MessageId::new(),
+                    MessageId::new(),
+                    GenerationId::new(),
+                    content,
+                    NOW + 1,
+                )
+            })
+        })
+        .collect();
+    barrier.wait();
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().expect("admission thread joins"))
+        .collect();
+
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|result| matches!(
+                result,
+                Err(PersistenceError::RecordConflict {
+                    entity: "chat_generation"
+                })
+            ))
+            .count(),
+        1
+    );
+    let messages = repository.messages(conversation_id).expect("messages read");
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].role, PersistedChatRole::User);
+    assert_eq!(messages[0].sequence, 1);
+    assert_eq!(messages[1].role, PersistedChatRole::Assistant);
+    assert_eq!(messages[1].sequence, 2);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message.status == PersistedChatMessageStatus::Generating)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn generation_admission_is_independent_across_conversations() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let (_persistence, repository) = open_repository(&temporary);
+    let conversations = [ConversationId::new(), ConversationId::new()];
+    for conversation_id in conversations {
+        repository
+            .create_conversation(&conversation_input(conversation_id))
+            .expect("conversation is created");
+        repository
+            .admit_generation(
+                conversation_id,
+                MessageId::new(),
+                MessageId::new(),
+                GenerationId::new(),
+                "hello",
+                NOW + 1,
+            )
+            .expect("conversation admits its own generation");
+    }
+
+    for conversation_id in conversations {
+        assert_eq!(
+            repository
+                .messages(conversation_id)
+                .expect("messages read")
+                .len(),
+            2
+        );
+    }
+}
+
+#[test]
+fn deletion_rejects_active_generation_then_succeeds_after_terminal_commit() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let (_persistence, repository) = open_repository(&temporary);
+    let conversation_id = ConversationId::new();
+    let generation_id = GenerationId::new();
+    repository
+        .create_conversation(&conversation_input(conversation_id))
+        .expect("conversation is created");
+    repository
+        .admit_generation(
+            conversation_id,
+            MessageId::new(),
+            MessageId::new(),
+            generation_id,
+            "keep this",
+            NOW + 1,
+        )
+        .expect("generation is admitted");
+
+    let rejected = repository.delete_conversation(conversation_id);
+    assert!(matches!(
+        rejected,
+        Err(PersistenceError::RecordConflict {
+            entity: "chat_generation"
+        })
+    ));
+    assert!(
+        repository
+            .conversation(conversation_id)
+            .expect("conversation reads")
+            .is_some()
+    );
+    assert_eq!(
+        repository
+            .messages(conversation_id)
+            .expect("messages remain")
+            .len(),
+        2
+    );
+
+    repository
+        .finish_assistant_generation(
+            generation_id,
+            PersistedGenerationOutcome::Cancelled,
+            "",
+            None,
+            1,
+            NOW + 2,
+        )
+        .expect("terminal cancellation commits");
+    assert_eq!(
+        repository
+            .delete_conversation(conversation_id)
+            .expect("terminal conversation deletes"),
+        2
+    );
 }

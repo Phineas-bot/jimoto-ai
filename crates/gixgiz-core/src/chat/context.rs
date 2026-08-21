@@ -25,9 +25,27 @@ pub(super) struct BoundedContext {
 /// message holds partial text that would misrepresent the conversation. The
 /// newest complete messages that fit are retained, and chronological order is
 /// restored before the provider call.
+#[cfg(test)]
 pub(super) fn build(history: &[PersistedChatMessage]) -> BoundedContext {
+    build_inner(history, None)
+}
+
+/// Builds bounded context while reserving space for the user message whose
+/// durable admission has not occurred yet.
+pub(super) fn build_with_user(
+    history: &[PersistedChatMessage],
+    user_content: &str,
+) -> Result<BoundedContext, ()> {
+    if user_content.len() > MAX_CONTEXT_BYTES {
+        return Err(());
+    }
+    Ok(build_inner(history, Some(user_content)))
+}
+
+fn build_inner(history: &[PersistedChatMessage], user_content: Option<&str>) -> BoundedContext {
     let mut selected = Vec::new();
-    let mut total_bytes = 0_usize;
+    let mut total_bytes = user_content.map_or(0, str::len);
+    let prior_limit = MAX_CONTEXT_MESSAGES - usize::from(user_content.is_some());
     let mut dropped = false;
 
     for message in history.iter().rev() {
@@ -37,7 +55,7 @@ pub(super) fn build(history: &[PersistedChatMessage]) -> BoundedContext {
         let Some(role) = runtime_role(message.role) else {
             continue;
         };
-        if selected.len() >= MAX_CONTEXT_MESSAGES {
+        if selected.len() >= prior_limit {
             dropped = true;
             break;
         }
@@ -57,6 +75,12 @@ pub(super) fn build(history: &[PersistedChatMessage]) -> BoundedContext {
     }
 
     selected.reverse();
+    if let Some(content) = user_content {
+        selected.push(RuntimeChatMessage {
+            role: RuntimeChatRole::User,
+            content: content.to_owned(),
+        });
+    }
     let mut warnings = Vec::new();
     if dropped {
         warnings.push(ChatWarning {

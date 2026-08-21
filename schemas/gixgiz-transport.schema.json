@@ -722,6 +722,11 @@
           "type": "string"
         },
         {
+          "const": "durability_interrupted",
+          "description": "The provider stopped, but the authoritative terminal database write failed.\n\nThis closes the transient stream without claiming a durable terminal\nstate. Startup recovery classifies the still-generating SQLite record.",
+          "type": "string"
+        },
+        {
           "const": "unknown",
           "description": "A newer peer supplied an unrecognized event kind.",
           "type": "string"
@@ -886,6 +891,12 @@
           ],
           "description": "Generation attempt that produced an assistant message."
         },
+        "last_event_sequence": {
+          "description": "Highest generation event sequence committed with this message.\n\nA client may use this cursor for bounded replay after reloading an\nactive generation from authoritative SQLite state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "message_id": {
           "$ref": "#/$defs/MessageId",
           "description": "Durable message identifier."
@@ -918,6 +929,7 @@
         "status",
         "sequence",
         "content",
+        "last_event_sequence",
         "created_at_unix_ms",
         "updated_at_unix_ms"
       ],
@@ -1111,6 +1123,58 @@
         "runtime_display_name",
         "locality",
         "ready"
+      ],
+      "type": "object"
+    },
+    "ChatRuntimeStatusRequest": {
+      "description": "Authenticated request for provider-neutral chat locality/readiness.",
+      "properties": {
+        "conversation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConversationId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Conversation whose bound model should be checked, when selected."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and safe failures."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "ChatRuntimeStatusResponse": {
+      "description": "Authoritative chat locality/readiness with boundary identifiers.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        },
+        "status": {
+          "$ref": "#/$defs/ChatRuntimeStatus",
+          "description": "Provider-neutral status derived by Rust."
+        }
+      },
+      "required": [
+        "status",
+        "correlation_id",
+        "request_id"
       ],
       "type": "object"
     },
@@ -6819,6 +6883,12 @@
     "chat_runtime_status": {
       "$ref": "#/$defs/ChatRuntimeStatus"
     },
+    "chat_runtime_status_request": {
+      "$ref": "#/$defs/ChatRuntimeStatusRequest"
+    },
+    "chat_runtime_status_response": {
+      "$ref": "#/$defs/ChatRuntimeStatusResponse"
+    },
     "client_hello": {
       "$ref": "#/$defs/ClientHello"
     },
@@ -7033,6 +7103,8 @@
     "chat_generation_events_request",
     "chat_generation_events_response",
     "chat_runtime_status",
+    "chat_runtime_status_request",
+    "chat_runtime_status_response",
     "cancel_generation_request",
     "cancel_generation_response",
     "test_operation_start_request",
