@@ -119,6 +119,13 @@ pub enum RuntimeConsentDecision {
     ApproveReuse,
     /// Refuse read-only reuse.
     DenyReuse,
+    /// Accept one exact runtime version that is outside recorded support evidence.
+    ///
+    /// The acknowledgement is bound to that exact version. A later provider
+    /// version is untested again and requires a new explicit decision.
+    AcknowledgeUntestedVersion,
+    /// Withdraw a previous untested-version acknowledgement.
+    RevokeUntestedVersion,
     /// A newer client supplied an unrecognized decision.
     #[serde(other)]
     Unknown,
@@ -387,6 +394,11 @@ pub struct RuntimeHealthReport {
     pub endpoint_safety: RuntimeEndpointSafety,
     /// Provider version evidence when available.
     pub version: Option<RuntimeVersionInfo>,
+    /// Exact provider version the user accepted while it remains untested.
+    ///
+    /// `None` means no acknowledgement applies to the detected version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_untested_version: Option<String>,
     /// Core-owned current action availability.
     pub capabilities: Vec<RuntimeCapabilityDescriptor>,
     /// Safe reasons supporting the state.
@@ -475,6 +487,12 @@ pub struct RuntimeConsentRequest {
     pub provider_id: RuntimeProviderId,
     /// Explicit reuse decision; management approval is not granted here.
     pub decision: RuntimeConsentDecision,
+    /// Exact normalized version acknowledged by `AcknowledgeUntestedVersion`.
+    ///
+    /// Required for that decision and ignored otherwise. Rust rejects the
+    /// request when this value does not match currently detected evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_version: Option<String>,
     /// Identifier shared with the response and any failure.
     pub correlation_id: CorrelationId,
     /// Identifier unique to this request.

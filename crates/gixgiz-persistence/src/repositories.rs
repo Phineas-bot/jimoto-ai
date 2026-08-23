@@ -169,6 +169,10 @@ pub struct RuntimePolicyRecord {
     pub reuse_consent: RuntimeConsentState,
     /// Explicit decision about lifecycle management authority.
     pub management_consent: RuntimeConsentState,
+    /// Exact provider version accepted while outside recorded support evidence.
+    ///
+    /// Bound to one exact version so a later provider version is untested again.
+    pub acknowledged_untested_version: Option<String>,
     /// Caller-supplied UTC Unix timestamp in milliseconds.
     pub updated_at_unix_ms: i64,
 }
@@ -192,8 +196,23 @@ impl RuntimePolicyRecord {
             ownership,
             reuse_consent,
             management_consent,
+            acknowledged_untested_version: None,
             updated_at_unix_ms,
         })
+    }
+
+    /// Binds an untested-version acknowledgement to this policy record.
+    ///
+    /// `None` clears any previous acknowledgement.
+    pub fn with_acknowledged_untested_version(
+        mut self,
+        version: Option<String>,
+    ) -> Result<Self, PersistenceError> {
+        if let Some(value) = version.as_deref() {
+            validate_text("acknowledged_untested_version", value, CATEGORY_BYTES_MAX)?;
+        }
+        self.acknowledged_untested_version = version;
+        Ok(self)
     }
 }
 
@@ -216,17 +235,21 @@ impl RuntimePolicyRepository {
             policy.reuse_consent,
             policy.management_consent,
             policy.updated_at_unix_ms,
-        )?;
+        )?
+        .with_acknowledged_untested_version(policy.acknowledged_untested_version.clone())?;
         self.persistence.try_with_write_transaction(|transaction| {
             let mut statement = transaction
                 .prepare(
                     "INSERT INTO runtime_policy
-                     (provider_id, ownership, reuse_consent, management_consent, updated_at_unix_ms)
-                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     (provider_id, ownership, reuse_consent, management_consent,
+                      acknowledged_untested_version, updated_at_unix_ms)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                      ON CONFLICT(provider_id) DO UPDATE SET
                          ownership = excluded.ownership,
                          reuse_consent = excluded.reuse_consent,
                          management_consent = excluded.management_consent,
+                         acknowledged_untested_version =
+                             excluded.acknowledged_untested_version,
                          updated_at_unix_ms = excluded.updated_at_unix_ms",
                 )
                 .map_err(|source| {
@@ -238,6 +261,7 @@ impl RuntimePolicyRepository {
                     runtime_ownership_as_str(validated.ownership)?,
                     runtime_consent_as_str(validated.reuse_consent),
                     runtime_consent_as_str(validated.management_consent),
+                    validated.acknowledged_untested_version.as_deref(),
                     validated.updated_at_unix_ms,
                 ])
                 .map_err(|source| PersistenceError::sqlite("write_runtime_policy", source))?;
@@ -255,7 +279,7 @@ impl RuntimePolicyRepository {
             let mut statement = connection
                 .prepare(
                     "SELECT provider_id, ownership, reuse_consent, management_consent,
-                            updated_at_unix_ms
+                            acknowledged_untested_version, updated_at_unix_ms
                      FROM runtime_policy WHERE provider_id = ?1",
                 )
                 .map_err(|source| {
@@ -268,20 +292,29 @@ impl RuntimePolicyRepository {
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
-                        row.get::<_, i64>(4)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, i64>(5)?,
                     ))
                 })
                 .optional()
                 .map_err(|source| PersistenceError::sqlite("read_runtime_policy", source))?;
             row.map(
-                |(provider_id, ownership, reuse_consent, management_consent, updated)| {
+                |(
+                    provider_id,
+                    ownership,
+                    reuse_consent,
+                    management_consent,
+                    acknowledged,
+                    updated,
+                )| {
                     RuntimePolicyRecord::new(
                         RuntimeProviderId::new(provider_id),
                         parse_runtime_ownership(&ownership)?,
                         parse_reuse_consent(&reuse_consent)?,
                         parse_management_consent(&management_consent)?,
                         updated,
-                    )
+                    )?
+                    .with_acknowledged_untested_version(acknowledged)
                 },
             )
             .transpose()
