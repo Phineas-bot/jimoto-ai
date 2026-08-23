@@ -3,6 +3,7 @@ import 'package:gixgiz_desktop/app/app_keys.dart';
 import 'package:gixgiz_desktop/core/core_client.dart';
 import 'package:gixgiz_desktop/core/generated/core_contracts.g.dart';
 import 'package:gixgiz_desktop/features/foundation/foundation_state.dart';
+import 'package:gixgiz_desktop/features/foundation/runtime_install_panel.dart';
 import 'package:gixgiz_desktop/features/foundation/runtime_panel.dart';
 import 'package:gixgiz_desktop/features/foundation/setup_panel.dart';
 import 'package:gixgiz_desktop/l10n/app_localizations.dart';
@@ -29,6 +30,16 @@ class FoundationScreen extends StatelessWidget {
     this.runtimeInventoryState = const RuntimeInventoryIdle(),
     this.onRefreshRuntime,
     this.onApproveRuntimeReuse,
+    this.onAcknowledgeUntestedRuntimeVersion,
+    this.installPlan,
+    this.installAttention,
+    this.installJob,
+    this.installBusy = false,
+    this.onReviewRuntimeInstall,
+    this.onApproveRuntimeInstall,
+    this.onDenyRuntimeInstall,
+    this.onStartRuntimeInstall,
+    this.onRefreshRuntimeInstall,
     this.onStartRuntimeOperation,
     this.onCancelRuntimeOperation,
     this.onToggleRuntimeModels,
@@ -60,6 +71,16 @@ class FoundationScreen extends StatelessWidget {
   final VoidCallback? onGenerateRecommendation;
   final VoidCallback? onRefreshRuntime;
   final VoidCallback? onApproveRuntimeReuse;
+  final ValueChanged<String>? onAcknowledgeUntestedRuntimeVersion;
+  final RuntimeInstallPlan? installPlan;
+  final RuntimeInstallAttentionReason? installAttention;
+  final RuntimeInstallJobSnapshot? installJob;
+  final bool installBusy;
+  final VoidCallback? onReviewRuntimeInstall;
+  final VoidCallback? onApproveRuntimeInstall;
+  final VoidCallback? onDenyRuntimeInstall;
+  final VoidCallback? onStartRuntimeInstall;
+  final VoidCallback? onRefreshRuntimeInstall;
   final ValueChanged<RuntimeOperationKind>? onStartRuntimeOperation;
   final VoidCallback? onCancelRuntimeOperation;
   final VoidCallback? onToggleRuntimeModels;
@@ -107,11 +128,25 @@ class FoundationScreen extends StatelessWidget {
                   if (state is FoundationReady ||
                       state is FoundationDegraded) ...[
                     const SizedBox(height: 24),
+                    RuntimeInstallPanel(
+                      plan: installPlan,
+                      attention: installAttention,
+                      job: installJob,
+                      busy: installBusy,
+                      onReviewPlan: onReviewRuntimeInstall,
+                      onApprove: onApproveRuntimeInstall,
+                      onDeny: onDenyRuntimeInstall,
+                      onStart: onStartRuntimeInstall,
+                      onRefresh: onRefreshRuntimeInstall,
+                    ),
+                    const SizedBox(height: 16),
                     RuntimePanel(
                       state: runtimeStatusState,
                       inventoryState: runtimeInventoryState,
                       onRefresh: onRefreshRuntime,
                       onApproveReuse: onApproveRuntimeReuse,
+                      onAcknowledgeUntestedVersion:
+                          onAcknowledgeUntestedRuntimeVersion,
                       onStartOperation: onStartRuntimeOperation,
                       onCancelOperation: onCancelRuntimeOperation,
                       onToggleModels: onToggleRuntimeModels,

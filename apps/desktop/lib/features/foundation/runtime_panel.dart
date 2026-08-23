@@ -10,6 +10,7 @@ class RuntimePanel extends StatelessWidget {
     required this.inventoryState,
     this.onRefresh,
     this.onApproveReuse,
+    this.onAcknowledgeUntestedVersion,
     this.onStartOperation,
     this.onCancelOperation,
     this.onToggleModels,
@@ -21,6 +22,9 @@ class RuntimePanel extends StatelessWidget {
   final RuntimeInventoryState inventoryState;
   final VoidCallback? onRefresh;
   final VoidCallback? onApproveReuse;
+
+  /// Accepts the exact detected runtime version while it remains untested.
+  final ValueChanged<String>? onAcknowledgeUntestedVersion;
   final ValueChanged<RuntimeOperationKind>? onStartOperation;
   final VoidCallback? onCancelOperation;
   final VoidCallback? onToggleModels;
@@ -177,6 +181,7 @@ class RuntimePanel extends StatelessWidget {
               inventoryState: inventoryState,
               onRefresh: onRefresh,
               onApproveReuse: onApproveReuse,
+              onAcknowledgeUntestedVersion: onAcknowledgeUntestedVersion,
               onStartOperation: onStartOperation,
               onCancelOperation: onCancelOperation,
               onToggleModels: onToggleModels,
@@ -236,6 +241,7 @@ class _RuntimeActions extends StatelessWidget {
     required this.inventoryState,
     required this.onRefresh,
     required this.onApproveReuse,
+    required this.onAcknowledgeUntestedVersion,
     required this.onStartOperation,
     required this.onCancelOperation,
     required this.onToggleModels,
@@ -247,6 +253,9 @@ class _RuntimeActions extends StatelessWidget {
   final RuntimeInventoryState inventoryState;
   final VoidCallback? onRefresh;
   final VoidCallback? onApproveReuse;
+
+  /// Accepts the exact detected runtime version while it remains untested.
+  final ValueChanged<String>? onAcknowledgeUntestedVersion;
   final ValueChanged<RuntimeOperationKind>? onStartOperation;
   final VoidCallback? onCancelOperation;
   final VoidCallback? onToggleModels;
@@ -266,6 +275,17 @@ class _RuntimeActions extends StatelessWidget {
           actionableReport,
           RuntimeCapabilityAvailability.requiresReuseConsent,
         );
+    // A runtime newer than recorded evidence is degraded rather than broken.
+    // Offer an explicit, version-bound acknowledgement instead of dead-ending.
+    final untestedVersion = actionableReport?.version;
+    final needsVersionAcknowledgement =
+        actionableReport != null &&
+        untestedVersion != null &&
+        untestedVersion.compatibility ==
+            RuntimeVersionCompatibility.untested &&
+        untestedVersion.normalizedVersion != null &&
+        actionableReport.acknowledgedUntestedVersion !=
+            untestedVersion.normalizedVersion;
     final canStart = _isAvailable(
       actionableReport,
       RuntimeCapabilityKind.start,
@@ -300,6 +320,18 @@ class _RuntimeActions extends StatelessWidget {
                 : () => _confirmReuse(context),
             icon: const Icon(Icons.check_circle_outline),
             label: Text(localizations.runtimeConsentApproveAction),
+          ),
+        if (needsVersionAcknowledgement)
+          FilledButton.icon(
+            key: AppKeys.runtimeVersionAcknowledgeAction,
+            onPressed: busy || onAcknowledgeUntestedVersion == null
+                ? null
+                : () => _confirmUntestedVersion(
+                    context,
+                    untestedVersion.normalizedVersion!,
+                  ),
+            icon: const Icon(Icons.verified_outlined),
+            label: Text(localizations.runtimeVersionAcknowledgeAction),
           ),
         if (canStart)
           FilledButton.icon(
@@ -352,6 +384,39 @@ class _RuntimeActions extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// Confirms acceptance of one exact untested version.
+  ///
+  /// The acknowledgement is bound to this version by the core, so a later
+  /// provider update is untested again and asks afresh.
+  Future<void> _confirmUntestedVersion(
+    BuildContext context,
+    String version,
+  ) async {
+    final localizations = AppLocalizations.of(context);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(localizations.runtimeVersionAcknowledgeTitle),
+        content: Text(
+          localizations.runtimeVersionAcknowledgeMessage(version),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(localizations.runtimeConsentCancelAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(localizations.runtimeVersionAcknowledgeConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      onAcknowledgeUntestedVersion?.call(version);
+    }
   }
 
   Future<void> _confirmReuse(BuildContext context) async {

@@ -1445,4 +1445,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String setupRecommendedAction(String action) {
     return 'Recommended action: $action';
   }
+
+  @override
+  String get runtimeInstallTitle => 'Set up local AI';
+
+  @override
+  String get runtimeInstallAvailable =>
+      'GixGiz can set up the local AI runtime for you. Nothing is downloaded or changed until you approve the plan.';
+
+  @override
+  String get runtimeInstallExternalPresent =>
+      'A local AI runtime is already installed on this PC. GixGiz will use it instead of installing another copy.';
+
+  @override
+  String get runtimeInstallUnavailable =>
+      'Local AI setup is not available on this PC right now.';
+
+  @override
+  String get runtimeInstallAwaitingApproval =>
+      'Review what this will change, then choose whether to continue.';
+
+  @override
+  String get runtimeInstallApproved => 'Approved. Setup has not started yet.';
+
+  @override
+  String get runtimeInstallRunning =>
+      'Setting up the local AI runtime. You can keep using the rest of GixGiz.';
+
+  @override
+  String get runtimeInstallReady =>
+      'The local AI runtime is installed and verified.';
+
+  @override
+  String get runtimeInstallFailed =>
+      'Setup did not finish. Nothing was left half-installed by GixGiz.';
+
+  @override
+  String get runtimeInstallCancelled =>
+      'Setup was cancelled. Nothing on this PC was changed.';
+
+  @override
+  String get runtimeInstallAttention =>
+      'Setup needs your attention before it can continue.';
+
+  @override
+  String get runtimeInstallReviewAction => 'Review setup';
+
+  @override
+  String get runtimeInstallApproveAction => 'Approve and continue';
+
+  @override
+  String get runtimeInstallDenyAction => 'Not now';
+
+  @override
+  String get runtimeInstallStartAction => 'Start setup';
+
+  @override
+  String get runtimeInstallRefreshAction => 'Check progress';
+
+  @override
+  String get runtimeInstallComponent => 'What gets installed';
+
+  @override
+  String get runtimeInstallVersion => 'Version';
+
+  @override
+  String get runtimeInstallSource => 'Downloaded from';
+
+  @override
+  String get runtimeInstallPublisher => 'Verified publisher';
+
+  @override
+  String get runtimeInstallDownloadSize => 'Download size';
+
+  @override
+  String get runtimeInstallAdministrator => 'Administrator needed';
+
+  @override
+  String get runtimeInstallAdministratorRequired =>
+      'Yes, Windows will ask for permission';
+
+  @override
+  String get runtimeInstallAdministratorNotRequired =>
+      'No, this installs just for you';
+
+  @override
+  String get runtimeVersionAcknowledgeAction => 'Use this version anyway';
+
+  @override
+  String get runtimeVersionAcknowledgeTitle =>
+      'Use an untested runtime version?';
+
+  @override
+  String get runtimeVersionAcknowledgeConfirmAction => 'Accept this version';
+
+  @override
+  String runtimeVersionAcknowledgeMessage(String version) {
+    return 'GixGiz has not tested version $version. It may still work, but it is outside the versions this release has evidence for. Accepting applies to this exact version only; a later update will ask again.';
+  }
+
+  @override
+  String runtimeInstallTransferred(
+    String transferred,
+    String total,
+    int percent,
+  ) {
+    return 'Downloaded $transferred of $total ($percent%)';
+  }
+
+  @override
+  String runtimeInstallTransferredUnknownTotal(String transferred) {
+    return 'Downloaded $transferred';
+  }
 }

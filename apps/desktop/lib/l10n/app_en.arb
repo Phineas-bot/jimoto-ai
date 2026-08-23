@@ -59,10 +59,18 @@
   "coreDetailsSemanticLabel": "Core details: application {application}, version {version}, protocol {protocol}, readiness {readiness}",
   "@coreDetailsSemanticLabel": {
     "placeholders": {
-      "application": { "type": "String" },
-      "version": { "type": "String" },
-      "protocol": { "type": "String" },
-      "readiness": { "type": "String" }
+      "application": {
+        "type": "String"
+      },
+      "version": {
+        "type": "String"
+      },
+      "protocol": {
+        "type": "String"
+      },
+      "readiness": {
+        "type": "String"
+      }
     }
   },
   "aboutSummary": "Local-first desktop foundation",
@@ -89,15 +97,23 @@
   "hardwareScanStatusSemanticLabel": "Hardware scan status: {status}. {detail}",
   "@hardwareScanStatusSemanticLabel": {
     "placeholders": {
-      "status": { "type": "String" },
-      "detail": { "type": "String" }
+      "status": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "hardwareProfileSemanticLabel": "Hardware profile {completeness}, schema version {version}",
   "@hardwareProfileSemanticLabel": {
     "placeholders": {
-      "completeness": { "type": "String" },
-      "version": { "type": "int" }
+      "completeness": {
+        "type": "String"
+      },
+      "version": {
+        "type": "int"
+      }
     }
   },
   "hardwareOperatingSystemLabel": "Operating system",
@@ -106,62 +122,104 @@
   "hardwareGpuLabel": "Display adapter",
   "hardwareGpuNumberLabel": "Display adapter {number}",
   "@hardwareGpuNumberLabel": {
-    "placeholders": { "number": { "type": "int" } }
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
   },
   "hardwareAccelerationLabel": "Acceleration evidence",
   "hardwareStorageLabel": "Application storage",
   "hardwareOperatingSystemValue": "{name}, version {version}, {architecture}",
   "@hardwareOperatingSystemValue": {
     "placeholders": {
-      "name": { "type": "String" },
-      "version": { "type": "String" },
-      "architecture": { "type": "String" }
+      "name": {
+        "type": "String"
+      },
+      "version": {
+        "type": "String"
+      },
+      "architecture": {
+        "type": "String"
+      }
     }
   },
   "hardwareCpuValue": "{name}, {physical} physical cores, {logical} logical processors",
   "@hardwareCpuValue": {
     "placeholders": {
-      "name": { "type": "String" },
-      "physical": { "type": "String" },
-      "logical": { "type": "String" }
+      "name": {
+        "type": "String"
+      },
+      "physical": {
+        "type": "String"
+      },
+      "logical": {
+        "type": "String"
+      }
     }
   },
   "hardwareMemoryValue": "{total} total, {available} available",
   "@hardwareMemoryValue": {
     "placeholders": {
-      "total": { "type": "String" },
-      "available": { "type": "String" }
+      "total": {
+        "type": "String"
+      },
+      "available": {
+        "type": "String"
+      }
     }
   },
   "hardwareGpuValue": "{name}, dedicated memory {dedicated}, shared memory {shared}",
   "@hardwareGpuValue": {
     "placeholders": {
-      "name": { "type": "String" },
-      "dedicated": { "type": "String" },
-      "shared": { "type": "String" }
+      "name": {
+        "type": "String"
+      },
+      "dedicated": {
+        "type": "String"
+      },
+      "shared": {
+        "type": "String"
+      }
     }
   },
   "hardwareAccelerationValue": "{kind}: {support}",
   "@hardwareAccelerationValue": {
     "placeholders": {
-      "kind": { "type": "String" },
-      "support": { "type": "String" }
+      "kind": {
+        "type": "String"
+      },
+      "support": {
+        "type": "String"
+      }
     }
   },
   "hardwareStorageValue": "{capacity} capacity, {free} free, {filesystem}, {media}",
   "@hardwareStorageValue": {
     "placeholders": {
-      "capacity": { "type": "String" },
-      "free": { "type": "String" },
-      "filesystem": { "type": "String" },
-      "media": { "type": "String" }
+      "capacity": {
+        "type": "String"
+      },
+      "free": {
+        "type": "String"
+      },
+      "filesystem": {
+        "type": "String"
+      },
+      "media": {
+        "type": "String"
+      }
     }
   },
   "hardwareEvidenceDetail": "Source: {source}. {reason}",
   "@hardwareEvidenceDetail": {
     "placeholders": {
-      "source": { "type": "String" },
-      "reason": { "type": "String" }
+      "source": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
     }
   },
   "supportedValue": "Supported",
@@ -185,8 +243,12 @@
   "capabilityReadySemanticLabel": "Recommended plan: {name}. Confidence: {confidence}.",
   "@capabilityReadySemanticLabel": {
     "placeholders": {
-      "name": { "type": "String" },
-      "confidence": { "type": "String" }
+      "name": {
+        "type": "String"
+      },
+      "confidence": {
+        "type": "String"
+      }
     }
   },
   "capabilityRecommendedTitle": "Recommended",
@@ -205,17 +267,29 @@
   "capabilityWarningsLabel": "Important considerations",
   "capabilityLicenceLabel": "Licence: {licence}",
   "@capabilityLicenceLabel": {
-    "placeholders": { "licence": { "type": "String" } }
+    "placeholders": {
+      "licence": {
+        "type": "String"
+      }
+    }
   },
   "capabilitySourceLabel": "Source: {source}",
   "@capabilitySourceLabel": {
-    "placeholders": { "source": { "type": "String" } }
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
   },
   "capabilityVersionsLabel": "Catalogue {catalogue}; rules {rules}",
   "@capabilityVersionsLabel": {
     "placeholders": {
-      "catalogue": { "type": "String" },
-      "rules": { "type": "String" }
+      "catalogue": {
+        "type": "String"
+      },
+      "rules": {
+        "type": "String"
+      }
     }
   },
   "capabilityNoPlanTitle": "No safe plan available",
@@ -251,11 +325,19 @@
   "runtimeOperationMessage": "GixGiz is waiting for the approved operation to reach a verified terminal state.",
   "runtimeOperationFailedTitle": "Runtime {operation} failed",
   "@runtimeOperationFailedTitle": {
-    "placeholders": { "operation": { "type": "String" } }
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
   },
   "runtimeOperationFailedMessage": "GixGiz could not complete the approved {operation} operation. Review diagnostics and the recommended action.",
   "@runtimeOperationFailedMessage": {
-    "placeholders": { "operation": { "type": "String" } }
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
   },
   "runtimeOperationKindStart": "start",
   "runtimeOperationKindStop": "stop",
@@ -307,11 +389,19 @@
   "runtimeExternalModelLabel": "External model",
   "runtimeModelSizeLabel": "Size: {size}",
   "@runtimeModelSizeLabel": {
-    "placeholders": { "size": { "type": "String" } }
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   },
   "runtimeModelCatalogueLabel": "Catalogue model: {model}",
   "@runtimeModelCatalogueLabel": {
-    "placeholders": { "model": { "type": "String" } }
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
   },
   "runtimeReasonsLabel": "Status details",
   "runtimeWarningsLabel": "Important considerations",
@@ -337,7 +427,11 @@
   "runtimeWarningUnknown": "An unrecognized runtime warning was reported.",
   "runtimeRecommendedAction": "Recommended action: {action}",
   "@runtimeRecommendedAction": {
-    "placeholders": { "action": { "type": "String" } }
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
   },
   "runtimeRecoveryRetry": "Try the operation again.",
   "runtimeRecoveryRestart": "Restart GixGiz, then check the runtime again.",
@@ -349,21 +443,41 @@
   "runtimeStatusSemanticLabel": "Runtime status: {status}. {message} Ownership: {ownership}. Permission: {consent}.",
   "@runtimeStatusSemanticLabel": {
     "placeholders": {
-      "status": { "type": "String" },
-      "message": { "type": "String" },
-      "ownership": { "type": "String" },
-      "consent": { "type": "String" }
+      "status": {
+        "type": "String"
+      },
+      "message": {
+        "type": "String"
+      },
+      "ownership": {
+        "type": "String"
+      },
+      "consent": {
+        "type": "String"
+      }
     }
   },
   "runtimeDetailsSemanticLabel": "Runtime details: {provider}, version {version}, endpoint {endpoint}, ownership {ownership}, reuse permission {reuseConsent}, management permission {managementConsent}.",
   "@runtimeDetailsSemanticLabel": {
     "placeholders": {
-      "provider": { "type": "String" },
-      "version": { "type": "String" },
-      "endpoint": { "type": "String" },
-      "ownership": { "type": "String" },
-      "reuseConsent": { "type": "String" },
-      "managementConsent": { "type": "String" }
+      "provider": {
+        "type": "String"
+      },
+      "version": {
+        "type": "String"
+      },
+      "endpoint": {
+        "type": "String"
+      },
+      "ownership": {
+        "type": "String"
+      },
+      "reuseConsent": {
+        "type": "String"
+      },
+      "managementConsent": {
+        "type": "String"
+      }
     }
   },
   "setupTitle": "Local model setup",
@@ -406,22 +520,38 @@
   "setupStatusSemanticLabel": "Model setup status: {status}. {message} Model: {model}. Stage: {stage}.",
   "@setupStatusSemanticLabel": {
     "placeholders": {
-      "status": { "type": "String" },
-      "message": { "type": "String" },
-      "model": { "type": "String" },
-      "stage": { "type": "String" }
+      "status": {
+        "type": "String"
+      },
+      "message": {
+        "type": "String"
+      },
+      "model": {
+        "type": "String"
+      },
+      "stage": {
+        "type": "String"
+      }
     }
   },
   "setupProgressSemanticLabel": "Model setup progress",
   "setupProgressPercent": "{percent}% complete",
   "@setupProgressPercent": {
-    "placeholders": { "percent": { "type": "String" } }
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
   },
   "setupProgressBytes": "{completed} of {total}",
   "@setupProgressBytes": {
     "placeholders": {
-      "completed": { "type": "String" },
-      "total": { "type": "String" }
+      "completed": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
     }
   },
   "setupModelLabel": "Model",
@@ -441,11 +571,19 @@
   "setupComponentUnknown": "Unrecognized setup component",
   "setupComponentRequired": "{component} (required)",
   "@setupComponentRequired": {
-    "placeholders": { "component": { "type": "String" } }
+    "placeholders": {
+      "component": {
+        "type": "String"
+      }
+    }
   },
   "setupComponentOptional": "{component} (optional)",
   "@setupComponentOptional": {
-    "placeholders": { "component": { "type": "String" } }
+    "placeholders": {
+      "component": {
+        "type": "String"
+      }
+    }
   },
   "setupRequiredEffectsLabel": "This approval allows",
   "setupReasonsLabel": "Why this plan was selected",
@@ -482,10 +620,18 @@
   "setupApprovalPromptMessage": "Approve adding {model} to {runtime}. This exact approval covers {size} in {destination} and only the listed effects.",
   "@setupApprovalPromptMessage": {
     "placeholders": {
-      "model": { "type": "String" },
-      "runtime": { "type": "String" },
-      "size": { "type": "String" },
-      "destination": { "type": "String" }
+      "model": {
+        "type": "String"
+      },
+      "runtime": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      },
+      "destination": {
+        "type": "String"
+      }
     }
   },
   "setupCancelPromptTitle": "Cancel model setup?",
@@ -533,11 +679,19 @@
   "chatRunningLocally": "Running locally on this PC",
   "chatRunningLocallyWithModel": "Running locally on this PC with {model}",
   "@chatRunningLocallyWithModel": {
-    "placeholders": { "model": { "type": "String" } }
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
   },
   "chatLocalitySemanticLabel": "Chat location: {detail}",
   "@chatLocalitySemanticLabel": {
-    "placeholders": { "detail": { "type": "String" } }
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
   },
   "chatNewConversationAction": "New conversation",
   "chatConversationsLoading": "Loading your conversations",
@@ -548,7 +702,11 @@
   "chatNoConversationSelected": "Choose a conversation or start a new one.",
   "chatMessageCount": "{count, plural, =0{No messages} =1{1 message} other{{count} messages}}",
   "@chatMessageCount": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "chatRoleUser": "You",
   "chatRoleAssistant": "Assistant",
@@ -576,6 +734,151 @@
   "setupRecoveryUnknown": "Review diagnostics before continuing.",
   "setupRecommendedAction": "Recommended action: {action}",
   "@setupRecommendedAction": {
-    "placeholders": { "action": { "type": "String" } }
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "runtimeInstallTitle": "Set up local AI",
+  "@runtimeInstallTitle": {
+    "description": "Title of the guided local runtime installation panel."
+  },
+  "runtimeInstallAvailable": "GixGiz can set up the local AI runtime for you. Nothing is downloaded or changed until you approve the plan.",
+  "@runtimeInstallAvailable": {
+    "description": "Shown when an installation can be offered."
+  },
+  "runtimeInstallExternalPresent": "A local AI runtime is already installed on this PC. GixGiz will use it instead of installing another copy.",
+  "@runtimeInstallExternalPresent": {
+    "description": "Shown when an existing runtime is reused rather than replaced."
+  },
+  "runtimeInstallUnavailable": "Local AI setup is not available on this PC right now.",
+  "@runtimeInstallUnavailable": {
+    "description": "Shown when no installation can be offered."
+  },
+  "runtimeInstallAwaitingApproval": "Review what this will change, then choose whether to continue.",
+  "@runtimeInstallAwaitingApproval": {
+    "description": "Shown while a plan awaits an explicit decision."
+  },
+  "runtimeInstallApproved": "Approved. Setup has not started yet.",
+  "@runtimeInstallApproved": {
+    "description": "Shown after approval and before work begins."
+  },
+  "runtimeInstallRunning": "Setting up the local AI runtime. You can keep using the rest of GixGiz.",
+  "@runtimeInstallRunning": {
+    "description": "Shown while approved installation work runs."
+  },
+  "runtimeInstallReady": "The local AI runtime is installed and verified.",
+  "@runtimeInstallReady": {
+    "description": "Shown only after the core verifies the installation end to end."
+  },
+  "runtimeInstallFailed": "Setup did not finish. Nothing was left half-installed by GixGiz.",
+  "@runtimeInstallFailed": {
+    "description": "Shown when installation failed."
+  },
+  "runtimeInstallCancelled": "Setup was cancelled. Nothing on this PC was changed.",
+  "@runtimeInstallCancelled": {
+    "description": "Shown when the plan was denied or cancelled."
+  },
+  "runtimeInstallAttention": "Setup needs your attention before it can continue.",
+  "@runtimeInstallAttention": {
+    "description": "Shown when installation stopped and needs a decision."
+  },
+  "runtimeInstallReviewAction": "Review setup",
+  "@runtimeInstallReviewAction": {
+    "description": "Button that builds a reviewable plan."
+  },
+  "runtimeInstallApproveAction": "Approve and continue",
+  "@runtimeInstallApproveAction": {
+    "description": "Button that approves the exact plan revision."
+  },
+  "runtimeInstallDenyAction": "Not now",
+  "@runtimeInstallDenyAction": {
+    "description": "Button that denies the plan."
+  },
+  "runtimeInstallStartAction": "Start setup",
+  "@runtimeInstallStartAction": {
+    "description": "Button that starts approved installation work."
+  },
+  "runtimeInstallRefreshAction": "Check progress",
+  "@runtimeInstallRefreshAction": {
+    "description": "Button that re-reads authoritative installation state."
+  },
+  "runtimeInstallComponent": "What gets installed",
+  "@runtimeInstallComponent": {
+    "description": "Label for the component being installed."
+  },
+  "runtimeInstallVersion": "Version",
+  "@runtimeInstallVersion": {
+    "description": "Label for the exact version installed."
+  },
+  "runtimeInstallSource": "Downloaded from",
+  "@runtimeInstallSource": {
+    "description": "Label for the trusted download origin."
+  },
+  "runtimeInstallPublisher": "Verified publisher",
+  "@runtimeInstallPublisher": {
+    "description": "Label for the expected signing publisher."
+  },
+  "runtimeInstallDownloadSize": "Download size",
+  "@runtimeInstallDownloadSize": {
+    "description": "Label for the expected download size."
+  },
+  "runtimeInstallAdministrator": "Administrator needed",
+  "@runtimeInstallAdministrator": {
+    "description": "Label for whether Windows will ask for administrator permission."
+  },
+  "runtimeInstallAdministratorRequired": "Yes, Windows will ask for permission",
+  "@runtimeInstallAdministratorRequired": {
+    "description": "Value shown when elevation is required."
+  },
+  "runtimeInstallAdministratorNotRequired": "No, this installs just for you",
+  "@runtimeInstallAdministratorNotRequired": {
+    "description": "Value shown when the installation is per-user and needs no elevation."
+  },
+  "runtimeVersionAcknowledgeAction": "Use this version anyway",
+  "@runtimeVersionAcknowledgeAction": {
+    "description": "Button that accepts an untested runtime version."
+  },
+  "runtimeVersionAcknowledgeTitle": "Use an untested runtime version?",
+  "@runtimeVersionAcknowledgeTitle": {
+    "description": "Title of the untested-version confirmation dialog."
+  },
+  "runtimeVersionAcknowledgeConfirmAction": "Accept this version",
+  "@runtimeVersionAcknowledgeConfirmAction": {
+    "description": "Confirm button in the untested-version dialog."
+  },
+  "runtimeVersionAcknowledgeMessage": "GixGiz has not tested version {version}. It may still work, but it is outside the versions this release has evidence for. Accepting applies to this exact version only; a later update will ask again.",
+  "@runtimeVersionAcknowledgeMessage": {
+    "description": "Explains what accepting an untested runtime version means.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "runtimeInstallTransferred": "Downloaded {transferred} of {total} ({percent}%)",
+  "@runtimeInstallTransferred": {
+    "description": "Live download progress with a percentage.",
+    "placeholders": {
+      "transferred": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeInstallTransferredUnknownTotal": "Downloaded {transferred}",
+  "@runtimeInstallTransferredUnknownTotal": {
+    "description": "Live download progress when the total size is unknown.",
+    "placeholders": {
+      "transferred": {
+        "type": "String"
+      }
+    }
   }
 }

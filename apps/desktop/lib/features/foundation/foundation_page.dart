@@ -33,6 +33,10 @@ class _FoundationPageState extends State<FoundationPage> {
   StreamSubscription<HardwareScanEvent>? _hardwareScanSubscription;
   CoreOperation? _activeRuntimeOperation;
   CoreClient? _activeRuntimeClient;
+  RuntimeInstallPlan? _installPlan;
+  RuntimeInstallAttentionReason? _installAttention;
+  RuntimeInstallJobSnapshot? _installJob;
+  bool _installBusy = false;
   StreamSubscription<RuntimeOperationEvent>? _runtimeOperationSubscription;
   int _runtimeRevision = 0;
   SetupJobSnapshot? _setupJob;
@@ -320,6 +324,164 @@ class _FoundationPageState extends State<FoundationPage> {
           report: previousReport,
         );
       });
+    }
+  }
+
+  /// Builds a reviewable installation plan. Changes nothing on the PC.
+  /// Accepts one exact untested runtime version, then re-reads status.
+  ///
+  /// The core validates the named version against live detection and refuses
+  /// anything that does not match, so this cannot approve a different runtime.
+  Future<void> _acknowledgeUntestedRuntimeVersion(String version) async {
+    final client = widget.coreClient;
+    setState(() => _runtimeStatusState = const RuntimeStatusLoading());
+    try {
+      final report = await client.acknowledgeUntestedRuntimeVersion(version);
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      setState(() => _runtimeStatusState = RuntimeStatusLoaded(report: report));
+    } on CoreClientFailure catch (failure) {
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = RuntimeStatusFailed(
+          diagnosticCode: failure.code,
+          recoveryAction: failure.recoveryAction,
+        );
+      });
+    } on Object {
+      if (!mounted || !identical(client, widget.coreClient)) {
+        return;
+      }
+      setState(() {
+        _runtimeStatusState = const RuntimeStatusFailed(
+          diagnosticCode: 'RUNTIME_VERSION_ACKNOWLEDGE_FAILED',
+        );
+      });
+    }
+  }
+
+  Future<void> _reviewRuntimeInstall() async {
+    final client = widget.coreClient;
+    setState(() => _installBusy = true);
+    try {
+      final response = await client.planRuntimeInstall();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _installPlan = response.plan;
+        _installAttention = response.attention;
+        _installJob = null;
+        _installBusy = false;
+      });
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _installPlan = null;
+        _installAttention = RuntimeInstallAttentionReason.unknown;
+        _installBusy = false;
+      });
+    }
+  }
+
+  /// Records an explicit decision for the exact plan revision on screen.
+  Future<void> _decideRuntimeInstall(
+    RuntimeInstallApprovalDecision decision,
+  ) async {
+    final plan = _installPlan;
+    if (plan == null) {
+      return;
+    }
+    setState(() => _installBusy = true);
+    try {
+      final job = await widget.coreClient.decideRuntimeInstall(
+        plan.jobId,
+        plan.revision,
+        decision,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _installJob = job;
+        _installBusy = false;
+      });
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _installBusy = false);
+    }
+  }
+
+  /// Starts approved installation work; the core owns the outcome.
+  Future<void> _startRuntimeInstall() async {
+    final plan = _installPlan;
+    if (plan == null) {
+      return;
+    }
+    setState(() => _installBusy = true);
+    try {
+      final job = await widget.coreClient.startRuntimeInstall(plan.jobId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _installJob = job;
+        _installBusy = false;
+      });
+      _scheduleInstallPoll();
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _installBusy = false);
+    }
+  }
+
+  /// Polls authoritative state while an installation is running.
+  ///
+  /// The core remains the only source of truth; this just keeps the visible
+  /// byte count moving during a long transfer.
+  void _scheduleInstallPoll() {
+    if (_installJob?.state != RuntimeInstallState.running) {
+      return;
+    }
+    Future<void>.delayed(const Duration(seconds: 1), () async {
+      if (!mounted || _installJob?.state != RuntimeInstallState.running) {
+        return;
+      }
+      await _refreshRuntimeInstall();
+      _scheduleInstallPoll();
+    });
+  }
+
+  /// Re-reads authoritative installation state. Never infers completion.
+  Future<void> _refreshRuntimeInstall() async {
+    final plan = _installPlan;
+    if (plan == null) {
+      return;
+    }
+    setState(() => _installBusy = true);
+    try {
+      final job = await widget.coreClient.checkRuntimeInstall(plan.jobId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _installJob = job ?? _installJob;
+        _installBusy = false;
+      });
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _installBusy = false);
     }
   }
 
@@ -1158,6 +1320,18 @@ class _FoundationPageState extends State<FoundationPage> {
           ? _checkRuntimeStatus
           : null,
       onApproveRuntimeReuse: _approveRuntimeReuse,
+      onAcknowledgeUntestedRuntimeVersion: _acknowledgeUntestedRuntimeVersion,
+      installPlan: _installPlan,
+      installAttention: _installAttention,
+      installJob: _installJob,
+      installBusy: _installBusy,
+      onReviewRuntimeInstall: _reviewRuntimeInstall,
+      onApproveRuntimeInstall: () =>
+          _decideRuntimeInstall(RuntimeInstallApprovalDecision.approve),
+      onDenyRuntimeInstall: () =>
+          _decideRuntimeInstall(RuntimeInstallApprovalDecision.deny),
+      onStartRuntimeInstall: _startRuntimeInstall,
+      onRefreshRuntimeInstall: _refreshRuntimeInstall,
       onStartRuntimeOperation: _startRuntimeOperation,
       onCancelRuntimeOperation: _activeRuntimeOperation == null
           ? null

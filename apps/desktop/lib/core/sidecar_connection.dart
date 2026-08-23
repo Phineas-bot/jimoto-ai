@@ -79,6 +79,22 @@ abstract interface class CoreSidecarSession {
 
   Future<RuntimeConsentResponse> runtimeConsent(RuntimeConsentRequest request);
 
+  Future<RuntimeInstallPlanResponse> runtimeInstallPlan(
+    RuntimeInstallPlanRequest request,
+  );
+
+  Future<RuntimeInstallApprovalResponse> runtimeInstallApproval(
+    RuntimeInstallApprovalRequest request,
+  );
+
+  Future<RuntimeInstallStartResponse> runtimeInstallStart(
+    RuntimeInstallStartRequest request,
+  );
+
+  Future<RuntimeInstallStatusResponse> runtimeInstallStatus(
+    RuntimeInstallStatusRequest request,
+  );
+
   Future<RuntimeModelInventoryResponse> runtimeModels(
     RuntimeModelInventoryRequest request,
   );
@@ -664,6 +680,70 @@ class IoCoreSidecarSession implements CoreSidecarSession {
       request.correlationId,
       request.requestId,
     );
+    return response;
+  }
+
+  @override
+  Future<RuntimeInstallPlanResponse> runtimeInstallPlan(
+    RuntimeInstallPlanRequest request,
+  ) async {
+    final response = RuntimeInstallPlanResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/install/plan',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(response.correlationId, response.requestId, request.correlationId, request.requestId);
+    return response;
+  }
+
+  @override
+  Future<RuntimeInstallApprovalResponse> runtimeInstallApproval(
+    RuntimeInstallApprovalRequest request,
+  ) async {
+    final response = RuntimeInstallApprovalResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/install/approval',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(response.correlationId, response.requestId, request.correlationId, request.requestId);
+    return response;
+  }
+
+  @override
+  Future<RuntimeInstallStartResponse> runtimeInstallStart(
+    RuntimeInstallStartRequest request,
+  ) async {
+    final response = RuntimeInstallStartResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/install/jobs',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(response.correlationId, response.requestId, request.correlationId, request.requestId);
+    return response;
+  }
+
+  @override
+  Future<RuntimeInstallStatusResponse> runtimeInstallStatus(
+    RuntimeInstallStatusRequest request,
+  ) async {
+    final response = RuntimeInstallStatusResponse.fromJson(
+      await _post(
+        '/internal/v1/runtime/install/jobs/status',
+        request.toJson(),
+        request.correlationId,
+        request.requestId,
+      ),
+    );
+    _verifyIds(response.correlationId, response.requestId, request.correlationId, request.requestId);
     return response;
   }
 
