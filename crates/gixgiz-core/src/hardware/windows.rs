@@ -231,6 +231,9 @@ struct RawOperatingSystem {
     caption: Option<String>,
     version: Option<String>,
     build_number: Option<String>,
+    // WMI reports `OSArchitecture`, which PascalCase would render as
+    // `OsArchitecture` and never match. Pin the exact property name.
+    #[serde(rename = "OSArchitecture")]
     os_architecture: Option<String>,
     total_visible_memory_size: Option<u64>,
     free_physical_memory: Option<u64>,
@@ -255,7 +258,9 @@ struct RawGpu {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct RawStorage {
+    // WMI reports `DeviceID`; PascalCase would render `DeviceId`.
     #[allow(dead_code)]
+    #[serde(rename = "DeviceID")]
     device_id: Option<String>,
     size: Option<u64>,
     free_space: Option<u64>,
@@ -593,6 +598,16 @@ mod tests {
         assert_eq!(
             evidence.physical_memory.available_bytes.value,
             Some(8_589_934_592)
+        );
+        // Architecture is a hard requirement for planning: a property-name
+        // mismatch here silently blocks every recommendation.
+        assert_eq!(
+            evidence.operating_system.architecture.value,
+            Some(MachineArchitecture::X86_64)
+        );
+        assert_eq!(
+            evidence.operating_system.architecture.metadata.availability,
+            EvidenceAvailability::Available
         );
         assert_eq!(evidence.gpus.devices.len(), 2);
         assert_eq!(evidence.storage.free_bytes.value, Some(5));
