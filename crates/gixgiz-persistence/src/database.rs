@@ -200,6 +200,18 @@ impl Persistence {
         ChatRepository::new(self.clone())
     }
 
+    /// Returns the durable storage-location repository.
+    #[must_use]
+    pub fn storage_locations(&self) -> crate::StorageLocationRepository {
+        crate::StorageLocationRepository::new(self.clone())
+    }
+
+    /// Returns the durable runtime-installation repository.
+    #[must_use]
+    pub fn runtime_install(&self) -> crate::RuntimeInstallRepository {
+        crate::RuntimeInstallRepository::new(self.clone())
+    }
+
     /// Returns the append-only, redaction-safe audit repository.
     #[must_use]
     pub fn audit_events(&self) -> AuditEventRepository {

@@ -15,7 +15,9 @@ mod database;
 mod error;
 mod migrations;
 mod repositories;
+mod runtime_install;
 mod setup;
+mod storage_location;
 
 pub use chat::{
     ChatRepository, INTERRUPTED_FAILURE_CODE, PersistedChatMessage, PersistedChatMessageStatus,
@@ -31,6 +33,7 @@ pub use repositories::{
     JobState, PlatformMetadataRepository, RuntimePolicyRecord, RuntimePolicyRepository,
     SettingsRepository,
 };
+pub use runtime_install::{PersistedRuntimeInstallJob, RuntimeInstallRepository};
 pub use setup::{
     PersistedArtifactUpdate, PersistedDestinationCategory, PersistedEffectDisposition,
     PersistedModelArtifact, PersistedModelIntegrity, PersistedModelLifecycle,
@@ -40,3 +43,4 @@ pub use setup::{
     PersistedSetupPlan, PersistedSetupProgress, PersistedSetupStage, PersistedSetupState,
     PersistedSetupTransition, PersistedSetupWriteResult, SetupJobRepository,
 };
+pub use storage_location::{PersistedStorageLocation, StorageLocationRepository};
