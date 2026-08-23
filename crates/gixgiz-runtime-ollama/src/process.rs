@@ -299,8 +299,20 @@ async fn verify_authenticode(
     executable: &ValidatedExecutable,
     limits: ProcessLimits,
 ) -> Result<(), OllamaAdapterError> {
+    verify_authenticode_path(executable.path(), limits).await
+}
+
+/// Verifies Authenticode signature and trusted publisher for one exact path.
+///
+/// The path is passed to PowerShell as a hex token and never interpolated into
+/// the script, so an adversarial path stays data. Callers must ensure the path
+/// is inside a GixGiz-owned location before calling.
+pub(crate) async fn verify_authenticode_path(
+    target: &Path,
+    limits: ProcessLimits,
+) -> Result<(), OllamaAdapterError> {
     let powershell = resolve_system_powershell()?;
-    let mut command = authenticode_command(&powershell, executable.path())?;
+    let mut command = authenticode_command(&powershell, target)?;
     let mut child = command
         .spawn()
         .map_err(|error| OllamaAdapterError::executable_io("verify Authenticode", &error))?;
@@ -366,15 +378,22 @@ fn authenticode_command(
 }
 
 fn encode_executable_path(path: &Path) -> Result<String, OllamaAdapterError> {
+    encode_wide_token(path.as_os_str())
+}
+
+/// Encodes an OS string as a validated hex token for PowerShell arguments.
+///
+/// The token matches `^x[0-9A-F]+$`, so any value the caller supplies reaches
+/// the script as inert data rather than as script text.
+pub(crate) fn encode_wide_token(value: &std::ffi::OsStr) -> Result<String, OllamaAdapterError> {
+    let path = value;
     #[cfg(windows)]
     let wide = path
-        .as_os_str()
         .encode_wide()
         .take(AUTHENTICODE_PATH_WIDE_LIMIT + 1)
         .collect::<Vec<_>>();
     #[cfg(not(windows))]
     let wide = path
-        .as_os_str()
         .to_str()
         .ok_or(OllamaAdapterError::InvalidExecutable)?
         .encode_utf16()
@@ -408,7 +427,7 @@ fn normalize_publisher_name(value: &str) -> Option<String> {
 }
 
 #[cfg(windows)]
-fn resolve_system_powershell() -> Result<PathBuf, OllamaAdapterError> {
+pub(crate) fn resolve_system_powershell() -> Result<PathBuf, OllamaAdapterError> {
     let candidate = PathBuf::from(SYSTEM_POWERSHELL_PATH);
     let candidate_metadata =
         std::fs::symlink_metadata(&candidate).map_err(|_| OllamaAdapterError::InvalidExecutable)?;
@@ -431,7 +450,7 @@ fn resolve_system_powershell() -> Result<PathBuf, OllamaAdapterError> {
 }
 
 #[cfg(not(windows))]
-fn resolve_system_powershell() -> Result<PathBuf, OllamaAdapterError> {
+pub(crate) fn resolve_system_powershell() -> Result<PathBuf, OllamaAdapterError> {
     let _ = POWERSHELL_SUFFIX;
     Err(OllamaAdapterError::InvalidExecutable)
 }
@@ -504,7 +523,7 @@ async fn probe_client_version(
     parse_client_version_output(&stdout, &stderr)
 }
 
-async fn collect_bounded_output<Stdout, Stderr, Wait, Status>(
+pub(crate) async fn collect_bounded_output<Stdout, Stderr, Wait, Status>(
     stdout: Stdout,
     stderr: Stderr,
     wait: Wait,
