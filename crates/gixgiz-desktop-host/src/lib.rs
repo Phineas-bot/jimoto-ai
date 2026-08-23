@@ -18,9 +18,10 @@ use std::time::Duration;
 
 use gixgiz_contracts::{
     BootstrapReady, CorrelationId, InstanceId, RequestId, SetupJobRecoveryRequest,
+    StorageLocationKind,
 };
 use gixgiz_core::{CoreError, HardwareProvider, HardwareScanner, OperationContext, PlatformCore};
-use gixgiz_runtime_ollama::OllamaRuntimeProvider;
+use gixgiz_runtime_ollama::{OLLAMA_PROVIDER_ID, OllamaInstaller, OllamaRuntimeProvider};
 use tokio::io::{AsyncWriteExt, BufReader};
 
 pub use error::HostError;
@@ -36,26 +37,58 @@ pub async fn run_sidecar() -> Result<(), HostError> {
     let bootstrap = read_bootstrap(stdin).await?;
     let instance_id = InstanceId::new();
     let context = OperationContext::generated();
-    let runtime_provider =
-        std::sync::Arc::new(OllamaRuntimeProvider::for_current_user().map_err(HostError::Runtime)?);
-    let (mut core, status, runtime_service, setup_service, chat_service) =
-        tokio::task::spawn_blocking(move || {
-            let mut core = PlatformCore::with_default_persistence();
-            let runtime_service = core.runtime_service(runtime_provider.clone());
-            let setup_service = core.setup_service(runtime_provider.clone());
-            let chat_service = core.chat_service(runtime_provider);
-            let status = core.start(&context)?;
-            Ok::<_, gixgiz_core::CoreError>((
-                core,
-                status,
-                runtime_service,
-                setup_service,
-                chat_service,
-            ))
-        })
-        .await
-        .map_err(HostError::CoreWorker)?
-        .map_err(HostError::Core)?;
+
+    let (
+        mut core,
+        status,
+        runtime_service,
+        setup_service,
+        chat_service,
+        install_coordinator,
+        storage_locations,
+    ) = tokio::task::spawn_blocking(move || {
+        let mut core = PlatformCore::with_default_persistence();
+
+        // Locations are read before the provider is composed, so a runtime
+        // installed outside the default directory is still discovered.
+        let chosen_runtime = core.storage_location(StorageLocationKind::Runtime);
+        let chosen_staging = core.storage_location(StorageLocationKind::Staging);
+        let runtime_provider = std::sync::Arc::new(OllamaRuntimeProvider::from_environment(
+            chosen_runtime
+                .as_ref()
+                .map(|root| root.join("Ollama").join("ollama.exe")),
+        ));
+
+        let runtime_service = core.runtime_service(runtime_provider.clone());
+        let setup_service = core.setup_service(runtime_provider.clone());
+        let chat_service = core.chat_service(runtime_provider.clone());
+        let status = core.start(&context)?;
+        // Managed installation stages into the GixGiz-owned staging root and
+        // reuses ordinary detection for post-install verification.
+        let install_coordinator = chosen_staging
+            .or_else(|| core.data_root_staging())
+            .and_then(|staging| {
+                let installer = std::sync::Arc::new(OllamaInstaller::for_current_user(
+                    staging,
+                    chosen_runtime.clone(),
+                    runtime_provider.clone(),
+                ));
+                core.runtime_install_coordinator(installer, OLLAMA_PROVIDER_ID)
+            });
+        let storage_locations = core.storage_location_service();
+        Ok::<_, gixgiz_core::CoreError>((
+            core,
+            status,
+            runtime_service,
+            setup_service,
+            chat_service,
+            install_coordinator,
+            storage_locations,
+        ))
+    })
+    .await
+    .map_err(HostError::CoreWorker)?
+    .map_err(HostError::Core)?;
     let hardware_scanner = HardwareScanner::windows().unwrap_or_else(|error| {
         HardwareScanner::new(std::sync::Arc::new(UnavailableHardwareProvider(error)))
     });
@@ -77,15 +110,32 @@ pub async fn run_sidecar() -> Result<(), HostError> {
             .map_err(HostError::Core)?;
     }
 
+    if let Some(coordinator) = install_coordinator.as_ref() {
+        // An installation interrupted by an earlier exit is reconciled through
+        // fresh detection before any client can observe it.
+        coordinator
+            .recover(gixgiz_runtime::RuntimeOperationContext::new(
+                CorrelationId::new(),
+                RequestId::new(),
+                Duration::from_secs(60),
+            ))
+            .await
+            .map_err(HostError::Core)?;
+    }
+
     let serve_result = async {
         let host = SidecarHost::bind(
             bootstrap.token.clone(),
             instance_id,
             status,
             hardware_scanner,
-            runtime_service,
-            setup_service,
-            chat_service,
+            crate::server::SidecarServices {
+                runtime: runtime_service,
+                setup: setup_service,
+                chat: chat_service,
+                runtime_install: install_coordinator,
+                storage_locations,
+            },
         )
         .await?;
         let ready = BootstrapReady::new(

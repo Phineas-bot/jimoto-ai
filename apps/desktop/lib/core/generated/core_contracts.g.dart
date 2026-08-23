@@ -3084,6 +3084,8 @@ enum RuntimeCapabilityKind {
 enum RuntimeConsentDecision {
   approveReuse('approve_reuse'),
   denyReuse('deny_reuse'),
+  acknowledgeUntestedVersion('acknowledge_untested_version'),
+  revokeUntestedVersion('revoke_untested_version'),
   unknown('unknown'),
   ;
 
@@ -3105,12 +3107,14 @@ enum RuntimeConsentDecision {
 
 class RuntimeConsentRequest {
   const RuntimeConsentRequest({
+    required this.acknowledgedVersion,
     required this.correlationId,
     required this.decision,
     required this.providerId,
     required this.requestId,
   });
 
+  final String? acknowledgedVersion;
   final CorrelationId correlationId;
   final RuntimeConsentDecision decision;
   final RuntimeProviderId providerId;
@@ -3118,6 +3122,7 @@ class RuntimeConsentRequest {
 
   factory RuntimeConsentRequest.fromJson(Map<String, dynamic> json) {
     return RuntimeConsentRequest(
+      acknowledgedVersion: json['acknowledged_version'] == null ? null : _contractString(json['acknowledged_version'], 'RuntimeConsentRequest.acknowledged_version'),
       correlationId: _contractString(json['correlation_id'], 'RuntimeConsentRequest.correlation_id'),
       decision: RuntimeConsentDecision.fromJson(json['decision']),
       providerId: _contractString(json['provider_id'], 'RuntimeConsentRequest.provider_id'),
@@ -3127,6 +3132,7 @@ class RuntimeConsentRequest {
 
   Map<String, dynamic> toJson() {
     return {
+      'acknowledged_version': acknowledgedVersion,
       'correlation_id': correlationId,
       'decision': decision.toJson(),
       'provider_id': providerId,
@@ -3214,6 +3220,7 @@ enum RuntimeEndpointSafety {
 
 class RuntimeHealthReport {
   const RuntimeHealthReport({
+    required this.acknowledgedUntestedVersion,
     required this.capabilities,
     required this.displayName,
     required this.endpointSafety,
@@ -3228,6 +3235,7 @@ class RuntimeHealthReport {
     required this.warnings,
   });
 
+  final String? acknowledgedUntestedVersion;
   final List<RuntimeCapabilityDescriptor> capabilities;
   final RuntimeDisplayName displayName;
   final RuntimeEndpointSafety endpointSafety;
@@ -3243,6 +3251,7 @@ class RuntimeHealthReport {
 
   factory RuntimeHealthReport.fromJson(Map<String, dynamic> json) {
     return RuntimeHealthReport(
+      acknowledgedUntestedVersion: json['acknowledged_untested_version'] == null ? null : _contractString(json['acknowledged_untested_version'], 'RuntimeHealthReport.acknowledged_untested_version'),
       capabilities: _contractList(json['capabilities'], 'RuntimeHealthReport.capabilities').map((item) => RuntimeCapabilityDescriptor.fromJson(_contractMap(item, 'RuntimeHealthReport.capabilities[]'))).toList(growable: false),
       displayName: _contractString(json['display_name'], 'RuntimeHealthReport.display_name'),
       endpointSafety: RuntimeEndpointSafety.fromJson(json['endpoint_safety']),
@@ -3260,6 +3269,7 @@ class RuntimeHealthReport {
 
   Map<String, dynamic> toJson() {
     return {
+      'acknowledged_untested_version': acknowledgedUntestedVersion,
       'capabilities': capabilities.map((item) => item.toJson()).toList(growable: false),
       'display_name': displayName,
       'endpoint_safety': endpointSafety.toJson(),
@@ -3272,6 +3282,938 @@ class RuntimeHealthReport {
       'state': state.toJson(),
       'version': version?.toJson(),
       'warnings': warnings.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+enum RuntimeInstallApprovalDecision {
+  approve('approve'),
+  deny('deny'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallApprovalDecision(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallApprovalDecision fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallApprovalRecord {
+  const RuntimeInstallApprovalRecord({
+    required this.authorizedEffects,
+    required this.correlationId,
+    required this.decidedAtUnixMs,
+    required this.decision,
+    required this.jobId,
+    required this.planRevision,
+    required this.providerId,
+    required this.requestId,
+    required this.requiresAdministrator,
+    required this.version,
+  });
+
+  final List<RuntimeInstallEffectKind> authorizedEffects;
+  final CorrelationId correlationId;
+  final int decidedAtUnixMs;
+  final RuntimeInstallApprovalDecision decision;
+  final RuntimeInstallJobId jobId;
+  final int planRevision;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+  final bool requiresAdministrator;
+  final String version;
+
+  factory RuntimeInstallApprovalRecord.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallApprovalRecord(
+      authorizedEffects: _contractList(json['authorized_effects'], 'RuntimeInstallApprovalRecord.authorized_effects').map((item) => RuntimeInstallEffectKind.fromJson(item)).toList(growable: false),
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallApprovalRecord.correlation_id'),
+      decidedAtUnixMs: _contractInt(json['decided_at_unix_ms'], 'RuntimeInstallApprovalRecord.decided_at_unix_ms'),
+      decision: RuntimeInstallApprovalDecision.fromJson(json['decision']),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallApprovalRecord.job_id'),
+      planRevision: _contractInt(json['plan_revision'], 'RuntimeInstallApprovalRecord.plan_revision'),
+      providerId: _contractString(json['provider_id'], 'RuntimeInstallApprovalRecord.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallApprovalRecord.request_id'),
+      requiresAdministrator: _contractBool(json['requires_administrator'], 'RuntimeInstallApprovalRecord.requires_administrator'),
+      version: _contractString(json['version'], 'RuntimeInstallApprovalRecord.version'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'authorized_effects': authorizedEffects.map((item) => item.toJson()).toList(growable: false),
+      'correlation_id': correlationId,
+      'decided_at_unix_ms': decidedAtUnixMs,
+      'decision': decision.toJson(),
+      'job_id': jobId,
+      'plan_revision': planRevision,
+      'provider_id': providerId,
+      'request_id': requestId,
+      'requires_administrator': requiresAdministrator,
+      'version': version,
+    };
+  }
+}
+
+class RuntimeInstallApprovalRequest {
+  const RuntimeInstallApprovalRequest({
+    required this.correlationId,
+    required this.decision,
+    required this.jobId,
+    required this.planRevision,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallApprovalDecision decision;
+  final RuntimeInstallJobId jobId;
+  final int planRevision;
+  final RequestId requestId;
+
+  factory RuntimeInstallApprovalRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallApprovalRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallApprovalRequest.correlation_id'),
+      decision: RuntimeInstallApprovalDecision.fromJson(json['decision']),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallApprovalRequest.job_id'),
+      planRevision: _contractInt(json['plan_revision'], 'RuntimeInstallApprovalRequest.plan_revision'),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallApprovalRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'decision': decision.toJson(),
+      'job_id': jobId,
+      'plan_revision': planRevision,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallApprovalResponse {
+  const RuntimeInstallApprovalResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallJobSnapshot job;
+  final RequestId requestId;
+
+  factory RuntimeInstallApprovalResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallApprovalResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallApprovalResponse.correlation_id'),
+      job: RuntimeInstallJobSnapshot.fromJson(_contractMap(json['job'], 'RuntimeInstallApprovalResponse.job')),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallApprovalResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeInstallAttentionReason {
+  approvalRequired('approval_required'),
+  externalRuntimePresent('external_runtime_present'),
+  artifactRejected('artifact_rejected'),
+  installOutcomeUncertain('install_outcome_uncertain'),
+  runtimeUnverified('runtime_unverified'),
+  insufficientStorage('insufficient_storage'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallAttentionReason(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallAttentionReason fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallComponent {
+  const RuntimeInstallComponent({
+    required this.artifactName,
+    required this.displayName,
+    required this.expectedPublisher,
+    required this.expectedSizeBytes,
+    required this.integrityEvidence,
+    required this.sourceOrigin,
+    required this.version,
+  });
+
+  final String artifactName;
+  final String displayName;
+  final String expectedPublisher;
+  final int expectedSizeBytes;
+  final RuntimeInstallIntegrityEvidence integrityEvidence;
+  final String sourceOrigin;
+  final String version;
+
+  factory RuntimeInstallComponent.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallComponent(
+      artifactName: _contractString(json['artifact_name'], 'RuntimeInstallComponent.artifact_name'),
+      displayName: _contractString(json['display_name'], 'RuntimeInstallComponent.display_name'),
+      expectedPublisher: _contractString(json['expected_publisher'], 'RuntimeInstallComponent.expected_publisher'),
+      expectedSizeBytes: _contractInt(json['expected_size_bytes'], 'RuntimeInstallComponent.expected_size_bytes'),
+      integrityEvidence: RuntimeInstallIntegrityEvidence.fromJson(json['integrity_evidence']),
+      sourceOrigin: _contractString(json['source_origin'], 'RuntimeInstallComponent.source_origin'),
+      version: _contractString(json['version'], 'RuntimeInstallComponent.version'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'artifact_name': artifactName,
+      'display_name': displayName,
+      'expected_publisher': expectedPublisher,
+      'expected_size_bytes': expectedSizeBytes,
+      'integrity_evidence': integrityEvidence.toJson(),
+      'source_origin': sourceOrigin,
+      'version': version,
+    };
+  }
+}
+
+enum RuntimeInstallDestinationCategory {
+  perUserApplicationDirectory('per_user_application_directory'),
+  machineWideApplicationDirectory('machine_wide_application_directory'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallDestinationCategory(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallDestinationCategory fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallEffect {
+  const RuntimeInstallEffect({
+    required this.description,
+    required this.disposition,
+    required this.kind,
+  });
+
+  final String description;
+  final RuntimeInstallEffectDisposition disposition;
+  final RuntimeInstallEffectKind kind;
+
+  factory RuntimeInstallEffect.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallEffect(
+      description: _contractString(json['description'], 'RuntimeInstallEffect.description'),
+      disposition: RuntimeInstallEffectDisposition.fromJson(json['disposition']),
+      kind: RuntimeInstallEffectKind.fromJson(json['kind']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'description': description,
+      'disposition': disposition.toJson(),
+      'kind': kind.toJson(),
+    };
+  }
+}
+
+enum RuntimeInstallEffectDisposition {
+  notStarted('not_started'),
+  completed('completed'),
+  rolledBack('rolled_back'),
+  retained('retained'),
+  uncertain('uncertain'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallEffectDisposition(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallEffectDisposition fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeInstallEffectKind {
+  stagedInstallerArtifact('staged_installer_artifact'),
+  perUserApplicationFiles('per_user_application_files'),
+  perUserUninstallRegistration('per_user_uninstall_registration'),
+  runtimeProcessStarted('runtime_process_started'),
+  ownershipRecorded('ownership_recorded'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallEffectKind(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallEffectKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallEffectReport {
+  const RuntimeInstallEffectReport({
+    required this.effects,
+  });
+
+  final List<RuntimeInstallEffect> effects;
+
+  factory RuntimeInstallEffectReport.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallEffectReport(
+      effects: _contractList(json['effects'], 'RuntimeInstallEffectReport.effects').map((item) => RuntimeInstallEffect.fromJson(_contractMap(item, 'RuntimeInstallEffectReport.effects[]'))).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'effects': effects.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class RuntimeInstallEvent {
+  const RuntimeInstallEvent({
+    required this.correlationId,
+    required this.failure,
+    required this.jobId,
+    required this.kind,
+    required this.occurredAtUnixMs,
+    required this.progress,
+    required this.schemaVersion,
+    required this.sequence,
+    required this.stage,
+    required this.state,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallFailureCode? failure;
+  final RuntimeInstallJobId jobId;
+  final RuntimeInstallEventKind kind;
+  final int occurredAtUnixMs;
+  final RuntimeInstallProgress? progress;
+  final int schemaVersion;
+  final int sequence;
+  final RuntimeInstallStage stage;
+  final RuntimeInstallState state;
+
+  factory RuntimeInstallEvent.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallEvent(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallEvent.correlation_id'),
+      failure: json['failure'] == null ? null : RuntimeInstallFailureCode.fromJson(json['failure']),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallEvent.job_id'),
+      kind: RuntimeInstallEventKind.fromJson(json['kind']),
+      occurredAtUnixMs: _contractInt(json['occurred_at_unix_ms'], 'RuntimeInstallEvent.occurred_at_unix_ms'),
+      progress: json['progress'] == null ? null : RuntimeInstallProgress.fromJson(_contractMap(json['progress'], 'RuntimeInstallEvent.progress')),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeInstallEvent.schema_version'),
+      sequence: _contractInt(json['sequence'], 'RuntimeInstallEvent.sequence'),
+      stage: RuntimeInstallStage.fromJson(json['stage']),
+      state: RuntimeInstallState.fromJson(json['state']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'failure': failure?.toJson(),
+      'job_id': jobId,
+      'kind': kind.toJson(),
+      'occurred_at_unix_ms': occurredAtUnixMs,
+      'progress': progress?.toJson(),
+      'schema_version': schemaVersion,
+      'sequence': sequence,
+      'stage': stage.toJson(),
+      'state': state.toJson(),
+    };
+  }
+}
+
+enum RuntimeInstallEventKind {
+  stageChanged('stage_changed'),
+  progress('progress'),
+  terminal('terminal'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallEventKind(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallEventKind fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeInstallFailureCode {
+  sourceUntrusted('source_untrusted'),
+  downloadFailed('download_failed'),
+  artifactTooLarge('artifact_too_large'),
+  integrityMismatch('integrity_mismatch'),
+  signatureInvalid('signature_invalid'),
+  publisherUnexpected('publisher_unexpected'),
+  stagingUnavailable('staging_unavailable'),
+  insufficientStorage('insufficient_storage'),
+  installerFailed('installer_failed'),
+  executableNotFound('executable_not_found'),
+  executableUntrusted('executable_untrusted'),
+  versionUnsupported('version_unsupported'),
+  runtimeUnhealthy('runtime_unhealthy'),
+  ownershipConflict('ownership_conflict'),
+  persistenceUnavailable('persistence_unavailable'),
+  timedOut('timed_out'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallFailureCode(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallFailureCode fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeInstallIntegrityEvidence {
+  digestAndPublisher('digest_and_publisher'),
+  publisherOnly('publisher_only'),
+  none('none'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallIntegrityEvidence(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallIntegrityEvidence fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+typedef RuntimeInstallJobId = String;
+
+class RuntimeInstallJobSnapshot {
+  const RuntimeInstallJobSnapshot({
+    required this.approval,
+    required this.attention,
+    required this.effects,
+    required this.failure,
+    required this.jobId,
+    required this.ownership,
+    required this.plan,
+    required this.progress,
+    required this.recovery,
+    required this.retryCount,
+    required this.schemaVersion,
+    required this.stage,
+    required this.state,
+    required this.updatedAtUnixMs,
+    required this.verification,
+  });
+
+  final RuntimeInstallApprovalRecord? approval;
+  final RuntimeInstallAttentionReason? attention;
+  final RuntimeInstallEffectReport effects;
+  final RuntimeInstallFailureCode? failure;
+  final RuntimeInstallJobId jobId;
+  final RuntimeOwnership ownership;
+  final RuntimeInstallPlan plan;
+  final RuntimeInstallProgress? progress;
+  final RuntimeInstallRecoveryAction? recovery;
+  final int retryCount;
+  final int schemaVersion;
+  final RuntimeInstallStage stage;
+  final RuntimeInstallState state;
+  final int updatedAtUnixMs;
+  final RuntimeInstallVerificationResult? verification;
+
+  factory RuntimeInstallJobSnapshot.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallJobSnapshot(
+      approval: json['approval'] == null ? null : RuntimeInstallApprovalRecord.fromJson(_contractMap(json['approval'], 'RuntimeInstallJobSnapshot.approval')),
+      attention: json['attention'] == null ? null : RuntimeInstallAttentionReason.fromJson(json['attention']),
+      effects: RuntimeInstallEffectReport.fromJson(_contractMap(json['effects'], 'RuntimeInstallJobSnapshot.effects')),
+      failure: json['failure'] == null ? null : RuntimeInstallFailureCode.fromJson(json['failure']),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallJobSnapshot.job_id'),
+      ownership: RuntimeOwnership.fromJson(json['ownership']),
+      plan: RuntimeInstallPlan.fromJson(_contractMap(json['plan'], 'RuntimeInstallJobSnapshot.plan')),
+      progress: json['progress'] == null ? null : RuntimeInstallProgress.fromJson(_contractMap(json['progress'], 'RuntimeInstallJobSnapshot.progress')),
+      recovery: json['recovery'] == null ? null : RuntimeInstallRecoveryAction.fromJson(json['recovery']),
+      retryCount: _contractInt(json['retry_count'], 'RuntimeInstallJobSnapshot.retry_count'),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeInstallJobSnapshot.schema_version'),
+      stage: RuntimeInstallStage.fromJson(json['stage']),
+      state: RuntimeInstallState.fromJson(json['state']),
+      updatedAtUnixMs: _contractInt(json['updated_at_unix_ms'], 'RuntimeInstallJobSnapshot.updated_at_unix_ms'),
+      verification: json['verification'] == null ? null : RuntimeInstallVerificationResult.fromJson(_contractMap(json['verification'], 'RuntimeInstallJobSnapshot.verification')),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'approval': approval?.toJson(),
+      'attention': attention?.toJson(),
+      'effects': effects.toJson(),
+      'failure': failure?.toJson(),
+      'job_id': jobId,
+      'ownership': ownership.toJson(),
+      'plan': plan.toJson(),
+      'progress': progress?.toJson(),
+      'recovery': recovery?.toJson(),
+      'retry_count': retryCount,
+      'schema_version': schemaVersion,
+      'stage': stage.toJson(),
+      'state': state.toJson(),
+      'updated_at_unix_ms': updatedAtUnixMs,
+      'verification': verification?.toJson(),
+    };
+  }
+}
+
+class RuntimeInstallPlan {
+  const RuntimeInstallPlan({
+    required this.authorizedEffects,
+    required this.components,
+    required this.destination,
+    required this.expectedDownloadBytes,
+    required this.jobId,
+    required this.ownershipAfterSuccess,
+    required this.providerId,
+    required this.reasons,
+    required this.requiresAdministrator,
+    required this.revision,
+    required this.runtimeDisplayName,
+    required this.schemaVersion,
+    required this.warnings,
+  });
+
+  final List<RuntimeInstallEffectKind> authorizedEffects;
+  final List<RuntimeInstallComponent> components;
+  final RuntimeInstallDestinationCategory destination;
+  final int expectedDownloadBytes;
+  final RuntimeInstallJobId jobId;
+  final RuntimeOwnership ownershipAfterSuccess;
+  final RuntimeProviderId providerId;
+  final List<String> reasons;
+  final bool requiresAdministrator;
+  final int revision;
+  final RuntimeDisplayName runtimeDisplayName;
+  final int schemaVersion;
+  final List<String> warnings;
+
+  factory RuntimeInstallPlan.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallPlan(
+      authorizedEffects: _contractList(json['authorized_effects'], 'RuntimeInstallPlan.authorized_effects').map((item) => RuntimeInstallEffectKind.fromJson(item)).toList(growable: false),
+      components: _contractList(json['components'], 'RuntimeInstallPlan.components').map((item) => RuntimeInstallComponent.fromJson(_contractMap(item, 'RuntimeInstallPlan.components[]'))).toList(growable: false),
+      destination: RuntimeInstallDestinationCategory.fromJson(json['destination']),
+      expectedDownloadBytes: _contractInt(json['expected_download_bytes'], 'RuntimeInstallPlan.expected_download_bytes'),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallPlan.job_id'),
+      ownershipAfterSuccess: RuntimeOwnership.fromJson(json['ownership_after_success']),
+      providerId: _contractString(json['provider_id'], 'RuntimeInstallPlan.provider_id'),
+      reasons: _contractList(json['reasons'], 'RuntimeInstallPlan.reasons').map((item) => _contractString(item, 'RuntimeInstallPlan.reasons[]')).toList(growable: false),
+      requiresAdministrator: _contractBool(json['requires_administrator'], 'RuntimeInstallPlan.requires_administrator'),
+      revision: _contractInt(json['revision'], 'RuntimeInstallPlan.revision'),
+      runtimeDisplayName: _contractString(json['runtime_display_name'], 'RuntimeInstallPlan.runtime_display_name'),
+      schemaVersion: _contractInt(json['schema_version'], 'RuntimeInstallPlan.schema_version'),
+      warnings: _contractList(json['warnings'], 'RuntimeInstallPlan.warnings').map((item) => _contractString(item, 'RuntimeInstallPlan.warnings[]')).toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'authorized_effects': authorizedEffects.map((item) => item.toJson()).toList(growable: false),
+      'components': components.map((item) => item.toJson()).toList(growable: false),
+      'destination': destination.toJson(),
+      'expected_download_bytes': expectedDownloadBytes,
+      'job_id': jobId,
+      'ownership_after_success': ownershipAfterSuccess.toJson(),
+      'provider_id': providerId,
+      'reasons': reasons.map((item) => item).toList(growable: false),
+      'requires_administrator': requiresAdministrator,
+      'revision': revision,
+      'runtime_display_name': runtimeDisplayName,
+      'schema_version': schemaVersion,
+      'warnings': warnings.map((item) => item).toList(growable: false),
+    };
+  }
+}
+
+class RuntimeInstallPlanRequest {
+  const RuntimeInstallPlanRequest({
+    required this.correlationId,
+    required this.providerId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeProviderId providerId;
+  final RequestId requestId;
+
+  factory RuntimeInstallPlanRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallPlanRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallPlanRequest.correlation_id'),
+      providerId: _contractString(json['provider_id'], 'RuntimeInstallPlanRequest.provider_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallPlanRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'provider_id': providerId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallPlanResponse {
+  const RuntimeInstallPlanResponse({
+    required this.attention,
+    required this.correlationId,
+    required this.plan,
+    required this.requestId,
+  });
+
+  final RuntimeInstallAttentionReason? attention;
+  final CorrelationId correlationId;
+  final RuntimeInstallPlan? plan;
+  final RequestId requestId;
+
+  factory RuntimeInstallPlanResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallPlanResponse(
+      attention: json['attention'] == null ? null : RuntimeInstallAttentionReason.fromJson(json['attention']),
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallPlanResponse.correlation_id'),
+      plan: json['plan'] == null ? null : RuntimeInstallPlan.fromJson(_contractMap(json['plan'], 'RuntimeInstallPlanResponse.plan')),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallPlanResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'attention': attention?.toJson(),
+      'correlation_id': correlationId,
+      'plan': plan?.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallProgress {
+  const RuntimeInstallProgress({
+    required this.expectedBytes,
+    required this.transferredBytes,
+  });
+
+  final int? expectedBytes;
+  final int transferredBytes;
+
+  factory RuntimeInstallProgress.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallProgress(
+      expectedBytes: json['expected_bytes'] == null ? null : _contractInt(json['expected_bytes'], 'RuntimeInstallProgress.expected_bytes'),
+      transferredBytes: _contractInt(json['transferred_bytes'], 'RuntimeInstallProgress.transferred_bytes'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'expected_bytes': expectedBytes,
+      'transferred_bytes': transferredBytes,
+    };
+  }
+}
+
+enum RuntimeInstallRecoveryAction {
+  retry('retry'),
+  recreatePlan('recreate_plan'),
+  reuseExternal('reuse_external'),
+  freeStorage('free_storage'),
+  noAction('no_action'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallRecoveryAction(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallRecoveryAction fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+enum RuntimeInstallStage {
+  preparingPlan('preparing_plan'),
+  awaitingApproval('awaiting_approval'),
+  approved('approved'),
+  downloading('downloading'),
+  verifyingArtifact('verifying_artifact'),
+  staging('staging'),
+  installing('installing'),
+  verifyingExecutable('verifying_executable'),
+  startingRuntime('starting_runtime'),
+  verifyingRuntime('verifying_runtime'),
+  ready('ready'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallStage(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallStage fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallStartRequest {
+  const RuntimeInstallStartRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallJobId jobId;
+  final RequestId requestId;
+
+  factory RuntimeInstallStartRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallStartRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallStartRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallStartRequest.job_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallStartRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallStartResponse {
+  const RuntimeInstallStartResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallJobSnapshot job;
+  final RequestId requestId;
+
+  factory RuntimeInstallStartResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallStartResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallStartResponse.correlation_id'),
+      job: RuntimeInstallJobSnapshot.fromJson(_contractMap(json['job'], 'RuntimeInstallStartResponse.job')),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallStartResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+enum RuntimeInstallState {
+  awaitingApproval('awaiting_approval'),
+  approved('approved'),
+  running('running'),
+  attentionRequired('attention_required'),
+  ready('ready'),
+  failed('failed'),
+  cancelled('cancelled'),
+  unknown('unknown'),
+  ;
+
+  const RuntimeInstallState(this.wireValue);
+
+  final String wireValue;
+
+  static RuntimeInstallState fromJson(Object? value) {
+    for (final candidate in values) {
+      if (candidate.wireValue == value) {
+        return candidate;
+      }
+    }
+    return unknown;
+  }
+
+  String toJson() => wireValue;
+}
+
+class RuntimeInstallStatusRequest {
+  const RuntimeInstallStatusRequest({
+    required this.correlationId,
+    required this.jobId,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallJobId jobId;
+  final RequestId requestId;
+
+  factory RuntimeInstallStatusRequest.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallStatusRequest(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallStatusRequest.correlation_id'),
+      jobId: _contractString(json['job_id'], 'RuntimeInstallStatusRequest.job_id'),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallStatusRequest.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job_id': jobId,
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallStatusResponse {
+  const RuntimeInstallStatusResponse({
+    required this.correlationId,
+    required this.job,
+    required this.requestId,
+  });
+
+  final CorrelationId correlationId;
+  final RuntimeInstallJobSnapshot? job;
+  final RequestId requestId;
+
+  factory RuntimeInstallStatusResponse.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallStatusResponse(
+      correlationId: _contractString(json['correlation_id'], 'RuntimeInstallStatusResponse.correlation_id'),
+      job: json['job'] == null ? null : RuntimeInstallJobSnapshot.fromJson(_contractMap(json['job'], 'RuntimeInstallStatusResponse.job')),
+      requestId: _contractString(json['request_id'], 'RuntimeInstallStatusResponse.request_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'correlation_id': correlationId,
+      'job': job?.toJson(),
+      'request_id': requestId,
+    };
+  }
+}
+
+class RuntimeInstallVerificationResult {
+  const RuntimeInstallVerificationResult({
+    required this.endpointHealthy,
+    required this.executableLocated,
+    required this.publisherMatched,
+    required this.signatureValid,
+    required this.versionSupported,
+  });
+
+  final bool endpointHealthy;
+  final bool executableLocated;
+  final bool publisherMatched;
+  final bool signatureValid;
+  final bool versionSupported;
+
+  factory RuntimeInstallVerificationResult.fromJson(Map<String, dynamic> json) {
+    return RuntimeInstallVerificationResult(
+      endpointHealthy: _contractBool(json['endpoint_healthy'], 'RuntimeInstallVerificationResult.endpoint_healthy'),
+      executableLocated: _contractBool(json['executable_located'], 'RuntimeInstallVerificationResult.executable_located'),
+      publisherMatched: _contractBool(json['publisher_matched'], 'RuntimeInstallVerificationResult.publisher_matched'),
+      signatureValid: _contractBool(json['signature_valid'], 'RuntimeInstallVerificationResult.signature_valid'),
+      versionSupported: _contractBool(json['version_supported'], 'RuntimeInstallVerificationResult.version_supported'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'endpoint_healthy': endpointHealthy,
+      'executable_located': executableLocated,
+      'publisher_matched': publisherMatched,
+      'signature_valid': signatureValid,
+      'version_supported': versionSupported,
     };
   }
 }
