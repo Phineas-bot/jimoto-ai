@@ -19,6 +19,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+gixgiz-runtime-ollama = { path = "../gixgiz-runtime-ollama" }
 gixgiz-runtime = { path = "../gixgiz-runtime", features = ["test-support"] }
 # Test-only: seeds the catalogue row a completed setup would have written, so
 # chat tests can bind a verified model. Production core never touches SQL.

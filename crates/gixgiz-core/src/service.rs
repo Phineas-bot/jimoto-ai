@@ -141,6 +141,79 @@ impl PlatformCore {
         }
     }
 
+    /// Composes the storage-location service with Rust-owned persistence.
+    #[must_use]
+    pub fn storage_location_service(
+        &self,
+    ) -> Option<std::sync::Arc<crate::StorageLocationService>> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => Some(std::sync::Arc::new(
+                crate::StorageLocationService::with_persistence(
+                    persistence,
+                    std::sync::Arc::new(crate::WindowsFreeSpaceProbe),
+                ),
+            )),
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
+        }
+    }
+
+    /// Returns a user-selected storage location, when one was chosen.
+    ///
+    /// Exposed on the core because persistence ownership stays here: the host
+    /// composes services from these paths without opening the database itself.
+    #[must_use]
+    pub fn storage_location(
+        &self,
+        kind: gixgiz_contracts::StorageLocationKind,
+    ) -> Option<std::path::PathBuf> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => {
+                let service = crate::StorageLocationService::with_persistence(
+                    persistence,
+                    std::sync::Arc::new(crate::WindowsFreeSpaceProbe),
+                );
+                service.resolved(kind).ok().flatten()
+            }
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
+        }
+    }
+
+    /// Returns the GixGiz-owned staging directory when persistence is available.
+    ///
+    /// Installer artifacts are staged here and nowhere else, so cleanup can only
+    /// ever remove GixGiz-owned files.
+    #[must_use]
+    pub fn data_root_staging(&self) -> Option<std::path::PathBuf> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => {
+                Some(persistence.data_root().staging_dir().to_path_buf())
+            }
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
+        }
+    }
+
+    /// Composes managed runtime installation with Rust-owned persistence.
+    ///
+    /// Returns `None` when persistence is unavailable, so an approved system
+    /// change can never run without a durable record of it.
+    #[must_use]
+    pub fn runtime_install_coordinator(
+        &self,
+        installer: std::sync::Arc<dyn gixgiz_runtime::RuntimeInstaller>,
+        provider_id: &str,
+    ) -> Option<std::sync::Arc<crate::RuntimeInstallCoordinator>> {
+        match &self.persistence {
+            PersistenceAccess::Available(persistence) => Some(std::sync::Arc::new(
+                crate::RuntimeInstallCoordinator::with_persistence(
+                    installer,
+                    persistence,
+                    provider_id,
+                ),
+            )),
+            PersistenceAccess::NotConfigured | PersistenceAccess::Unavailable => None,
+        }
+    }
+
     /// Returns the current explicit lifecycle state.
     #[must_use]
     pub const fn lifecycle(&self) -> CoreLifecycle {
