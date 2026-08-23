@@ -11,11 +11,14 @@
 mod chat;
 mod context;
 mod error;
+mod install;
 mod model_setup;
 mod provider;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
+#[cfg(any(test, feature = "test-support"))]
+mod testing_install;
 
 pub use chat::{
     CHAT_DELTA_CHANNEL_CAPACITY, ChatDeltaSender, RuntimeChatMessage, RuntimeChatProvider,
@@ -23,6 +26,11 @@ pub use chat::{
 };
 pub use context::{RuntimeCancellationToken, RuntimeOperationContext};
 pub use error::RuntimeError;
+pub use install::{
+    INSTALL_PROGRESS_CHANNEL_CAPACITY, InstallProgressSender, RuntimeArtifactOutcome,
+    RuntimeArtifactRejection, RuntimeInstallCandidate, RuntimeInstallExecution,
+    RuntimeInstallRefusal, RuntimeInstaller,
+};
 pub use model_setup::{
     MODEL_PROGRESS_CHANNEL_CAPACITY, ModelProgressSender, RuntimeCancellationSemantics,
     RuntimeModelAcquisitionPlan, RuntimeModelAcquisitionResult, RuntimeModelAcquisitionStatus,
@@ -33,3 +41,5 @@ pub use provider::{
     RuntimeDetector, RuntimeFuture, RuntimeLifecycle, RuntimeModelInventoryProvider,
     RuntimeObservation, RuntimeProvider,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use testing_install::{FakeInstallCall, FakeRuntimeInstaller, sample_candidate};

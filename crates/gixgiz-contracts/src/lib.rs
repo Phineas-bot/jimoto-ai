@@ -14,7 +14,9 @@ mod identity;
 mod ids;
 mod readiness;
 mod runtime;
+mod runtime_install;
 mod setup;
+mod storage_location;
 mod transport;
 
 pub use capability::{
@@ -70,6 +72,21 @@ pub use runtime::{
     RuntimeReason, RuntimeReasonCode, RuntimeState, RuntimeStatusRequest, RuntimeStatusResponse,
     RuntimeVersionCompatibility, RuntimeVersionInfo, RuntimeWarning, RuntimeWarningCode,
 };
+pub use runtime_install::{
+    MAX_INSTALL_EVENT_PAGE, MAX_INSTALLER_ARTIFACT_BYTES, RUNTIME_INSTALL_SCHEMA_VERSION,
+    RuntimeInstallApprovalDecision, RuntimeInstallApprovalRecord, RuntimeInstallApprovalRequest,
+    RuntimeInstallApprovalResponse, RuntimeInstallAttentionReason, RuntimeInstallCancelRequest,
+    RuntimeInstallCancelResponse, RuntimeInstallComponent, RuntimeInstallDestinationCategory,
+    RuntimeInstallEffect, RuntimeInstallEffectDisposition, RuntimeInstallEffectKind,
+    RuntimeInstallEffectReport, RuntimeInstallEvent, RuntimeInstallEventKind,
+    RuntimeInstallEventsRequest, RuntimeInstallEventsResponse, RuntimeInstallFailure,
+    RuntimeInstallFailureCode, RuntimeInstallIntegrityEvidence, RuntimeInstallJobId,
+    RuntimeInstallJobSnapshot, RuntimeInstallPlan, RuntimeInstallPlanRequest,
+    RuntimeInstallPlanResponse, RuntimeInstallProgress, RuntimeInstallRecoveryAction,
+    RuntimeInstallRecoveryRequest, RuntimeInstallRecoveryResponse, RuntimeInstallStage,
+    RuntimeInstallStartRequest, RuntimeInstallStartResponse, RuntimeInstallState,
+    RuntimeInstallStatusRequest, RuntimeInstallStatusResponse, RuntimeInstallVerificationResult,
+};
 pub use setup::{
     ModelAcquisitionPhase, ModelAcquisitionProgress, ModelIntegrityState, ModelLifecycleState,
     ModelMetadata, ModelProviderArtifact, ModelVerificationResult, ModelVerificationState,
@@ -84,6 +101,13 @@ pub use setup::{
     SetupJobTerminalState, SetupPlan, SetupPlanComponent, SetupPlanComponentKind, SetupPlanRequest,
     SetupPlanResponse, SetupReason, SetupReasonCode, SetupRecoveryAction, SetupStage, SetupWarning,
     SetupWarningCode,
+};
+pub use storage_location::{
+    MAX_STORAGE_PATH_BYTES, STORAGE_LOCATION_SCHEMA_VERSION, SetStorageLocationRequest,
+    SetStorageLocationResponse, StorageLocationKind, StorageLocationRejection,
+    StorageLocationSetting, StorageLocationValidation, StorageLocationWarning,
+    StorageLocationWarningCode, StorageLocationsRequest, StorageLocationsResponse,
+    ValidateStorageLocationRequest, ValidateStorageLocationResponse,
 };
 pub use transport::{
     BootstrapReady, BootstrapRequest, CancelOperationRequest, CancelOperationResponse, ClientHello,

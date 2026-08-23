@@ -23,19 +23,25 @@ use gixgiz_contracts::{
     ListConversationsResponse, OperationId, PROTOCOL_VERSION, PlatformStatus,
     RecommendationRequest, RecommendationResponse, RecoveryAction, RecoveryGuidance,
     RenameConversationRequest, RenameConversationResponse, RequestId, RuntimeConsentRequest,
-    RuntimeConsentResponse, RuntimeModelInventoryRequest, RuntimeModelInventoryResponse,
-    RuntimeOperationEvent, RuntimeOperationStartRequest, RuntimeOperationStartResponse,
-    RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload, SendMessageRequest,
-    SendMessageResponse, SetupApprovalRequest, SetupApprovalResponse, SetupJobCancelRequest,
-    SetupJobCancelResponse, SetupJobEvent, SetupJobEventsRequest, SetupJobId,
-    SetupJobRecoveryRequest, SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse,
-    SetupJobStartRequest, SetupJobStartResponse, SetupJobState, SetupJobStatusRequest,
-    SetupJobStatusResponse, SetupPlanRequest, SetupPlanResponse, ShutdownRequest, ShutdownResponse,
-    TestOperationStartRequest, TestOperationStartResponse, TransportCapability,
+    RuntimeConsentResponse, RuntimeInstallApprovalRecord, RuntimeInstallApprovalRequest,
+    RuntimeInstallApprovalResponse, RuntimeInstallFailureCode, RuntimeInstallPlanRequest,
+    RuntimeInstallPlanResponse, RuntimeInstallStartRequest, RuntimeInstallStartResponse,
+    RuntimeInstallStatusRequest, RuntimeInstallStatusResponse, RuntimeModelInventoryRequest,
+    RuntimeModelInventoryResponse, RuntimeOperationEvent, RuntimeOperationStartRequest,
+    RuntimeOperationStartResponse, RuntimeStatusRequest, RuntimeStatusResponse, SafeErrorPayload,
+    SendMessageRequest, SendMessageResponse, SetStorageLocationRequest, SetStorageLocationResponse,
+    SetupApprovalRequest, SetupApprovalResponse, SetupJobCancelRequest, SetupJobCancelResponse,
+    SetupJobEvent, SetupJobEventsRequest, SetupJobId, SetupJobRecoveryRequest,
+    SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse, SetupJobStartRequest,
+    SetupJobStartResponse, SetupJobState, SetupJobStatusRequest, SetupJobStatusResponse,
+    SetupPlanRequest, SetupPlanResponse, ShutdownRequest, ShutdownResponse,
+    StorageLocationsRequest, StorageLocationsResponse, TestOperationStartRequest,
+    TestOperationStartResponse, TransportCapability, ValidateStorageLocationRequest,
+    ValidateStorageLocationResponse,
 };
 use gixgiz_core::{
-    CapabilityEngine, ChatService, CoreError, HardwareScanner, OperationContext, RuntimeService,
-    SetupService,
+    CapabilityEngine, ChatService, CoreError, HardwareScanner, OperationContext,
+    RuntimeInstallCoordinator, RuntimeService, SetupService, StorageLocationService,
 };
 use gixgiz_runtime::{RuntimeError, RuntimeOperationContext};
 use serde::Deserialize;
@@ -54,6 +60,9 @@ const MAX_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_CONCURRENT_REQUESTS: usize = 16;
 const MAX_CONCURRENT_EVENT_STREAMS: usize = 16;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// Installation work is admitted quickly and then runs in the background;
+/// this bounds the whole approved attempt, not the admitting request.
+const INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60 * 60);
 const SETUP_EVENT_LIMIT: u32 = 64;
 const SETUP_EVENT_CHANNEL_CAPACITY: usize = 16;
 const SETUP_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -73,10 +82,23 @@ struct AppState {
     runtime: RuntimeService,
     setup: Option<SetupService>,
     chat: Option<ChatService>,
+    runtime_install: Option<Arc<RuntimeInstallCoordinator>>,
+    storage_locations: Option<Arc<StorageLocationService>>,
     runtime_operations: RuntimeOperationRegistry,
     request_slots: Arc<Semaphore>,
     event_stream_slots: Arc<Semaphore>,
     shutdown: ShutdownHandle,
+}
+
+/// Core services the sidecar exposes.
+///
+/// Grouped so the bind entry point stays readable as services are added.
+pub(crate) struct SidecarServices {
+    pub(crate) runtime: RuntimeService,
+    pub(crate) setup: Option<SetupService>,
+    pub(crate) chat: Option<ChatService>,
+    pub(crate) runtime_install: Option<Arc<RuntimeInstallCoordinator>>,
+    pub(crate) storage_locations: Option<Arc<StorageLocationService>>,
 }
 
 #[derive(Clone, Copy)]
@@ -112,10 +134,15 @@ impl SidecarHost {
         instance_id: InstanceId,
         status: PlatformStatus,
         hardware_scanner: HardwareScanner,
-        runtime: RuntimeService,
-        setup: Option<SetupService>,
-        chat: Option<ChatService>,
+        services: SidecarServices,
     ) -> Result<Self, HostError> {
+        let SidecarServices {
+            runtime,
+            setup,
+            chat,
+            runtime_install,
+            storage_locations,
+        } = services;
         let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
             .map_err(HostError::Bind)?;
@@ -142,6 +169,8 @@ impl SidecarHost {
             runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
             runtime,
             setup,
+            runtime_install,
+            storage_locations,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: shutdown.clone(),
@@ -276,6 +305,34 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/internal/v1/chat/generations/{generation_id}/cancel",
             post(cancel_chat_generation),
+        )
+        .route(
+            "/internal/v1/runtime/install/plan",
+            post(runtime_install_plan),
+        )
+        .route(
+            "/internal/v1/runtime/install/approval",
+            post(runtime_install_approval),
+        )
+        .route(
+            "/internal/v1/runtime/install/jobs",
+            post(runtime_install_start),
+        )
+        .route(
+            "/internal/v1/runtime/install/jobs/status",
+            post(runtime_install_status),
+        )
+        .route(
+            "/internal/v1/storage/locations",
+            post(storage_locations_read),
+        )
+        .route(
+            "/internal/v1/storage/locations/validate",
+            post(storage_location_validate),
+        )
+        .route(
+            "/internal/v1/storage/locations/set",
+            post(storage_location_set),
         )
         .route("/internal/v1/shutdown", post(shutdown))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
@@ -654,7 +711,12 @@ async fn runtime_consent(
         RuntimeOperationContext::new(request.correlation_id, request.request_id, REQUEST_TIMEOUT);
     let report = state
         .runtime
-        .set_reuse_consent(&request.provider_id, request.decision, context)
+        .set_consent(
+            &request.provider_id,
+            request.decision,
+            request.acknowledged_version.as_deref(),
+            context,
+        )
         .await
         .map_err(|error| runtime_failure(error, ids))?;
     Ok(Json(RuntimeConsentResponse {
@@ -989,6 +1051,294 @@ async fn retry_setup_job(
         .await
         .map(Json)
         .map_err(|error| setup_failure(error, ids))
+}
+
+/// Builds a reviewable installation plan. Performs no system change.
+async fn runtime_install_plan(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeInstallPlanRequest>, JsonRejection>,
+) -> Result<Json<RuntimeInstallPlanResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let coordinator = install_coordinator(&state, ids)?;
+    let context =
+        RuntimeOperationContext::new(request.correlation_id, request.request_id, REQUEST_TIMEOUT);
+
+    // Detection first: an existing runtime is reused, never replaced.
+    let report = state
+        .runtime
+        .status(&request.provider_id, context.clone())
+        .await
+        .map_err(|error| runtime_failure(error, ids))?;
+
+    match coordinator
+        .plan(report.state, report.ownership, context)
+        .await
+    {
+        Ok(job) => Ok(Json(RuntimeInstallPlanResponse {
+            plan: Some(job.plan),
+            attention: None,
+            correlation_id: request.correlation_id,
+            request_id: request.request_id,
+        })),
+        Err(attention) => Ok(Json(RuntimeInstallPlanResponse {
+            plan: None,
+            attention: Some(attention),
+            correlation_id: request.correlation_id,
+            request_id: request.request_id,
+        })),
+    }
+}
+
+/// Records an explicit decision for one exact plan revision.
+async fn runtime_install_approval(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeInstallApprovalRequest>, JsonRejection>,
+) -> Result<Json<RuntimeInstallApprovalResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let coordinator = install_coordinator(&state, ids)?;
+
+    let existing = coordinator
+        .status(request.job_id)
+        .await
+        .ok_or_else(|| install_failure(RuntimeInstallFailureCode::OwnershipConflict, ids))?;
+    let component = existing.plan.components.first();
+    let record = RuntimeInstallApprovalRecord {
+        job_id: request.job_id,
+        plan_revision: request.plan_revision,
+        decision: request.decision,
+        provider_id: existing.plan.provider_id.clone(),
+        version: component
+            .map(|component| component.version.clone())
+            .unwrap_or_default(),
+        authorized_effects: existing.plan.authorized_effects.clone(),
+        requires_administrator: existing.plan.requires_administrator,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+        decided_at_unix_ms: unix_millis(),
+    };
+
+    let job = coordinator
+        .approve(record)
+        .await
+        .map_err(|code| install_failure(code, ids))?;
+    Ok(Json(RuntimeInstallApprovalResponse {
+        job,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+/// Starts approved installation work.
+async fn runtime_install_start(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeInstallStartRequest>, JsonRejection>,
+) -> Result<Json<RuntimeInstallStartResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let coordinator = install_coordinator(&state, ids)?;
+    let context = RuntimeOperationContext::new(
+        request.correlation_id,
+        request.request_id,
+        INSTALL_REQUEST_TIMEOUT,
+    );
+    let job = coordinator
+        .start(request.job_id, None, context)
+        .await
+        .map_err(|code| install_failure(code, ids))?;
+    Ok(Json(RuntimeInstallStartResponse {
+        job,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+/// Reads authoritative durable installation state.
+async fn runtime_install_status(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<RuntimeInstallStatusRequest>, JsonRejection>,
+) -> Result<Json<RuntimeInstallStatusResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let coordinator = install_coordinator(&state, ids)?;
+    Ok(Json(RuntimeInstallStatusResponse {
+        job: coordinator.status(request.job_id).await,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+fn install_coordinator(
+    state: &AppState,
+    ids: BoundaryIds,
+) -> Result<Arc<RuntimeInstallCoordinator>, ApiFailure> {
+    state.runtime_install.clone().ok_or_else(|| {
+        ApiFailure::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCategory::Unavailable,
+            "runtime_install.unavailable",
+            "Local runtime installation is unavailable.",
+            RecoveryAction::Restart,
+            "Restart GixGiz and try again.",
+            ids,
+        )
+    })
+}
+
+fn install_failure(code: RuntimeInstallFailureCode, ids: BoundaryIds) -> ApiFailure {
+    let (status, category, message, action, guidance) = match code {
+        RuntimeInstallFailureCode::OwnershipConflict => (
+            StatusCode::CONFLICT,
+            ErrorCategory::Conflict,
+            "The installation plan is no longer current.",
+            RecoveryAction::Retry,
+            "Review a new installation plan.",
+        ),
+        RuntimeInstallFailureCode::PersistenceUnavailable => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCategory::Unavailable,
+            "Local storage is unavailable.",
+            RecoveryAction::Restart,
+            "Restart GixGiz and try again.",
+        ),
+        _ => (
+            StatusCode::BAD_REQUEST,
+            ErrorCategory::InvalidInput,
+            "The installation request could not be completed.",
+            RecoveryAction::Retry,
+            "Review the installation plan and try again.",
+        ),
+    };
+    ApiFailure::new(
+        status,
+        category,
+        "runtime_install.rejected",
+        message,
+        action,
+        guidance,
+        ids,
+    )
+}
+
+fn unix_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
+}
+
+/// Reads current storage-location settings.
+async fn storage_locations_read(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<StorageLocationsRequest>, JsonRejection>,
+) -> Result<Json<StorageLocationsResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = storage_service(&state, ids)?;
+    let external = state_runtime_is_external(&state, ids).await;
+    let settings = service
+        .settings(external)
+        .map_err(|_| storage_failure(ids))?;
+    Ok(Json(StorageLocationsResponse {
+        settings,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+/// Checks a candidate path without storing it.
+async fn storage_location_validate(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<ValidateStorageLocationRequest>, JsonRejection>,
+) -> Result<Json<ValidateStorageLocationResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = storage_service(&state, ids)?;
+    Ok(Json(ValidateStorageLocationResponse {
+        validation: service.validate(request.kind, &request.path),
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+/// Stores or clears one storage location.
+async fn storage_location_set(
+    State(state): State<AppState>,
+    Extension(ids): Extension<BoundaryIds>,
+    payload: Result<Json<SetStorageLocationRequest>, JsonRejection>,
+) -> Result<Json<SetStorageLocationResponse>, ApiFailure> {
+    let request = parse_json(payload, ids)?.0;
+    ensure_ids(request.correlation_id, request.request_id, ids)?;
+    let service = storage_service(&state, ids)?;
+    let external = state_runtime_is_external(&state, ids).await;
+    let outcome = service
+        .set(
+            request.kind,
+            request.path.as_deref(),
+            external,
+            request.accept_external_reconfiguration,
+            unix_millis() as i64,
+        )
+        .map_err(|_| storage_failure(ids))?;
+    Ok(Json(SetStorageLocationResponse {
+        setting: outcome.setting,
+        validation: outcome.validation,
+        warnings: outcome.warnings,
+        correlation_id: request.correlation_id,
+        request_id: request.request_id,
+    }))
+}
+
+fn storage_service(
+    state: &AppState,
+    ids: BoundaryIds,
+) -> Result<Arc<StorageLocationService>, ApiFailure> {
+    state.storage_locations.clone().ok_or_else(|| {
+        ApiFailure::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCategory::Unavailable,
+            "storage_location.unavailable",
+            "Storage settings are unavailable.",
+            RecoveryAction::Restart,
+            "Restart GixGiz and try again.",
+            ids,
+        )
+    })
+}
+
+fn storage_failure(ids: BoundaryIds) -> ApiFailure {
+    ApiFailure::new(
+        StatusCode::SERVICE_UNAVAILABLE,
+        ErrorCategory::Unavailable,
+        "storage_location.persistence_unavailable",
+        "Local storage settings could not be saved.",
+        RecoveryAction::Retry,
+        "Try again.",
+        ids,
+    )
+}
+
+/// Reports whether the detected runtime is owned outside GixGiz.
+///
+/// Unknown ownership is treated as external, so consent is demanded rather than
+/// assumed when the answer cannot be established.
+async fn state_runtime_is_external(state: &AppState, ids: BoundaryIds) -> bool {
+    let context = RuntimeOperationContext::new(ids.correlation_id, ids.request_id, REQUEST_TIMEOUT);
+    match state
+        .runtime
+        .status(&state.runtime.provider_id(), context)
+        .await
+    {
+        Ok(report) => report.ownership != gixgiz_contracts::RuntimeOwnership::GixGizManaged,
+        Err(_) => true,
+    }
 }
 
 async fn shutdown(
@@ -2264,6 +2614,8 @@ mod tests {
             runtime_operations: RuntimeOperationRegistry::new(runtime.clone()),
             runtime,
             setup: None,
+            runtime_install: None,
+            storage_locations: None,
             request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS)),
             event_stream_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_EVENT_STREAMS)),
             shutdown: ShutdownHandle {
@@ -3009,6 +3361,7 @@ mod tests {
         let consent_request = RuntimeConsentRequest {
             provider_id: provider.provider_id.clone(),
             decision: RuntimeConsentDecision::ApproveReuse,
+            acknowledged_version: None,
             correlation_id: CorrelationId::new(),
             request_id: RequestId::new(),
         };
@@ -3601,9 +3954,13 @@ mod tests {
             state.instance_id,
             state.status,
             test_hardware_scanner(),
-            test_runtime_service(),
-            None,
-            None,
+            SidecarServices {
+                runtime: test_runtime_service(),
+                setup: None,
+                chat: None,
+                runtime_install: None,
+                storage_locations: None,
+            },
         )
         .await
         .expect("loopback listener binds");
@@ -3950,6 +4307,7 @@ mod tests {
         let consent = RuntimeConsentRequest {
             provider_id: models.provider_id.clone(),
             decision: gixgiz_contracts::RuntimeConsentDecision::ApproveReuse,
+            acknowledged_version: None,
             correlation_id: CorrelationId::new(),
             request_id: RequestId::new(),
         };
@@ -4188,9 +4546,13 @@ mod tests {
             state.instance_id,
             state.status,
             test_hardware_scanner(),
-            test_runtime_service(),
-            None,
-            None,
+            SidecarServices {
+                runtime: test_runtime_service(),
+                setup: None,
+                chat: None,
+                runtime_install: None,
+                storage_locations: None,
+            },
         )
         .await
         .expect("loopback listener binds");

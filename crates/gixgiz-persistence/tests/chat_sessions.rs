@@ -35,7 +35,6 @@ fn migration_four_applies_and_reports_the_current_schema_version() {
     let temporary = tempfile::tempdir().expect("temporary directory is available");
     let persistence = Persistence::open(test_root(&temporary)).expect("database opens");
 
-    assert_eq!(CURRENT_SCHEMA_VERSION, 4);
     assert_eq!(
         persistence
             .health_check()

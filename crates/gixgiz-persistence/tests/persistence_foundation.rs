@@ -67,6 +67,7 @@ fn fresh_database_has_bounded_runtime_policy_schema() {
             "reuse_consent",
             "management_consent",
             "updated_at_unix_ms",
+            "acknowledged_untested_version",
         ]
     );
 }
@@ -137,7 +138,7 @@ fn schema_one_database_upgrades_without_losing_existing_data() {
         .expect("migration ledger rows query")
         .collect::<Result<_, _>>()
         .expect("migration ledger rows decode");
-    assert_eq!(versions, vec![1, 2, 3, 4]);
+    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
     assert_eq!(
         fs::read_dir(persistence.data_root().backups_dir())
             .expect("backup directory reads")
@@ -529,4 +530,111 @@ fn foundation_rejects_secret_keys_large_values_and_private_audit_payloads() {
             "message" | "payload" | "content" | "secret"
         )
     }));
+}
+
+#[test]
+fn migration_five_adds_a_nullable_untested_version_acknowledgement() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let persistence = Persistence::open(test_root(&temporary)).expect("database opens");
+
+    assert_eq!(
+        persistence
+            .health_check()
+            .expect("health check succeeds")
+            .schema_version,
+        CURRENT_SCHEMA_VERSION
+    );
+
+    let provider_id = RuntimeProviderId::new("test.runtime");
+    let policy = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::NotRequested,
+        7,
+    )
+    .expect("policy is valid");
+    persistence
+        .runtime_policy()
+        .upsert(&policy)
+        .expect("policy writes");
+
+    let stored = persistence
+        .runtime_policy()
+        .get(&provider_id)
+        .expect("policy reads")
+        .expect("policy exists");
+
+    // Existing rows carry no acknowledgement: the column is additive and nullable.
+    assert_eq!(stored.acknowledged_untested_version, None);
+}
+
+#[test]
+fn untested_version_acknowledgement_round_trips_and_can_be_cleared() {
+    let temporary = tempfile::tempdir().expect("temporary directory is available");
+    let persistence = Persistence::open(test_root(&temporary)).expect("database opens");
+    let provider_id = RuntimeProviderId::new("test.runtime");
+
+    let acknowledged = RuntimePolicyRecord::new(
+        provider_id.clone(),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::NotRequested,
+        7,
+    )
+    .expect("policy is valid")
+    .with_acknowledged_untested_version(Some("0.32.14".to_owned()))
+    .expect("acknowledgement is valid");
+    persistence
+        .runtime_policy()
+        .upsert(&acknowledged)
+        .expect("policy writes");
+
+    assert_eq!(
+        persistence
+            .runtime_policy()
+            .get(&provider_id)
+            .expect("policy reads")
+            .expect("policy exists")
+            .acknowledged_untested_version
+            .as_deref(),
+        Some("0.32.14")
+    );
+
+    let cleared = acknowledged
+        .clone()
+        .with_acknowledged_untested_version(None)
+        .expect("clearing is valid");
+    persistence
+        .runtime_policy()
+        .upsert(&cleared)
+        .expect("policy rewrites");
+
+    assert_eq!(
+        persistence
+            .runtime_policy()
+            .get(&provider_id)
+            .expect("policy reads")
+            .expect("policy exists")
+            .acknowledged_untested_version,
+        None
+    );
+}
+
+#[test]
+fn an_oversized_acknowledged_version_is_rejected_before_sql() {
+    let policy = RuntimePolicyRecord::new(
+        RuntimeProviderId::new("test.runtime"),
+        RuntimeOwnership::External,
+        RuntimeConsentState::ReuseApproved,
+        RuntimeConsentState::NotRequested,
+        7,
+    )
+    .expect("policy is valid");
+
+    assert!(
+        policy
+            .with_acknowledged_untested_version(Some("9".repeat(65)))
+            .is_err()
+    );
 }

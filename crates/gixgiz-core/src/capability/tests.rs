@@ -461,3 +461,83 @@ fn unknown_metadata() -> EvidenceMetadata {
         "Fixture evidence is intentionally unknown.",
     )
 }
+
+/// Manual end-to-end diagnostic: real Windows scan into the real engine.
+///
+/// Prints exactly what the desktop would receive so a "no safe plan" result can
+/// be traced to the specific missing evidence rather than guessed at.
+#[test]
+#[ignore = "manual Windows scan-to-recommendation diagnostic"]
+fn manual_real_scan_produces_a_recommendation() {
+    use crate::{CapabilityEngine, HardwareScanner, OperationContext};
+    use gixgiz_contracts::{OperationId, PreferencePriority, UserPreferenceProfile, WorkloadTier};
+
+    let scanner = HardwareScanner::windows().expect("windows scanner is available");
+    let context = OperationContext::generated();
+    let profile = scanner
+        .scan(OperationId::new(), &context)
+        .expect("scan succeeds");
+
+    println!("completeness      : {:?}", profile.completeness);
+    println!(
+        "architecture      : {:?}  availability={:?} reason={:?}",
+        profile.operating_system.architecture.value,
+        profile.operating_system.architecture.metadata.availability,
+        profile.operating_system.architecture.metadata.reason_code,
+    );
+    println!(
+        "os name           : {:?}",
+        profile.operating_system.name.value
+    );
+    println!(
+        "total memory      : {:?}  availability={:?}",
+        profile.physical_memory.total_bytes.value,
+        profile.physical_memory.total_bytes.metadata.availability,
+    );
+    println!(
+        "available memory  : {:?}  availability={:?}",
+        profile.physical_memory.available_bytes.value,
+        profile
+            .physical_memory
+            .available_bytes
+            .metadata
+            .availability,
+    );
+    println!(
+        "cpu logical       : {:?}  physical={:?}",
+        profile.cpu.logical_core_count.value, profile.cpu.physical_core_count.value
+    );
+    println!(
+        "storage capacity  : {:?}  free={:?}  availability={:?}",
+        profile.storage.capacity_bytes.value,
+        profile.storage.free_bytes.value,
+        profile.storage.free_bytes.metadata.availability,
+    );
+
+    let report = CapabilityEngine::v0_1()
+        .recommend(
+            &profile,
+            UserPreferenceProfile {
+                workload: WorkloadTier::GeneralText,
+                priority: PreferencePriority::Balanced,
+                include_optional_larger: true,
+            },
+        )
+        .expect("recommendation succeeds");
+
+    println!("\nreport status     : {:?}", report.status);
+    for reason in &report.reasons {
+        println!("  reason  {:?}: {}", reason.code, reason.message);
+    }
+    for warning in &report.warnings {
+        println!("  warning {:?}: {}", warning.code, warning.message);
+    }
+    if let Some(plan) = report.recommended_plan.as_ref() {
+        println!("recommended       : {}", plan.model.display_name);
+    }
+    if let Some(no_plan) = report.no_plan.as_ref() {
+        for reason in &no_plan.reasons {
+            println!("  no-plan {:?}: {}", reason.code, reason.message);
+        }
+    }
+}

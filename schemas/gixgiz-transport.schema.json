@@ -3645,6 +3645,16 @@
           "type": "string"
         },
         {
+          "const": "acknowledge_untested_version",
+          "description": "Accept one exact runtime version that is outside recorded support evidence.\n\nThe acknowledgement is bound to that exact version. A later provider\nversion is untested again and requires a new explicit decision.",
+          "type": "string"
+        },
+        {
+          "const": "revoke_untested_version",
+          "description": "Withdraw a previous untested-version acknowledgement.",
+          "type": "string"
+        },
+        {
           "const": "unknown",
           "description": "A newer client supplied an unrecognized decision.",
           "type": "string"
@@ -3654,6 +3664,13 @@
     "RuntimeConsentRequest": {
       "description": "Authenticated decision for external-runtime reuse.",
       "properties": {
+        "acknowledged_version": {
+          "description": "Exact normalized version acknowledged by `AcknowledgeUntestedVersion`.\n\nRequired for that decision and ignored otherwise. Rust rejects the\nrequest when this value does not match currently detected evidence.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "correlation_id": {
           "$ref": "#/$defs/CorrelationId",
           "description": "Identifier shared with the response and any failure."
@@ -3764,6 +3781,13 @@
     "RuntimeHealthReport": {
       "description": "Authoritative provider-neutral runtime status.",
       "properties": {
+        "acknowledged_untested_version": {
+          "description": "Exact provider version the user accepted while it remains untested.\n\n`None` means no acknowledgement applies to the detected version.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "capabilities": {
           "description": "Core-owned current action availability.",
           "items": {
@@ -3843,6 +3867,1168 @@
         "capabilities",
         "reasons",
         "warnings"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallApprovalDecision": {
+      "description": "Explicit decision for one exact runtime-installation plan revision.",
+      "oneOf": [
+        {
+          "const": "approve",
+          "description": "Approve only this exact plan revision and its recorded effects.",
+          "type": "string"
+        },
+        {
+          "const": "deny",
+          "description": "Deny this plan revision.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer client supplied an unrecognized decision.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallApprovalRecord": {
+      "description": "Durable approval record created by Rust after validating the plan revision.",
+      "properties": {
+        "authorized_effects": {
+          "description": "Approved material effects.",
+          "items": {
+            "$ref": "#/$defs/RuntimeInstallEffectKind"
+          },
+          "type": "array"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Correlation identifier from the approval request."
+        },
+        "decided_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds assigned by Rust.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "decision": {
+          "$ref": "#/$defs/RuntimeInstallApprovalDecision",
+          "description": "Explicit user decision."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Approved durable job."
+        },
+        "plan_revision": {
+          "description": "Approved plan revision; a different revision requires a new approval.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Approved runtime provider."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier of the approval request."
+        },
+        "requires_administrator": {
+          "description": "Whether the approved plan expected an administrator prompt.",
+          "type": "boolean"
+        },
+        "version": {
+          "description": "Approved exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "decision",
+        "provider_id",
+        "version",
+        "authorized_effects",
+        "requires_administrator",
+        "correlation_id",
+        "request_id",
+        "decided_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallApprovalRequest": {
+      "description": "Records one explicit decision for one exact plan revision.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and any failure."
+        },
+        "decision": {
+          "$ref": "#/$defs/RuntimeInstallApprovalDecision",
+          "description": "Explicit decision."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Job whose plan is being decided."
+        },
+        "plan_revision": {
+          "description": "Exact plan revision the user reviewed.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_revision",
+        "decision",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallApprovalResponse": {
+      "description": "Authoritative job state after the approval write.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/RuntimeInstallJobSnapshot",
+          "description": "Authoritative snapshot after the decision."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallAttentionReason": {
+      "description": "Explicit reason an installation stopped and needs a user decision.",
+      "oneOf": [
+        {
+          "const": "approval_required",
+          "description": "The plan revision has no approval.",
+          "type": "string"
+        },
+        {
+          "const": "external_runtime_present",
+          "description": "A runtime is already installed and is not owned by GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "artifact_rejected",
+          "description": "Artifact identity, integrity, or publisher evidence was rejected.",
+          "type": "string"
+        },
+        {
+          "const": "install_outcome_uncertain",
+          "description": "The installer finished but its effect could not be established.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_unverified",
+          "description": "The runtime could not be verified after installation.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_storage",
+          "description": "Not enough storage remains for the declared artifact.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized reason.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallComponent": {
+      "description": "One reviewable component of a runtime-installation plan.",
+      "properties": {
+        "artifact_name": {
+          "description": "Bounded artifact file name.",
+          "type": "string"
+        },
+        "display_name": {
+          "description": "Beginner-readable component name.",
+          "type": "string"
+        },
+        "expected_publisher": {
+          "description": "Expected signing publisher shown to the user.",
+          "type": "string"
+        },
+        "expected_size_bytes": {
+          "description": "Conservative expected transfer size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "integrity_evidence": {
+          "$ref": "#/$defs/RuntimeInstallIntegrityEvidence",
+          "description": "Integrity evidence that will be enforced before any execution."
+        },
+        "source_origin": {
+          "description": "Bounded trusted origin shown to the user, without query parameters.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Exact version this plan installs.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display_name",
+        "version",
+        "source_origin",
+        "artifact_name",
+        "expected_size_bytes",
+        "integrity_evidence",
+        "expected_publisher"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallDestinationCategory": {
+      "description": "Where an installation writes.",
+      "oneOf": [
+        {
+          "const": "per_user_application_directory",
+          "description": "A per-user application directory requiring no administrator rights.",
+          "type": "string"
+        },
+        {
+          "const": "machine_wide_application_directory",
+          "description": "A machine-wide location requiring administrator rights.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized destination.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallEffect": {
+      "description": "One material effect and its observed disposition.",
+      "properties": {
+        "description": {
+          "description": "Bounded beginner-readable description containing no private paths.",
+          "type": "string"
+        },
+        "disposition": {
+          "$ref": "#/$defs/RuntimeInstallEffectDisposition",
+          "description": "Observed disposition; never assumed from an exit code."
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeInstallEffectKind",
+          "description": "Effect category."
+        }
+      },
+      "required": [
+        "kind",
+        "disposition",
+        "description"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallEffectDisposition": {
+      "description": "What actually happened to one declared effect.",
+      "oneOf": [
+        {
+          "const": "not_started",
+          "description": "The effect was never started.",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "description": "The effect completed and remains in place.",
+          "type": "string"
+        },
+        {
+          "const": "rolled_back",
+          "description": "The effect was undone by GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "retained",
+          "description": "The effect completed and was deliberately kept for recovery.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Whether the effect applies cannot be established.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized disposition.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallEffectKind": {
+      "description": "Category of material system effect an installation may produce.",
+      "oneOf": [
+        {
+          "const": "staged_installer_artifact",
+          "description": "An installer artifact placed in GixGiz-owned staging.",
+          "type": "string"
+        },
+        {
+          "const": "per_user_application_files",
+          "description": "Application files written outside the GixGiz data root.",
+          "type": "string"
+        },
+        {
+          "const": "per_user_uninstall_registration",
+          "description": "A per-user uninstall registration created by the provider installer.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_process_started",
+          "description": "A runtime process started by GixGiz.",
+          "type": "string"
+        },
+        {
+          "const": "ownership_recorded",
+          "description": "A GixGiz-owned ownership record.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized effect.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallEffectReport": {
+      "description": "Complete honest account of every declared effect.",
+      "properties": {
+        "effects": {
+          "description": "Declared effects and what happened to each.",
+          "items": {
+            "$ref": "#/$defs/RuntimeInstallEffect"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "effects"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallEvent": {
+      "description": "One ordered runtime-installation event.\n\nEvents are a convenience for live observation. Durable SQLite state remains\nauthoritative, and a terminal event is published only after its transition\ncommits.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Correlation identifier shared by the whole job."
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallFailureCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe failure classification on a failed terminal event."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Job this event belongs to."
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeInstallEventKind",
+          "description": "Event category."
+        },
+        "occurred_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bounded transfer progress when relevant."
+        },
+        "schema_version": {
+          "description": "Runtime-installation schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "description": "Monotonic sequence within the job.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "$ref": "#/$defs/RuntimeInstallStage",
+          "description": "Stage at the time of the event."
+        },
+        "state": {
+          "$ref": "#/$defs/RuntimeInstallState",
+          "description": "Durable state at the time of the event."
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "sequence",
+        "kind",
+        "stage",
+        "state",
+        "correlation_id",
+        "occurred_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallEventKind": {
+      "description": "Streamed runtime-installation event kind.",
+      "oneOf": [
+        {
+          "const": "stage_changed",
+          "description": "The job entered a new stage.",
+          "type": "string"
+        },
+        {
+          "const": "progress",
+          "description": "Bounded transfer progress advanced.",
+          "type": "string"
+        },
+        {
+          "const": "terminal",
+          "description": "The job reached a terminal or attention state.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized event.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallFailureCode": {
+      "description": "Safe classification of a runtime-installation failure.",
+      "oneOf": [
+        {
+          "const": "source_untrusted",
+          "description": "The requested source is not an allowlisted trusted origin.",
+          "type": "string"
+        },
+        {
+          "const": "download_failed",
+          "description": "The artifact could not be transferred within its bounds.",
+          "type": "string"
+        },
+        {
+          "const": "artifact_too_large",
+          "description": "The artifact exceeded its declared or absolute size bound.",
+          "type": "string"
+        },
+        {
+          "const": "integrity_mismatch",
+          "description": "The artifact digest did not match trusted expected evidence.",
+          "type": "string"
+        },
+        {
+          "const": "signature_invalid",
+          "description": "The artifact carried no valid signature.",
+          "type": "string"
+        },
+        {
+          "const": "publisher_unexpected",
+          "description": "The artifact was signed by an unexpected publisher.",
+          "type": "string"
+        },
+        {
+          "const": "staging_unavailable",
+          "description": "GixGiz-owned staging was unavailable or failed validation.",
+          "type": "string"
+        },
+        {
+          "const": "insufficient_storage",
+          "description": "Not enough free space to transfer or install the runtime.",
+          "type": "string"
+        },
+        {
+          "const": "installer_failed",
+          "description": "The provider installer reported an unsuccessful result.",
+          "type": "string"
+        },
+        {
+          "const": "executable_not_found",
+          "description": "No installed executable was found after installation.",
+          "type": "string"
+        },
+        {
+          "const": "executable_untrusted",
+          "description": "The installed executable failed identity or publisher verification.",
+          "type": "string"
+        },
+        {
+          "const": "version_unsupported",
+          "description": "The installed runtime version is outside supported evidence.",
+          "type": "string"
+        },
+        {
+          "const": "runtime_unhealthy",
+          "description": "The installed runtime did not become healthy.",
+          "type": "string"
+        },
+        {
+          "const": "ownership_conflict",
+          "description": "Ownership could not be established safely.",
+          "type": "string"
+        },
+        {
+          "const": "persistence_unavailable",
+          "description": "Durable state could not be read or written.",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "description": "The operation exceeded its deadline.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "The operation was cancelled.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized failure.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallIntegrityEvidence": {
+      "description": "Category of integrity evidence available for an artifact.",
+      "oneOf": [
+        {
+          "const": "digest_and_publisher",
+          "description": "A pinned cryptographic digest plus an expected signing publisher.",
+          "type": "string"
+        },
+        {
+          "const": "publisher_only",
+          "description": "An expected signing publisher only.",
+          "type": "string"
+        },
+        {
+          "const": "none",
+          "description": "No trustworthy evidence; installation must not proceed.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized evidence kind.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallJobId": {
+      "description": "Opaque identifier for one durable runtime-installation job.",
+      "format": "uuid",
+      "type": "string"
+    },
+    "RuntimeInstallJobSnapshot": {
+      "description": "Authoritative persistent runtime-installation job snapshot.",
+      "properties": {
+        "approval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallApprovalRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approval when one exists for the current revision."
+        },
+        "attention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallAttentionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reason the job needs a decision, when it does."
+        },
+        "effects": {
+          "$ref": "#/$defs/RuntimeInstallEffectReport",
+          "description": "Honest account of every declared effect."
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallFailureCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe failure classification when the job failed."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Durable job identifier."
+        },
+        "ownership": {
+          "$ref": "#/$defs/RuntimeOwnership",
+          "description": "Ownership currently recorded for the provider."
+        },
+        "plan": {
+          "$ref": "#/$defs/RuntimeInstallPlan",
+          "description": "Current immutable plan."
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bounded transfer progress when a transfer started."
+        },
+        "recovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallRecoveryAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Safe recovery route when one exists."
+        },
+        "retry_count": {
+          "description": "Number of retries already consumed.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_version": {
+          "description": "Runtime-installation schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "$ref": "#/$defs/RuntimeInstallStage",
+          "description": "Furthest stage actually reached."
+        },
+        "state": {
+          "$ref": "#/$defs/RuntimeInstallState",
+          "description": "Current durable state."
+        },
+        "updated_at_unix_ms": {
+          "description": "UTC Unix timestamp in milliseconds of the last durable transition.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "verification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallVerificationResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Verification evidence when verification ran."
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "state",
+        "stage",
+        "plan",
+        "effects",
+        "ownership",
+        "retry_count",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallPlan": {
+      "description": "Immutable reviewable description of one exact runtime installation.",
+      "properties": {
+        "authorized_effects": {
+          "description": "Material effects this approval authorizes and nothing more.",
+          "items": {
+            "$ref": "#/$defs/RuntimeInstallEffectKind"
+          },
+          "type": "array"
+        },
+        "components": {
+          "description": "Components the user is approving.",
+          "items": {
+            "$ref": "#/$defs/RuntimeInstallComponent"
+          },
+          "type": "array"
+        },
+        "destination": {
+          "$ref": "#/$defs/RuntimeInstallDestinationCategory",
+          "description": "Where the installation writes."
+        },
+        "expected_download_bytes": {
+          "description": "Total conservative expected download size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Durable job that owns this plan."
+        },
+        "ownership_after_success": {
+          "$ref": "#/$defs/RuntimeOwnership",
+          "description": "Ownership recorded only after full verification succeeds."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Runtime provider this plan installs."
+        },
+        "reasons": {
+          "description": "Safe deterministic plan reasons.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requires_administrator": {
+          "description": "Whether Windows will require administrator approval.\n\nA per-user installation is `false`. This never implies GixGiz approval:\nthe plan must be approved regardless of this value.",
+          "type": "boolean"
+        },
+        "revision": {
+          "description": "Monotonic plan revision that approval is bound to.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtime_display_name": {
+          "$ref": "#/$defs/RuntimeDisplayName",
+          "description": "Beginner-readable runtime name."
+        },
+        "schema_version": {
+          "description": "Runtime-installation schema generation.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "description": "Safe plan warnings and limitations, including what cannot be rolled back.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "job_id",
+        "revision",
+        "provider_id",
+        "runtime_display_name",
+        "components",
+        "destination",
+        "expected_download_bytes",
+        "requires_administrator",
+        "ownership_after_success",
+        "authorized_effects",
+        "reasons",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallPlanRequest": {
+      "description": "Requests a reviewable installation plan; performs no system change.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response and any failure."
+        },
+        "provider_id": {
+          "$ref": "#/$defs/RuntimeProviderId",
+          "description": "Provider to plan an installation for."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "provider_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallPlanResponse": {
+      "description": "Reviewable plan, or an explicit reason no plan is offered.",
+      "properties": {
+        "attention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallAttentionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reason no plan is offered, such as an existing external runtime."
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Plan when an installation is offered."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallProgress": {
+      "description": "Bounded transfer progress for the installer artifact.",
+      "properties": {
+        "expected_bytes": {
+          "description": "Conservative expected total when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "transferred_bytes": {
+          "description": "Bytes transferred into GixGiz-owned staging so far.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transferred_bytes"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallRecoveryAction": {
+      "description": "Safe recovery route offered after a stopped installation.",
+      "oneOf": [
+        {
+          "const": "retry",
+          "description": "Retry the same approved plan revision.",
+          "type": "string"
+        },
+        {
+          "const": "recreate_plan",
+          "description": "Discard this plan and prepare a new one.",
+          "type": "string"
+        },
+        {
+          "const": "reuse_external",
+          "description": "Use the already-present external runtime instead of installing.",
+          "type": "string"
+        },
+        {
+          "const": "free_storage",
+          "description": "Free storage and retry.",
+          "type": "string"
+        },
+        {
+          "const": "no_action",
+          "description": "No safe automatic route exists.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized action.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallStage": {
+      "description": "Ordered stage within an approved runtime installation.\n\nStages are observable progress only. They never imply success: a stage may\nbe reached and then fail, and only `Ready` follows full verification.",
+      "oneOf": [
+        {
+          "const": "preparing_plan",
+          "description": "Assembling a reviewable plan; no system change may occur.",
+          "type": "string"
+        },
+        {
+          "const": "awaiting_approval",
+          "description": "The exact plan revision awaits a user decision.",
+          "type": "string"
+        },
+        {
+          "const": "approved",
+          "description": "The plan revision was approved.",
+          "type": "string"
+        },
+        {
+          "const": "downloading",
+          "description": "Transferring the installer artifact into GixGiz-owned staging.",
+          "type": "string"
+        },
+        {
+          "const": "verifying_artifact",
+          "description": "Checking artifact identity, integrity, and publisher before any execution.",
+          "type": "string"
+        },
+        {
+          "const": "staging",
+          "description": "Placing the verified artifact at its final staged location.",
+          "type": "string"
+        },
+        {
+          "const": "installing",
+          "description": "Running the provider installer.",
+          "type": "string"
+        },
+        {
+          "const": "verifying_executable",
+          "description": "Confirming the installed executable and its publisher.",
+          "type": "string"
+        },
+        {
+          "const": "starting_runtime",
+          "description": "Starting the newly installed runtime when required.",
+          "type": "string"
+        },
+        {
+          "const": "verifying_runtime",
+          "description": "Confirming runtime version and endpoint health.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Installation verified end to end.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized stage.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallStartRequest": {
+      "description": "Starts approved installation work.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with every event and failure."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Approved job to start."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallStartResponse": {
+      "description": "Accepted installation start.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "$ref": "#/$defs/RuntimeInstallJobSnapshot",
+          "description": "Authoritative snapshot after admission."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "job",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallState": {
+      "description": "High-level durable runtime-installation job state.",
+      "oneOf": [
+        {
+          "const": "awaiting_approval",
+          "description": "A plan exists and has never been approved.",
+          "type": "string"
+        },
+        {
+          "const": "approved",
+          "description": "The exact current plan revision was approved and work may begin.",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "description": "Approved work is in progress.",
+          "type": "string"
+        },
+        {
+          "const": "attention_required",
+          "description": "Work stopped and needs an explicit user decision.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "The runtime was installed and independently verified.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "Work stopped without a verified runtime.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "The user cancelled or denied the plan.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A newer peer supplied an unrecognized state.",
+          "type": "string"
+        }
+      ]
+    },
+    "RuntimeInstallStatusRequest": {
+      "description": "Reads authoritative durable job state.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier shared with the response."
+        },
+        "job_id": {
+          "$ref": "#/$defs/RuntimeInstallJobId",
+          "description": "Job to read."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier unique to this request."
+        }
+      },
+      "required": [
+        "job_id",
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallStatusResponse": {
+      "description": "Authoritative durable job state.",
+      "properties": {
+        "correlation_id": {
+          "$ref": "#/$defs/CorrelationId",
+          "description": "Identifier copied from the request."
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstallJobSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Snapshot when the job exists."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Identifier copied from the request."
+        }
+      },
+      "required": [
+        "correlation_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeInstallVerificationResult": {
+      "description": "Independent post-installation verification evidence.\n\nEvery field must be true before an installation may report success. A value\nis only ever set from observed evidence, never from an installer exit code.",
+      "properties": {
+        "endpoint_healthy": {
+          "description": "The approved loopback endpoint reported health.",
+          "type": "boolean"
+        },
+        "executable_located": {
+          "description": "An executable was found at an approved installation location.",
+          "type": "boolean"
+        },
+        "publisher_matched": {
+          "description": "The signing publisher matched the approved expectation.",
+          "type": "boolean"
+        },
+        "signature_valid": {
+          "description": "The executable carried a valid signature.",
+          "type": "boolean"
+        },
+        "version_supported": {
+          "description": "The reported version is within supported evidence.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "executable_located",
+        "signature_valid",
+        "publisher_matched",
+        "version_supported",
+        "endpoint_healthy"
       ],
       "type": "object"
     },
@@ -6952,6 +8138,33 @@
     "runtime_consent_response": {
       "$ref": "#/$defs/RuntimeConsentResponse"
     },
+    "runtime_install_approval_request": {
+      "$ref": "#/$defs/RuntimeInstallApprovalRequest"
+    },
+    "runtime_install_approval_response": {
+      "$ref": "#/$defs/RuntimeInstallApprovalResponse"
+    },
+    "runtime_install_event": {
+      "$ref": "#/$defs/RuntimeInstallEvent"
+    },
+    "runtime_install_plan_request": {
+      "$ref": "#/$defs/RuntimeInstallPlanRequest"
+    },
+    "runtime_install_plan_response": {
+      "$ref": "#/$defs/RuntimeInstallPlanResponse"
+    },
+    "runtime_install_start_request": {
+      "$ref": "#/$defs/RuntimeInstallStartRequest"
+    },
+    "runtime_install_start_response": {
+      "$ref": "#/$defs/RuntimeInstallStartResponse"
+    },
+    "runtime_install_status_request": {
+      "$ref": "#/$defs/RuntimeInstallStatusRequest"
+    },
+    "runtime_install_status_response": {
+      "$ref": "#/$defs/RuntimeInstallStatusResponse"
+    },
     "runtime_model_inventory_request": {
       "$ref": "#/$defs/RuntimeModelInventoryRequest"
     },
@@ -7061,6 +8274,15 @@
     "hardware_scan_event",
     "recommendation_request",
     "recommendation_response",
+    "runtime_install_plan_request",
+    "runtime_install_plan_response",
+    "runtime_install_approval_request",
+    "runtime_install_approval_response",
+    "runtime_install_start_request",
+    "runtime_install_start_response",
+    "runtime_install_status_request",
+    "runtime_install_status_response",
+    "runtime_install_event",
     "runtime_status_request",
     "runtime_status_response",
     "runtime_consent_request",

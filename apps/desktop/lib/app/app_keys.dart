@@ -96,6 +96,9 @@ abstract final class AppKeys {
   static const runtimeConsentAction = ValueKey<String>(
     'foundation.runtime.consent_action',
   );
+  static const runtimeVersionAcknowledgeAction = ValueKey<String>(
+    'runtime-version-acknowledge-action',
+  );
   static const runtimeStartAction = ValueKey<String>(
     'foundation.runtime.start_action',
   );

@@ -17,8 +17,10 @@ mod observability;
 mod operation;
 mod persistence;
 mod runtime;
+mod runtime_install;
 mod service;
 mod setup;
+mod storage_location;
 
 pub use capability::CapabilityEngine;
 pub use chat::{ChatEventSubscription, ChatService};
@@ -28,6 +30,13 @@ pub use hardware::{
 };
 pub use observability::{TracingInitError, init_tracing};
 pub use operation::{CancellationToken, OperationContext};
-pub use runtime::RuntimeService;
+pub use runtime::{RuntimeService, runtime_is_usable};
+pub use runtime_install::{
+    MAX_INSTALL_RETRIES, RuntimeInstallCoordinator, RuntimeInstallJob, RuntimeInstallService,
+    decision_authorizes_work,
+};
 pub use service::{CoreLifecycle, PlatformCore, ServiceHealthSource, compose_readiness};
 pub use setup::SetupService;
+pub use storage_location::{
+    FreeSpaceProbe, SetOutcome, StorageLocationService, WindowsFreeSpaceProbe,
+};

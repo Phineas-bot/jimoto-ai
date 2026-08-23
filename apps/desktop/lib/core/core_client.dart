@@ -138,6 +138,61 @@ abstract class CoreClient {
     );
   }
 
+  /// Accepts one exact runtime version that is outside recorded support evidence.
+  ///
+  /// The acknowledgement is bound to that exact version by the core; a later
+  /// provider version is untested again and requires a new decision.
+  Future<RuntimeHealthReport> acknowledgeUntestedRuntimeVersion(String version) {
+    return Future.error(
+      UnsupportedError('Runtime consent is not supported by this client.'),
+    );
+  }
+
+  /// Builds a reviewable local-runtime installation plan.
+  ///
+  /// Performs no system change. Returns `null` when no installation is offered.
+  Future<RuntimeInstallPlanResponse> planRuntimeInstall() {
+    return Future.error(
+      UnsupportedError('Runtime installation is not supported by this client.'),
+    );
+  }
+
+  /// Records an explicit decision for one exact plan revision.
+  Future<RuntimeInstallJobSnapshot> decideRuntimeInstall(
+    RuntimeInstallJobId jobId,
+    int planRevision,
+    RuntimeInstallApprovalDecision decision,
+  ) {
+    return Future.error(
+      UnsupportedError('Runtime installation is not supported by this client.'),
+    );
+  }
+
+  /// Starts approved installation work.
+  Future<RuntimeInstallJobSnapshot> startRuntimeInstall(
+    RuntimeInstallJobId jobId,
+  ) {
+    return Future.error(
+      UnsupportedError('Runtime installation is not supported by this client.'),
+    );
+  }
+
+  /// Reads authoritative durable installation state.
+  Future<RuntimeInstallJobSnapshot?> checkRuntimeInstall(
+    RuntimeInstallJobId jobId,
+  ) {
+    return Future.error(
+      UnsupportedError('Runtime installation is not supported by this client.'),
+    );
+  }
+
+  /// Withdraws a previous untested-version acknowledgement.
+  Future<RuntimeHealthReport> revokeUntestedRuntimeVersion() {
+    return Future.error(
+      UnsupportedError('Runtime consent is not supported by this client.'),
+    );
+  }
+
   Future<CoreOperation> startRuntimeOperation(RuntimeOperationKind kind) {
     return Future.error(
       UnsupportedError(

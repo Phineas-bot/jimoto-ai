@@ -2512,6 +2512,190 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recommended action: {action}'**
   String setupRecommendedAction(String action);
+
+  /// Title of the guided local runtime installation panel.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up local AI'**
+  String get runtimeInstallTitle;
+
+  /// Shown when an installation can be offered.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz can set up the local AI runtime for you. Nothing is downloaded or changed until you approve the plan.'**
+  String get runtimeInstallAvailable;
+
+  /// Shown when an existing runtime is reused rather than replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'A local AI runtime is already installed on this PC. GixGiz will use it instead of installing another copy.'**
+  String get runtimeInstallExternalPresent;
+
+  /// Shown when no installation can be offered.
+  ///
+  /// In en, this message translates to:
+  /// **'Local AI setup is not available on this PC right now.'**
+  String get runtimeInstallUnavailable;
+
+  /// Shown while a plan awaits an explicit decision.
+  ///
+  /// In en, this message translates to:
+  /// **'Review what this will change, then choose whether to continue.'**
+  String get runtimeInstallAwaitingApproval;
+
+  /// Shown after approval and before work begins.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved. Setup has not started yet.'**
+  String get runtimeInstallApproved;
+
+  /// Shown while approved installation work runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Setting up the local AI runtime. You can keep using the rest of GixGiz.'**
+  String get runtimeInstallRunning;
+
+  /// Shown only after the core verifies the installation end to end.
+  ///
+  /// In en, this message translates to:
+  /// **'The local AI runtime is installed and verified.'**
+  String get runtimeInstallReady;
+
+  /// Shown when installation failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup did not finish. Nothing was left half-installed by GixGiz.'**
+  String get runtimeInstallFailed;
+
+  /// Shown when the plan was denied or cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup was cancelled. Nothing on this PC was changed.'**
+  String get runtimeInstallCancelled;
+
+  /// Shown when installation stopped and needs a decision.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup needs your attention before it can continue.'**
+  String get runtimeInstallAttention;
+
+  /// Button that builds a reviewable plan.
+  ///
+  /// In en, this message translates to:
+  /// **'Review setup'**
+  String get runtimeInstallReviewAction;
+
+  /// Button that approves the exact plan revision.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve and continue'**
+  String get runtimeInstallApproveAction;
+
+  /// Button that denies the plan.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get runtimeInstallDenyAction;
+
+  /// Button that starts approved installation work.
+  ///
+  /// In en, this message translates to:
+  /// **'Start setup'**
+  String get runtimeInstallStartAction;
+
+  /// Button that re-reads authoritative installation state.
+  ///
+  /// In en, this message translates to:
+  /// **'Check progress'**
+  String get runtimeInstallRefreshAction;
+
+  /// Label for the component being installed.
+  ///
+  /// In en, this message translates to:
+  /// **'What gets installed'**
+  String get runtimeInstallComponent;
+
+  /// Label for the exact version installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get runtimeInstallVersion;
+
+  /// Label for the trusted download origin.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded from'**
+  String get runtimeInstallSource;
+
+  /// Label for the expected signing publisher.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified publisher'**
+  String get runtimeInstallPublisher;
+
+  /// Label for the expected download size.
+  ///
+  /// In en, this message translates to:
+  /// **'Download size'**
+  String get runtimeInstallDownloadSize;
+
+  /// Label for whether Windows will ask for administrator permission.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator needed'**
+  String get runtimeInstallAdministrator;
+
+  /// Value shown when elevation is required.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, Windows will ask for permission'**
+  String get runtimeInstallAdministratorRequired;
+
+  /// Value shown when the installation is per-user and needs no elevation.
+  ///
+  /// In en, this message translates to:
+  /// **'No, this installs just for you'**
+  String get runtimeInstallAdministratorNotRequired;
+
+  /// Button that accepts an untested runtime version.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this version anyway'**
+  String get runtimeVersionAcknowledgeAction;
+
+  /// Title of the untested-version confirmation dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an untested runtime version?'**
+  String get runtimeVersionAcknowledgeTitle;
+
+  /// Confirm button in the untested-version dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept this version'**
+  String get runtimeVersionAcknowledgeConfirmAction;
+
+  /// Explains what accepting an untested runtime version means.
+  ///
+  /// In en, this message translates to:
+  /// **'GixGiz has not tested version {version}. It may still work, but it is outside the versions this release has evidence for. Accepting applies to this exact version only; a later update will ask again.'**
+  String runtimeVersionAcknowledgeMessage(String version);
+
+  /// Live download progress with a percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded {transferred} of {total} ({percent}%)'**
+  String runtimeInstallTransferred(
+    String transferred,
+    String total,
+    int percent,
+  );
+
+  /// Live download progress when the total size is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded {transferred}'**
+  String runtimeInstallTransferredUnknownTotal(String transferred);
 }
 
 class _AppLocalizationsDelegate

@@ -163,11 +163,102 @@ class SidecarCoreClient extends CoreClient {
   Future<RuntimeHealthReport> decideRuntimeReuse(
     RuntimeConsentDecision decision,
   ) async {
+    return _decideRuntimeConsent(decision, null);
+  }
+
+  @override
+  Future<RuntimeHealthReport> acknowledgeUntestedRuntimeVersion(
+    String version,
+  ) async {
+    return _decideRuntimeConsent(
+      RuntimeConsentDecision.acknowledgeUntestedVersion,
+      version,
+    );
+  }
+
+  @override
+  Future<RuntimeHealthReport> revokeUntestedRuntimeVersion() async {
+    return _decideRuntimeConsent(
+      RuntimeConsentDecision.revokeUntestedVersion,
+      null,
+    );
+  }
+
+  @override
+  Future<RuntimeInstallPlanResponse> planRuntimeInstall() async {
+    return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
+      return session.runtimeInstallPlan(
+        RuntimeInstallPlanRequest(
+          providerId: _runtimeProviderId(),
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<RuntimeInstallJobSnapshot> decideRuntimeInstall(
+    RuntimeInstallJobId jobId,
+    int planRevision,
+    RuntimeInstallApprovalDecision decision,
+  ) async {
+    return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
+      final response = await session.runtimeInstallApproval(
+        RuntimeInstallApprovalRequest(
+          jobId: jobId,
+          planRevision: planRevision,
+          decision: decision,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.job;
+    });
+  }
+
+  @override
+  Future<RuntimeInstallJobSnapshot> startRuntimeInstall(
+    RuntimeInstallJobId jobId,
+  ) async {
+    return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
+      final response = await session.runtimeInstallStart(
+        RuntimeInstallStartRequest(
+          jobId: jobId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.job;
+    });
+  }
+
+  @override
+  Future<RuntimeInstallJobSnapshot?> checkRuntimeInstall(
+    RuntimeInstallJobId jobId,
+  ) async {
+    return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
+      final response = await session.runtimeInstallStatus(
+        RuntimeInstallStatusRequest(
+          jobId: jobId,
+          correlationId: newCorrelationId(),
+          requestId: newRequestId(),
+        ),
+      );
+      return response.job;
+    });
+  }
+
+  Future<RuntimeHealthReport> _decideRuntimeConsent(
+    RuntimeConsentDecision decision,
+    String? acknowledgedVersion,
+  ) async {
     return _runtimeRequest(TransportCapability.runtimeConsent, (session) async {
       final response = await session.runtimeConsent(
         RuntimeConsentRequest(
           providerId: _runtimeProviderId(),
           decision: decision,
+          acknowledgedVersion: acknowledgedVersion,
           correlationId: newCorrelationId(),
           requestId: newRequestId(),
         ),

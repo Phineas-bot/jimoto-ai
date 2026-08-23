@@ -14,11 +14,11 @@ use gixgiz_contracts::{
     ModelIntegrityState, ModelLifecycleState, ModelMetadata, ModelProviderArtifact,
     ModelVerificationResult, ModelVerificationState, ProviderRegistrationState, RecoveryAction,
     RecoveryGuidance, RequestId, ResourceEstimate, RuntimeConsentState, RuntimeOwnership,
-    RuntimeState, SETUP_WORKFLOW_SCHEMA_VERSION, SafeErrorPayload, SetupApprovalDecision,
-    SetupApprovalRecord, SetupApprovalRequest, SetupApprovalResponse, SetupAttentionReason,
-    SetupCancellationReport, SetupDestinationCategory, SetupEffect, SetupEffectDisposition,
-    SetupEffectKind, SetupEffectReport, SetupJobCancelRequest, SetupJobCancelResponse,
-    SetupJobEvent, SetupJobEventKind, SetupJobEventsRequest, SetupJobEventsResponse, SetupJobId,
+    SETUP_WORKFLOW_SCHEMA_VERSION, SafeErrorPayload, SetupApprovalDecision, SetupApprovalRecord,
+    SetupApprovalRequest, SetupApprovalResponse, SetupAttentionReason, SetupCancellationReport,
+    SetupDestinationCategory, SetupEffect, SetupEffectDisposition, SetupEffectKind,
+    SetupEffectReport, SetupJobCancelRequest, SetupJobCancelResponse, SetupJobEvent,
+    SetupJobEventKind, SetupJobEventsRequest, SetupJobEventsResponse, SetupJobId,
     SetupJobRecoveryRequest, SetupJobRecoveryResponse, SetupJobRetryRequest, SetupJobRetryResponse,
     SetupJobSnapshot, SetupJobStartRequest, SetupJobStartResponse, SetupJobState,
     SetupJobStatusRequest, SetupJobStatusResponse, SetupJobTerminalState, SetupPlan,
@@ -1646,7 +1646,9 @@ fn runtime_context(
 }
 
 fn ensure_runtime_ready(health: &gixgiz_contracts::RuntimeHealthReport) -> Result<(), CoreError> {
-    if health.state != RuntimeState::Ready
+    // `runtime_is_usable` accepts `Ready`, and accepts `Degraded` only when the
+    // single cause is an untested version the user acknowledged by exact value.
+    if !crate::runtime_is_usable(health)
         || (health.ownership == RuntimeOwnership::External
             && health.reuse_consent != RuntimeConsentState::ReuseApproved)
     {
@@ -2816,7 +2818,7 @@ mod tests {
         RuntimeObservation {
             provider_id: provider_id.clone(),
             display_name: RuntimeDisplayName::new("Test runtime"),
-            state: RuntimeState::Ready,
+            state: gixgiz_contracts::RuntimeState::Ready,
             endpoint_safety: RuntimeEndpointSafety::LoopbackVerified,
             version: None,
             capabilities: [

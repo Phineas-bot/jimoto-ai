@@ -184,7 +184,7 @@ impl ChatService {
         let display_name = report.display_name.clone();
         let blocked = if report.state == gixgiz_contracts::RuntimeState::Incompatible {
             Some(ChatFailureCode::RuntimeIncompatible)
-        } else if report.state != gixgiz_contracts::RuntimeState::Ready
+        } else if !crate::runtime_is_usable(&report)
             || report.endpoint_safety != gixgiz_contracts::RuntimeEndpointSafety::LoopbackVerified
         {
             Some(ChatFailureCode::RuntimeUnavailable)
@@ -500,7 +500,7 @@ impl ChatService {
             .status(&provider_id, context.clone())
             .await
             .map_err(runtime_failure)?;
-        if !matches!(report.state, gixgiz_contracts::RuntimeState::Ready) {
+        if !crate::runtime_is_usable(&report) {
             return Err(CoreError::Chat(ChatFailureCode::RuntimeUnavailable));
         }
 

@@ -501,6 +501,28 @@ class _FakeConnector implements CoreSidecarConnector {
 }
 
 class _FakeSession implements CoreSidecarSession {
+
+  // Runtime installation is exercised by dedicated tests; this stub only needs
+  // to satisfy the interface.
+  @override
+  Future<RuntimeInstallPlanResponse> runtimeInstallPlan(
+    RuntimeInstallPlanRequest request,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<RuntimeInstallApprovalResponse> runtimeInstallApproval(
+    RuntimeInstallApprovalRequest request,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<RuntimeInstallStartResponse> runtimeInstallStart(
+    RuntimeInstallStartRequest request,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<RuntimeInstallStatusResponse> runtimeInstallStatus(
+    RuntimeInstallStatusRequest request,
+  ) async => throw UnimplementedError();
   _FakeSession({
     required this.readiness,
     this.healthFailure,

@@ -10,7 +10,8 @@ use gixgiz_contracts::{
     RUNTIME_REPORT_SCHEMA_VERSION, RuntimeCapabilityAvailability, RuntimeCapabilityDescriptor,
     RuntimeCapabilityKind, RuntimeConsentDecision, RuntimeConsentState, RuntimeEndpointSafety,
     RuntimeHealthReport, RuntimeModelInventory, RuntimeOperationKind, RuntimeOwnership,
-    RuntimeProviderId, RuntimeState, RuntimeWarning, RuntimeWarningCode,
+    RuntimeProviderId, RuntimeState, RuntimeVersionCompatibility, RuntimeWarning,
+    RuntimeWarningCode,
 };
 use gixgiz_persistence::{Persistence, RuntimePolicyRecord, RuntimePolicyRepository};
 use gixgiz_runtime::{RuntimeError, RuntimeObservation, RuntimeOperationContext, RuntimeProvider};
@@ -152,19 +153,61 @@ impl RuntimeService {
         decision: RuntimeConsentDecision,
         context: RuntimeOperationContext,
     ) -> Result<RuntimeHealthReport, RuntimeError> {
+        self.set_consent(provider_id, decision, None, context).await
+    }
+
+    /// Applies one explicit consent decision, including untested-version acknowledgement.
+    ///
+    /// `acknowledged_version` is required by `AcknowledgeUntestedVersion` and must
+    /// match the currently detected normalized version exactly. Rust never accepts
+    /// a version the caller merely asserts.
+    pub async fn set_consent(
+        &self,
+        provider_id: &RuntimeProviderId,
+        decision: RuntimeConsentDecision,
+        acknowledged_version: Option<&str>,
+        context: RuntimeOperationContext,
+    ) -> Result<RuntimeHealthReport, RuntimeError> {
         self.ensure_provider(provider_id)?;
-        let reuse_consent = match decision {
-            RuntimeConsentDecision::ApproveReuse => RuntimeConsentState::ReuseApproved,
-            RuntimeConsentDecision::DenyReuse => RuntimeConsentState::Denied,
-            RuntimeConsentDecision::Unknown => return Err(RuntimeError::InvalidInput),
-            _ => return Err(RuntimeError::InvalidInput),
-        };
         let observation = self.provider.detect(context.clone()).await?;
         if observation.state == RuntimeState::NotInstalled {
             return Err(RuntimeError::NotInstalled);
         }
         let current = self.load_policy(provider_id, &context).await?;
-        ensure_reuse_decision(&observation, current.as_ref(), decision)?;
+
+        let existing_acknowledgement = current
+            .as_ref()
+            .and_then(|record| record.acknowledged_untested_version.clone());
+        let existing_reuse = current
+            .as_ref()
+            .map_or(RuntimeConsentState::NotRequested, |record| {
+                record.reuse_consent
+            });
+
+        let (reuse_consent, acknowledgement) = match decision {
+            RuntimeConsentDecision::ApproveReuse => {
+                ensure_reuse_decision(&observation, current.as_ref(), decision)?;
+                (RuntimeConsentState::ReuseApproved, existing_acknowledgement)
+            }
+            RuntimeConsentDecision::DenyReuse => {
+                ensure_reuse_decision(&observation, current.as_ref(), decision)?;
+                // Denying reuse also withdraws any version acknowledgement, so a
+                // later re-approval cannot silently inherit the earlier decision.
+                (RuntimeConsentState::Denied, None)
+            }
+            RuntimeConsentDecision::AcknowledgeUntestedVersion => {
+                let accepted = ensure_untested_version_decision(
+                    &observation,
+                    current.as_ref(),
+                    acknowledged_version,
+                )?;
+                (existing_reuse, Some(accepted))
+            }
+            RuntimeConsentDecision::RevokeUntestedVersion => (existing_reuse, None),
+            RuntimeConsentDecision::Unknown => return Err(RuntimeError::InvalidInput),
+            _ => return Err(RuntimeError::InvalidInput),
+        };
+
         let policy = RuntimePolicyRecord::new(
             provider_id.clone(),
             current
@@ -178,6 +221,8 @@ impl RuntimeService {
                 }),
             unix_timestamp_millis(),
         )
+        .map_err(|_| RuntimeError::InvalidInput)?
+        .with_acknowledged_untested_version(acknowledgement)
         .map_err(|_| RuntimeError::InvalidInput)?;
         self.save_policy(policy.clone(), &context).await?;
         Ok(compose_report(observation, Some(&policy)))
@@ -317,6 +362,49 @@ fn ensure_reuse_decision(
     }
 }
 
+/// Validates an untested-version acknowledgement against live provider evidence.
+///
+/// Returns the exact normalized version to record. Fails closed when the runtime
+/// is not actually untested, when evidence is missing, or when the caller names a
+/// version that does not match what was just detected.
+fn ensure_untested_version_decision(
+    observation: &RuntimeObservation,
+    policy: Option<&RuntimePolicyRecord>,
+    acknowledged_version: Option<&str>,
+) -> Result<String, RuntimeError> {
+    let ownership = policy.map_or(RuntimeOwnership::External, |record| record.ownership);
+    if ownership == RuntimeOwnership::Bundled {
+        return Err(RuntimeError::OwnershipConflict);
+    }
+    match observation.state {
+        RuntimeState::Incompatible => return Err(RuntimeError::IncompatibleVersion),
+        RuntimeState::Failed => return Err(RuntimeError::ProviderUnavailable),
+        RuntimeState::NotInstalled => return Err(RuntimeError::NotInstalled),
+        _ => {}
+    }
+    if observation.endpoint_safety != RuntimeEndpointSafety::LoopbackVerified {
+        return Err(RuntimeError::EndpointUnsafe);
+    }
+    let Some(version) = observation.version.as_ref() else {
+        return Err(RuntimeError::InvalidInput);
+    };
+    // Acknowledging a version that is already supported, or whose support cannot
+    // be established at all, is not a meaningful decision.
+    if version.compatibility != RuntimeVersionCompatibility::Untested {
+        return Err(RuntimeError::InvalidInput);
+    }
+    let Some(detected) = version.normalized_version.as_deref() else {
+        return Err(RuntimeError::InvalidInput);
+    };
+    let Some(requested) = acknowledged_version else {
+        return Err(RuntimeError::InvalidInput);
+    };
+    if requested != detected {
+        return Err(RuntimeError::InvalidInput);
+    }
+    Ok(detected.to_owned())
+}
+
 fn compose_report(
     observation: RuntimeObservation,
     policy: Option<&RuntimePolicyRecord>,
@@ -362,6 +450,20 @@ fn compose_report(
         });
     }
 
+    // A stored acknowledgement applies only to the exact version it named. After
+    // a provider upgrade the detected version differs, the acknowledgement goes
+    // inert, and the user is asked again instead of silently inheriting consent.
+    let acknowledged_untested_version = policy
+        .and_then(|record| record.acknowledged_untested_version.as_deref())
+        .filter(|acknowledged| {
+            observation
+                .version
+                .as_ref()
+                .and_then(|info| info.normalized_version.as_deref())
+                == Some(*acknowledged)
+        })
+        .map(str::to_owned);
+
     RuntimeHealthReport {
         schema_version: RUNTIME_REPORT_SCHEMA_VERSION,
         provider_id: observation.provider_id,
@@ -372,9 +474,39 @@ fn compose_report(
         management_consent,
         endpoint_safety: observation.endpoint_safety,
         version: observation.version,
+        acknowledged_untested_version,
         capabilities,
         reasons: observation.reasons,
         warnings,
+    }
+}
+
+/// Returns whether a report may be used for model setup and local inference.
+///
+/// `Ready` is always usable. `Degraded` is usable only when the sole reason is
+/// an untested provider version and the user acknowledged that exact version.
+/// Every other degraded cause, and every other state, stays unusable: the
+/// acknowledgement is deliberately not a general override.
+#[must_use]
+pub fn runtime_is_usable(report: &RuntimeHealthReport) -> bool {
+    match report.state {
+        RuntimeState::Ready => true,
+        RuntimeState::Degraded => {
+            let Some(version) = report.version.as_ref() else {
+                return false;
+            };
+            if version.compatibility != RuntimeVersionCompatibility::Untested {
+                return false;
+            }
+            match (
+                version.normalized_version.as_deref(),
+                report.acknowledged_untested_version.as_deref(),
+            ) {
+                (Some(detected), Some(acknowledged)) => detected == acknowledged,
+                _ => false,
+            }
+        }
+        _ => false,
     }
 }
 
@@ -888,5 +1020,206 @@ mod tests {
 
         assert_eq!(policy.remaining_failures.load(Ordering::SeqCst), 0);
         assert_eq!(report.reuse_consent, RuntimeConsentState::ReuseApproved);
+    }
+
+    fn untested_report(detected: Option<&str>, acknowledged: Option<&str>) -> RuntimeHealthReport {
+        let mut observation = observation(RuntimeState::Degraded);
+        observation.version = Some(gixgiz_contracts::RuntimeVersionInfo {
+            reported_version: detected.unwrap_or("unparseable").to_owned(),
+            normalized_version: detected.map(str::to_owned),
+            compatibility: RuntimeVersionCompatibility::Untested,
+        });
+        let policy = acknowledged_policy(acknowledged);
+        compose_report(observation, Some(&policy))
+    }
+
+    fn acknowledged_policy(acknowledged: Option<&str>) -> RuntimePolicyRecord {
+        RuntimePolicyRecord::new(
+            RuntimeProviderId::new("test.runtime"),
+            RuntimeOwnership::External,
+            RuntimeConsentState::ReuseApproved,
+            RuntimeConsentState::NotRequested,
+            1,
+        )
+        .expect("policy")
+        .with_acknowledged_untested_version(acknowledged.map(str::to_owned))
+        .expect("acknowledgement")
+    }
+
+    fn untested_provider() -> Arc<FakeRuntimeProvider> {
+        let mut untested = observation(RuntimeState::Degraded);
+        untested.version = Some(gixgiz_contracts::RuntimeVersionInfo {
+            reported_version: "0.32.14".to_owned(),
+            normalized_version: Some("0.32.14".to_owned()),
+            compatibility: RuntimeVersionCompatibility::Untested,
+        });
+        let provider_id = untested.provider_id.clone();
+        Arc::new(FakeRuntimeProvider::new(
+            provider_id.clone(),
+            Ok(untested.clone()),
+            Ok(untested),
+            Ok(RuntimeModelInventory {
+                schema_version: RUNTIME_REPORT_SCHEMA_VERSION,
+                provider_id,
+                models: Vec::new(),
+                truncated: false,
+                collected_at_unix_ms: 1,
+            }),
+        ))
+    }
+
+    #[test]
+    fn ready_runtime_is_usable_without_any_acknowledgement() {
+        let report = compose_report(observation(RuntimeState::Ready), None);
+
+        assert!(runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn acknowledged_untested_version_becomes_usable_for_that_exact_version() {
+        let report = untested_report(Some("0.32.14"), Some("0.32.14"));
+
+        assert_eq!(report.state, RuntimeState::Degraded);
+        assert_eq!(
+            report.acknowledged_untested_version.as_deref(),
+            Some("0.32.14")
+        );
+        assert!(runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn untested_version_without_acknowledgement_stays_unusable() {
+        let report = untested_report(Some("0.32.14"), None);
+
+        assert!(!runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn acknowledgement_does_not_transfer_to_a_later_provider_version() {
+        // The user accepted 0.32.14; the provider then upgraded to 0.33.0.
+        let report = untested_report(Some("0.33.0"), Some("0.32.14"));
+
+        assert_eq!(report.acknowledged_untested_version, None);
+        assert!(!runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn acknowledgement_never_excuses_a_non_version_degraded_cause() {
+        // Degraded has many causes; only an untested version may be acknowledged.
+        let mut observation = observation(RuntimeState::Degraded);
+        observation.version = Some(gixgiz_contracts::RuntimeVersionInfo {
+            reported_version: "0.32.14".to_owned(),
+            normalized_version: Some("0.32.14".to_owned()),
+            compatibility: RuntimeVersionCompatibility::Compatible,
+        });
+        let report = compose_report(observation, Some(&acknowledged_policy(Some("0.32.14"))));
+
+        assert!(!runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn unparseable_version_evidence_can_never_be_acknowledged_into_use() {
+        let report = untested_report(None, Some("0.32.14"));
+
+        assert!(!runtime_is_usable(&report));
+    }
+
+    #[test]
+    fn non_ready_states_are_never_usable_even_when_acknowledged() {
+        for state in [
+            RuntimeState::Incompatible,
+            RuntimeState::Failed,
+            RuntimeState::NotInstalled,
+            RuntimeState::InstalledStopped,
+        ] {
+            let mut observation = observation(state);
+            observation.version = Some(gixgiz_contracts::RuntimeVersionInfo {
+                reported_version: "0.32.14".to_owned(),
+                normalized_version: Some("0.32.14".to_owned()),
+                compatibility: RuntimeVersionCompatibility::Untested,
+            });
+            let report = compose_report(observation, Some(&acknowledged_policy(Some("0.32.14"))));
+
+            assert!(
+                !runtime_is_usable(&report),
+                "{state:?} must never be usable"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn acknowledging_a_version_the_provider_does_not_report_is_rejected() {
+        let provider = untested_provider();
+        let service = RuntimeService::in_memory(provider.clone());
+
+        let error = service
+            .set_consent(
+                provider.provider_id(),
+                RuntimeConsentDecision::AcknowledgeUntestedVersion,
+                Some("9.9.9"),
+                context(),
+            )
+            .await
+            .expect_err("a mismatched version must be rejected");
+
+        assert!(matches!(error, RuntimeError::InvalidInput));
+    }
+
+    #[tokio::test]
+    async fn acknowledging_without_naming_a_version_is_rejected() {
+        let provider = untested_provider();
+        let service = RuntimeService::in_memory(provider.clone());
+
+        let error = service
+            .set_consent(
+                provider.provider_id(),
+                RuntimeConsentDecision::AcknowledgeUntestedVersion,
+                None,
+                context(),
+            )
+            .await
+            .expect_err("an unnamed version must be rejected");
+
+        assert!(matches!(error, RuntimeError::InvalidInput));
+    }
+
+    #[tokio::test]
+    async fn denying_reuse_withdraws_a_previous_version_acknowledgement() {
+        let provider = untested_provider();
+        let service = RuntimeService::in_memory(provider.clone());
+        let provider_id = provider.provider_id();
+
+        service
+            .set_consent(
+                provider_id,
+                RuntimeConsentDecision::ApproveReuse,
+                None,
+                context(),
+            )
+            .await
+            .expect("reuse approved");
+        let acknowledged = service
+            .set_consent(
+                provider_id,
+                RuntimeConsentDecision::AcknowledgeUntestedVersion,
+                Some("0.32.14"),
+                context(),
+            )
+            .await
+            .expect("acknowledged");
+        assert!(runtime_is_usable(&acknowledged));
+
+        let denied = service
+            .set_consent(
+                provider_id,
+                RuntimeConsentDecision::DenyReuse,
+                None,
+                context(),
+            )
+            .await
+            .expect("reuse denied");
+
+        assert_eq!(denied.acknowledged_untested_version, None);
+        assert!(!runtime_is_usable(&denied));
     }
 }
